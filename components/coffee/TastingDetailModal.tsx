@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { BREWING_METHODS, SENSORY_TAGS, type TastingRecord } from '@/lib/types/coffee';
-import { getLotById } from '@/lib/data/lots';
+import { getMergedLotById } from '@/lib/data/lotsStore';
 import { getRoasterById } from '@/lib/data/roasters';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { getBaristaById } from '@/lib/data/baristas';
@@ -25,7 +25,7 @@ export function TastingDetailModal({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
-  const lot = getLotById(record.lotId);
+  const lot = getMergedLotById(record.lotId);
   const roaster = getRoasterById(record.roasterId);
   const shop = getCoffeeShopById(record.coffeeShopId);
   const barista = getBaristaById(record.baristaId);

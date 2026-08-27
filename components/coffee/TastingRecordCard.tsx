@@ -1,6 +1,6 @@
 import type { TastingRecord } from '@/lib/types/coffee';
 import { BREWING_METHODS } from '@/lib/types/coffee';
-import { getLotById } from '@/lib/data/lots';
+import { getMergedLotById } from '@/lib/data/lotsStore';
 import { getRoasterById } from '@/lib/data/roasters';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { formatTastingDate } from '@/lib/utils/date';
@@ -13,7 +13,7 @@ export function TastingRecordCard({
   record: TastingRecord;
   onClick?: () => void;
 }) {
-  const lot = getLotById(record.lotId);
+  const lot = getMergedLotById(record.lotId);
   const roaster = getRoasterById(record.roasterId);
   const shop = getCoffeeShopById(record.coffeeShopId);
   const brewingMethod = BREWING_METHODS.find((method) => method.id === record.brewingMethod);

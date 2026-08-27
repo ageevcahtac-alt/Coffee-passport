@@ -1,9 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
-import { getLotById } from '@/lib/data/lots';
+import { useLots } from '@/lib/data/useLots';
 import { COFFEE_SHOPS } from '@/lib/data/coffeeShops';
 import { getBaristasForShop } from '@/lib/data/baristas';
 import type { BrewingMethodId, Lot } from '@/lib/types/coffee';
@@ -21,10 +20,21 @@ const fieldClasses =
   'text-ink-900 placeholder:text-ink-300 focus:border-gold-400';
 
 export default function TasteLotPage({ params }: { params: { lotId: string } }) {
-  const lot = getLotById(params.lotId);
+  const lots = useLots();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const lot = lots.find((candidate) => candidate.id === params.lotId);
+
+  if (!mounted) return null;
+
   if (!lot) {
-    notFound();
-    return null;
+    return (
+      <main className="min-h-dvh flex flex-col items-center justify-center px-6 text-center">
+        <h1 className="font-display text-2xl text-ink-900 mb-2">Лот не найден</h1>
+        <p className="text-ink-500 text-sm">Проверьте ссылку или отсканируйте другой QR-код.</p>
+      </main>
+    );
   }
 
   return <TasteLotFlow lot={lot} />;
