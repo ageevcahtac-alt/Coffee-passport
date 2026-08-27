@@ -31,6 +31,12 @@ export interface CoffeeShop {
   city: string;
 }
 
+export interface Barista {
+  id: string;
+  name: string;
+  coffeeShopId: string; // '' for shop-agnostic entries like "Не указан"
+}
+
 export const BREWING_METHODS = [
   { id: 'espresso', label: 'Эспрессо' },
   { id: 'v60', label: 'V60 / Воронка' },
@@ -69,5 +75,8 @@ export interface TastingRecord {
   liked: string;
   disliked: string;
   note: string;
+  baristaId: string;
+  baristaRating: number; // 1-5, 0 if not rated
+  baristaNote: string;
   createdAt: string; // ISO timestamp
 }

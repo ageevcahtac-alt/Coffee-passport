@@ -1,8 +1,14 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
 import type { TastingRecord } from '@/lib/types/coffee';
 import { TastingRecordCard } from './TastingRecordCard';
+import { TastingDetailModal } from './TastingDetailModal';
 
 export function CoffeeJourney({ records }: { records: TastingRecord[] }) {
+  const [openRecord, setOpenRecord] = useState<TastingRecord | null>(null);
+
   if (records.length === 0) {
     return (
       <div className="text-center py-16">
@@ -23,10 +29,19 @@ export function CoffeeJourney({ records }: { records: TastingRecord[] }) {
   }
 
   return (
-    <div className="flex flex-col gap-4 max-w-md mx-auto w-full">
-      {records.map((record) => (
-        <TastingRecordCard key={record.id} record={record} />
-      ))}
-    </div>
+    <>
+      <div className="flex flex-col gap-4 max-w-md mx-auto w-full">
+        {records.map((record) => (
+          <TastingRecordCard
+            key={record.id}
+            record={record}
+            onClick={() => setOpenRecord(record)}
+          />
+        ))}
+      </div>
+      {openRecord && (
+        <TastingDetailModal record={openRecord} onClose={() => setOpenRecord(null)} />
+      )}
+    </>
   );
 }

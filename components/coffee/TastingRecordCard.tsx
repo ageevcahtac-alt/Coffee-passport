@@ -3,16 +3,16 @@ import { BREWING_METHODS } from '@/lib/types/coffee';
 import { getLotById } from '@/lib/data/lots';
 import { getRoasterById } from '@/lib/data/roasters';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
+import { formatTastingDate } from '@/lib/utils/date';
+import { StarRating } from './StarRating';
 
-function formatDate(iso: string) {
-  return new Intl.DateTimeFormat('ru-RU', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date(iso));
-}
-
-export function TastingRecordCard({ record }: { record: TastingRecord }) {
+export function TastingRecordCard({
+  record,
+  onClick,
+}: {
+  record: TastingRecord;
+  onClick?: () => void;
+}) {
   const lot = getLotById(record.lotId);
   const roaster = getRoasterById(record.roasterId);
   const shop = getCoffeeShopById(record.coffeeShopId);
@@ -21,7 +21,12 @@ export function TastingRecordCard({ record }: { record: TastingRecord }) {
   if (!lot || !roaster || !shop) return null;
 
   return (
-    <article className="rounded-md border border-ink-200 bg-parchment-100 p-5">
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full text-left rounded-md border border-ink-200 bg-parchment-100 p-5
+                 hover:border-gold-400 transition-colors"
+    >
       <div className="flex items-start justify-between gap-4 mb-3">
         <div>
           <h3 className="font-display text-xl text-ink-900 leading-tight">{lot.name}</h3>
@@ -35,15 +40,8 @@ export function TastingRecordCard({ record }: { record: TastingRecord }) {
       </p>
       <p className="text-sm text-ink-400 mb-3">{brewingMethod?.label ?? record.brewingMethod}</p>
 
-      <div className="flex items-center gap-1 mb-3" aria-label={`Оценка ${record.rating} из 5`}>
-        {[1, 2, 3, 4, 5].map((star) => (
-          <span
-            key={star}
-            style={{ color: star <= record.rating ? 'var(--color-rating)' : 'var(--color-ink-200)' }}
-          >
-            ★
-          </span>
-        ))}
+      <div className="mb-3">
+        <StarRating value={record.rating} />
       </div>
 
       {lot.descriptors.length > 0 && (
@@ -51,8 +49,8 @@ export function TastingRecordCard({ record }: { record: TastingRecord }) {
       )}
 
       <p className="text-xs text-ink-300">
-        Попробовано {formatDate(record.createdAt)} · урожай {lot.harvestYear}
+        Попробовано {formatTastingDate(record.createdAt)} · урожай {lot.harvestYear}
       </p>
-    </article>
+    </button>
   );
 }
