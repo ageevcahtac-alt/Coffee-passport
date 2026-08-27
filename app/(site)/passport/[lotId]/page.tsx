@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { getLotById } from '@/lib/data/lots';
 import { getRoasterById } from '@/lib/data/roasters';
 import { LotPassport } from '@/components/coffee/LotPassport';
+import { ProducerRoasterCard } from '@/components/coffee/ProducerRoasterCard';
 
 export default async function LotPassportPage({
   params,
@@ -20,7 +21,11 @@ export default async function LotPassportPage({
     <main className="min-h-dvh flex flex-col px-6 py-16">
       <LotPassport lot={lot} roaster={roaster} />
 
-      <div className="max-w-md mx-auto w-full mt-12">
+      <div className="max-w-md mx-auto w-full mt-10">
+        <ProducerRoasterCard lot={lot} />
+      </div>
+
+      <div className="max-w-md mx-auto w-full mt-8">
         <Link
           href={`/passport/${lot.id}/taste`}
           className="inline-flex items-center justify-center w-full rounded-md bg-ink-900

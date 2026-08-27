@@ -8,6 +8,7 @@ import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { getBaristaById } from '@/lib/data/baristas';
 import { formatTastingDate } from '@/lib/utils/date';
 import { StarRating } from './StarRating';
+import { ProducerRoasterCard } from './ProducerRoasterCard';
 
 export function TastingDetailModal({
   record,
@@ -115,16 +116,21 @@ export function TastingDetailModal({
         )}
 
         <p className="section-label mb-3">Бариста</p>
-        <p className="text-sm text-ink-900 mb-2">{barista?.name ?? 'Не указан'}</p>
-        {record.baristaRating > 0 && (
-          <div className="mb-2">
-            <StarRating
-              value={record.baristaRating}
-              label={`Оценка бариста ${record.baristaRating} из 5`}
-            />
-          </div>
-        )}
-        {record.baristaNote && <p className="text-sm text-ink-700">{record.baristaNote}</p>}
+        <div className="mb-6">
+          <p className="text-sm text-ink-900 mb-2">{barista?.name ?? 'Не указан'}</p>
+          {record.baristaRating > 0 && (
+            <div className="mb-2">
+              <StarRating
+                value={record.baristaRating}
+                label={`Оценка бариста ${record.baristaRating} из 5`}
+              />
+            </div>
+          )}
+          {record.baristaNote && <p className="text-sm text-ink-700">{record.baristaNote}</p>}
+        </div>
+
+        <p className="section-label mb-3">Происхождение и обжарка</p>
+        <ProducerRoasterCard lot={lot} />
       </div>
     </div>
   );

@@ -49,7 +49,7 @@ export function TastingRecordCard({
       )}
 
       <p className="text-xs text-ink-300">
-        Попробовано {formatTastingDate(record.createdAt)} · урожай {lot.harvestYear}
+        Попробовано {formatTastingDate(record.createdAt)} · урожай {lot.cropYear}
       </p>
     </button>
   );

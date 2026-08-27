@@ -36,7 +36,7 @@ export function LotPassport({ lot, roaster }: { lot: Lot; roaster: Roaster }) {
         </div>
         <div className="flex justify-between">
           <dt className="text-ink-400">Урожай</dt>
-          <dd className="data-value text-ink-900">{lot.harvestYear}</dd>
+          <dd className="data-value text-ink-900">{lot.cropYear}</dd>
         </div>
         <div className="flex justify-between">
           <dt className="text-ink-400">Профиль обжарки</dt>

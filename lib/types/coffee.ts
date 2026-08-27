@@ -12,6 +12,31 @@ export interface Roaster {
   slug: string;
 }
 
+export type RoastType = 'filter' | 'espresso' | 'omni' | 'alternative';
+
+export const ROAST_TYPE_LABELS: Record<RoastType, string> = {
+  filter: 'Фильтр',
+  espresso: 'Эспрессо',
+  omni: 'Омни',
+  alternative: 'Альтернатива',
+};
+
+// The roaster's own cupping read of the lot, 1-5 per axis — distinct from the
+// consumer's per-cup sensory tags/rating recorded on a TastingRecord.
+export interface RoasterFlavorProfile {
+  acidity: number;
+  sweetness: number;
+  body: number;
+  bitterness: number;
+}
+
+export interface ProducerProfile {
+  farmerName: string; // farmer or cooperative name
+  farmName: string; // farm / washing station name
+  altitude: string; // e.g. "1900–2100 м"
+  story: string; // roaster's origin story, in the roaster's own words
+}
+
 export interface Lot {
   id: string; // stable public id, e.g. "LOT-XO-ETH-001" — what the QR encodes
   roasterId: string;
@@ -19,10 +44,13 @@ export interface Lot {
   country: string;
   region: string;
   process: string;
-  harvestYear: number;
+  cropYear: string; // e.g. "2025/2026"
   qGrade: number;
-  roastProfile: string;
+  roastProfile: string; // branded roast name, e.g. "Pure Roast®"
+  roastType: RoastType;
   descriptors: string[];
+  roasterFlavorProfile: RoasterFlavorProfile;
+  producer: ProducerProfile;
 }
 
 export interface CoffeeShop {
