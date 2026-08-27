@@ -26,9 +26,8 @@ export default function TasteLotPage({ params }: { params: { lotId: string } }) 
 
   const lot = lots.find((candidate) => candidate.id === params.lotId);
 
-  if (!mounted) return null;
-
   if (!lot) {
+    if (!mounted) return null;
     return (
       <main className="min-h-dvh flex flex-col items-center justify-center px-6 text-center">
         <h1 className="font-display text-2xl text-ink-900 mb-2">Лот не найден</h1>
