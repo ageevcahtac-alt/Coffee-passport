@@ -9,12 +9,21 @@
   /* Кофейная палитра проекта */
   --color-parchment-100: #faf8f5;
   --color-parchment-200: #f5f2eb;
+  --color-parchment-300: #ede4d3;
+  --color-ink-100: #e6dfd5;
   --color-ink-200: #e0dad0;
+  --color-ink-300: #a08d74;
   --color-ink-400: #8c857b;
+  --color-ink-500: #4a3728;
+  --color-ink-700: #2b2019;
+  --color-ink-800: #221913;
   --color-ink-900: #1a1a1a;
   --color-gold-300: #d4af37;
   --color-gold-400: #c5a028;
   --color-gold-500: #aa840a;
+
+  /* Личная оценка вкуса — намеренно отличается от gold (Q-score) */
+  --color-rating: #a0522d;
 
   /* Настройки трекинга и скруглений */
   --tracking-widest2: 0.15em;
