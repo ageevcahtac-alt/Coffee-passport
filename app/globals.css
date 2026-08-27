@@ -1,0 +1,117 @@
+@import "tailwindcss";
+
+@theme {
+  /* Кастомные шрифты */
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  /* Кофейная палитра проекта */
+  --color-parchment-100: #faf8f5;
+  --color-parchment-200: #f5f2eb;
+  --color-ink-200: #e0dad0;
+  --color-ink-400: #8c857b;
+  --color-ink-900: #1a1a1a;
+  --color-gold-300: #d4af37;
+  --color-gold-400: #c5a028;
+  --color-gold-500: #aa840a;
+
+  /* Настройки трекинга и скруглений */
+  --tracking-widest2: 0.15em;
+  --radius-seal: 50%; /* Скругление для печати Q-score */
+}
+
+/* Базовые стили для элементов */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-parchment-200);
+  color: var(--color-ink-900);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+}
+
+/* Точные числовые значения */
+.data-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Разделительные ярлыки секций */
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-widest2);
+  color: var(--color-ink-400);
+  font-family: var(--font-body);
+}
+
+.section-label::after {
+  content: '';
+  flex: 1 1 0%;
+  height: 1px;
+  background-color: var(--color-ink-200);
+}
+
+/* Доступность и фокус */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-gold-400);
+  outline-offset: 2px;
+}
+
+/* Фирменная печать Q-score */
+.q-seal {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-seal);
+  border: 1px solid var(--color-gold-300);
+  color: var(--color-gold-500);
+  background-color: var(--color-parchment-100);
+  width: 7rem;
+  height: 7rem;
+  transform: rotate(-2deg);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.q-seal-value {
+  font-family: var(--font-mono);
+  font-size: 1.875rem;
+  line-height: 2.25rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.q-seal-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-widest2);
+  color: var(--color-ink-400);
+  margin-top: 0.25rem;
+}
+
+/* Адаптация под системный режим уменьшения движения */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
