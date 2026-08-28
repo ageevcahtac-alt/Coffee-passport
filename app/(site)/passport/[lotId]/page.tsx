@@ -66,7 +66,7 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
             {roaster.name}
           </p>
           <h1 className="font-display text-3xl leading-[1.1] text-ink-900 mb-8">{lot.name}</h1>
-          <BlindTastingLock lotId={lot.id} />
+          <BlindTastingLock lot={lot} />
         </div>
       </main>
     );

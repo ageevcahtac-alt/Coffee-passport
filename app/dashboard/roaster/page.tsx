@@ -4,8 +4,10 @@ import { useState } from 'react';
 import Link from 'next/link';
 import QRCode from 'qrcode';
 import { useLots } from '@/lib/data/useLots';
+import { useJourney } from '@/lib/journey/useJourney';
 import { getRoasterById } from '@/lib/data/roasters';
-import { ROAST_TYPE_LABELS, type Lot } from '@/lib/types/coffee';
+import { ROAST_TYPE_LABELS, type Lot, type TastingRecord } from '@/lib/types/coffee';
+import { LotGuestAnalytics } from '@/components/roaster/LotGuestAnalytics';
 
 // No real roaster auth wired up yet (see /dashboard for the Supabase-gated
 // membership flow) — this cabinet is scoped to the pilot roaster for now,
@@ -14,6 +16,7 @@ const ACTIVE_ROASTER_ID = 'roaster-xo';
 
 export default function RoasterDashboardPage() {
   const lots = useLots();
+  const records = useJourney();
   const roaster = getRoasterById(ACTIVE_ROASTER_ID);
   const myLots = lots.filter((lot) => lot.roasterId === ACTIVE_ROASTER_ID);
 
@@ -44,7 +47,7 @@ export default function RoasterDashboardPage() {
         ) : (
           <div className="flex flex-col gap-4">
             {myLots.map((lot) => (
-              <LotRow key={lot.id} lot={lot} />
+              <LotRow key={lot.id} lot={lot} records={records} />
             ))}
           </div>
         )}
@@ -53,7 +56,7 @@ export default function RoasterDashboardPage() {
   );
 }
 
-function LotRow({ lot }: { lot: Lot }) {
+function LotRow({ lot, records }: { lot: Lot; records: TastingRecord[] }) {
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -135,6 +138,8 @@ function LotRow({ lot }: { lot: Lot }) {
           <p className="text-xs text-ink-400">Отсканируйте, чтобы открыть паспорт лота</p>
         </div>
       )}
+
+      <LotGuestAnalytics lot={lot} records={records} />
     </div>
   );
 }

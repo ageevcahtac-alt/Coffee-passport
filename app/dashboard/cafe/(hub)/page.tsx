@@ -29,7 +29,7 @@ export default function CafeMenuPage() {
       <div className="flex items-start justify-between gap-4 mb-8">
         <p className="section-label flex-1">Меню зерна по регионам</p>
         <Link
-          href="/dashboard/cafe/add"
+          href="/dashboard/cafe/add-lot"
           className="inline-flex items-center justify-center rounded-md bg-ink-900
                      text-parchment-100 font-body font-medium text-sm px-5 py-3
                      hover:bg-ink-800 transition-colors shrink-0"

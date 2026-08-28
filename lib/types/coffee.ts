@@ -30,6 +30,16 @@ export interface RoasterFlavorProfile {
   bitterness: number;
 }
 
+// Shared axis order/labels for anything comparing two RoasterFlavorProfile-
+// shaped readings (roaster reference vs. one guest, or vs. a guest average)
+// — see components/coffee/FlavorRadar.tsx and its callers.
+export const FLAVOR_AXES: { key: keyof RoasterFlavorProfile; label: string }[] = [
+  { key: 'acidity', label: 'Кислотность' },
+  { key: 'sweetness', label: 'Сладость' },
+  { key: 'body', label: 'Плотность' },
+  { key: 'bitterness', label: 'Горечь' },
+];
+
 export interface ProducerProfile {
   farmerName: string; // farmer or cooperative name
   farmName: string; // farm / washing station name
