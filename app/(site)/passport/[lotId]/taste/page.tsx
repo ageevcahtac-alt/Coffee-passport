@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useLots } from '@/lib/data/useLots';
 import { COFFEE_SHOPS } from '@/lib/data/coffeeShops';
 import { getBaristasForShop } from '@/lib/data/baristas';
@@ -12,8 +12,9 @@ import { RatingInput } from '@/components/coffee/RatingInput';
 import { BrewingMethodSelector } from '@/components/coffee/BrewingMethodSelector';
 import { TastingForm, type TastingFormValues } from '@/components/coffee/TastingForm';
 import { addTastingRecord } from '@/lib/journey/store';
+import { markJustRevealed } from '@/lib/journey/revealFlag';
 
-type Step = 'shop' | 'barista' | 'brew' | 'taste' | 'saved';
+type Step = 'shop' | 'barista' | 'brew' | 'taste';
 
 const fieldClasses =
   'w-full rounded-md border border-ink-200 bg-parchment-100 px-4 py-3 text-sm ' +
@@ -40,6 +41,7 @@ export default function TasteLotPage({ params }: { params: { lotId: string } }) 
 }
 
 function TasteLotFlow({ lot }: { lot: Lot }) {
+  const router = useRouter();
   const [step, setStep] = useState<Step>('shop');
   const [coffeeShopId, setCoffeeShopId] = useState<string | null>(null);
   const [baristaId, setBaristaId] = useState<string | null>(null);
@@ -59,7 +61,10 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
       baristaNote,
       ...values,
     });
-    setStep('saved');
+    // The passport page is where the unlock moment plays out — send the
+    // guest straight there instead of showing a static "saved" screen here.
+    markJustRevealed(lot.id);
+    router.push(`/passport/${lot.id}`);
   }
 
   return (
@@ -180,24 +185,6 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
             <h1 className="font-display text-2xl text-ink-900 mb-8">Расскажите о чашке</h1>
             <TastingForm onSave={handleSave} />
           </>
-        )}
-
-        {step === 'saved' && (
-          <div className="text-center py-16">
-            <p className="text-4xl mb-4" aria-hidden="true">✓</p>
-            <h1 className="font-display text-2xl text-ink-900 mb-3">Сохранено</h1>
-            <p className="text-ink-500 text-sm mb-8 max-w-xs mx-auto">
-              {lot.name} добавлен в ваше кофейное путешествие.
-            </p>
-            <Link
-              href="/journey"
-              className="inline-flex items-center justify-center rounded-md bg-ink-900
-                         text-parchment-100 font-body font-medium text-sm px-6 py-4
-                         hover:bg-ink-800 transition-colors"
-            >
-              Моё кофейное путешествие
-            </Link>
-          </div>
         )}
       </div>
     </main>

@@ -1,12 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import type { SensoryTagId } from '@/lib/types/coffee';
+import type { RoasterFlavorProfile, SensoryTagId } from '@/lib/types/coffee';
 import { RatingInput } from './RatingInput';
 import { SensoryTagPicker } from './SensoryTagPicker';
+import { FlavorSlider } from './FlavorSlider';
 
 export interface TastingFormValues {
   rating: number;
+  guestFlavorProfile: RoasterFlavorProfile;
   sensoryTags: SensoryTagId[];
   liked: string;
   disliked: string;
@@ -19,6 +21,10 @@ const fieldClasses =
 
 export function TastingForm({ onSave }: { onSave: (values: TastingFormValues) => void }) {
   const [rating, setRating] = useState(0);
+  const [acidity, setAcidity] = useState(3);
+  const [sweetness, setSweetness] = useState(3);
+  const [body, setBody] = useState(3);
+  const [bitterness, setBitterness] = useState(3);
   const [sensoryTags, setSensoryTags] = useState<SensoryTagId[]>([]);
   const [liked, setLiked] = useState('');
   const [disliked, setDisliked] = useState('');
@@ -31,6 +37,16 @@ export function TastingForm({ onSave }: { onSave: (values: TastingFormValues) =>
       <div>
         <p className="section-label mb-4">Оценка</p>
         <RatingInput value={rating} onChange={setRating} />
+      </div>
+
+      <div>
+        <p className="section-label mb-4">Ваш вкусовой профиль</p>
+        <div className="flex flex-col gap-5">
+          <FlavorSlider label="Кислотность" value={acidity} onChange={setAcidity} />
+          <FlavorSlider label="Сладость" value={sweetness} onChange={setSweetness} />
+          <FlavorSlider label="Плотность" value={body} onChange={setBody} />
+          <FlavorSlider label="Горечь" value={bitterness} onChange={setBitterness} />
+        </div>
       </div>
 
       <div>
@@ -83,13 +99,22 @@ export function TastingForm({ onSave }: { onSave: (values: TastingFormValues) =>
       <button
         type="button"
         disabled={!canSave}
-        onClick={() => onSave({ rating, sensoryTags, liked, disliked, note })}
+        onClick={() =>
+          onSave({
+            rating,
+            guestFlavorProfile: { acidity, sweetness, body, bitterness },
+            sensoryTags,
+            liked,
+            disliked,
+            note,
+          })
+        }
         className="inline-flex items-center justify-center rounded-md bg-ink-900
                    text-parchment-100 font-body font-medium text-sm px-6 py-4
                    hover:bg-ink-800 transition-colors
                    disabled:opacity-40 disabled:pointer-events-none"
       >
-        Сохранить в моё кофейное путешествие
+        Сохранить дегустацию в дневник
       </button>
       {!canSave && (
         <p className="text-xs text-ink-400 -mt-4 text-center">Поставьте оценку, чтобы сохранить</p>

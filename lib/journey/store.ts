@@ -10,11 +10,17 @@ import type { TastingRecord } from '@/lib/types/coffee';
 const STORAGE_KEY = 'coffee-passport:journey';
 const DEMO_USER_ID = 'demo-user';
 
+// useSyncExternalStore requires getServerSnapshot to return a referentially
+// stable value — a fresh `[]` literal on every call trips React's "should be
+// cached to avoid an infinite loop" warning, so both the SSR branch of
+// read() and getServerSnapshot() share this one instance.
+const EMPTY_RECORDS: TastingRecord[] = [];
+
 let cache: TastingRecord[] | null = null;
 const listeners = new Set<() => void>();
 
 function read(): TastingRecord[] {
-  if (typeof window === 'undefined') return [];
+  if (typeof window === 'undefined') return EMPTY_RECORDS;
   if (cache) return cache;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -46,7 +52,7 @@ export function getSnapshot(): TastingRecord[] {
 }
 
 export function getServerSnapshot(): TastingRecord[] {
-  return [];
+  return EMPTY_RECORDS;
 }
 
 export function addTastingRecord(

@@ -14,6 +14,11 @@ const DEFAULT_MENU: Record<string, string[]> = {
   'shop-xo-vsevolozhsk': ['LOT-XO-ETH-001', 'LOT-XO-COL-004', 'LOT-NS-KEN-002'],
 };
 
+// useSyncExternalStore requires getServerSnapshot to return a referentially
+// stable value — a fresh `[]` literal on every call (the fallback below)
+// trips React's "should be cached to avoid an infinite loop" warning.
+const EMPTY_IDS: string[] = [];
+
 let cache: Record<string, string[]> | null = null;
 const listeners = new Set<() => void>();
 
@@ -47,11 +52,11 @@ export function subscribe(listener: () => void): () => void {
 
 export function getMenuLotIds(shopId: string): string[] {
   const overrides = read();
-  return overrides[shopId] ?? DEFAULT_MENU[shopId] ?? [];
+  return overrides[shopId] ?? DEFAULT_MENU[shopId] ?? EMPTY_IDS;
 }
 
 export function getServerMenuLotIds(shopId: string): string[] {
-  return DEFAULT_MENU[shopId] ?? [];
+  return DEFAULT_MENU[shopId] ?? EMPTY_IDS;
 }
 
 export function addLotToMenu(shopId: string, lotId: string): void {

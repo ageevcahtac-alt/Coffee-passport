@@ -140,5 +140,9 @@ export interface TastingRecord {
   baristaId: string;
   baristaRating: number; // 1-5, 0 if not rated
   baristaNote: string;
+  // The guest's own blind-cupping read of the lot, 1-5 per axis — same shape
+  // as RoasterFlavorProfile so the two can be compared directly once the
+  // roaster's reference profile unlocks (see TasteComparison).
+  guestFlavorProfile: RoasterFlavorProfile;
   createdAt: string; // ISO timestamp
 }
