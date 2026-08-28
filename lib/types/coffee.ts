@@ -10,6 +10,10 @@ export interface Roaster {
   id: string;
   name: string;
   slug: string;
+  color: string; // brand pin color on the Coffee Belt map, e.g. "#D4AF37"
+  philosophy: string; // short brand statement, shown on the roaster profile card
+  city: string; // production/roastery location
+  country: string;
 }
 
 export type RoastType = 'filter' | 'espresso' | 'omni' | 'alternative';

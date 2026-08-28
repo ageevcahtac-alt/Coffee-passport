@@ -11,6 +11,7 @@ import { ProducerRoasterCard } from '@/components/coffee/ProducerRoasterCard';
 import { BlindTastingLock } from '@/components/coffee/BlindTastingLock';
 import { FarmerRevealCard } from '@/components/coffee/FarmerRevealCard';
 import { TasteComparison } from '@/components/coffee/TasteComparison';
+import { PinPlantedNotice } from '@/components/coffee/PinPlantedNotice';
 
 export default function LotPassportPage({ params }: { params: { lotId: string } }) {
   const lots = useLots();
@@ -91,6 +92,10 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
 
       <div className="max-w-md mx-auto w-full mt-10">
         <TasteComparison lot={lot} tasting={latestTasting} animate={justRevealed} />
+      </div>
+
+      <div className="max-w-md mx-auto w-full mt-6">
+        <PinPlantedNotice lot={lot} roaster={roaster} animate={justRevealed} />
       </div>
 
       <div className="max-w-md mx-auto w-full mt-8">

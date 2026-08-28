@@ -11,7 +11,7 @@ const STORAGE_KEY = 'coffee-passport:cafe-menu';
 // XO Coffee starts with a small cross-roaster selection so the dashboard
 // isn't empty on first load; every other shop starts with an empty menu.
 const DEFAULT_MENU: Record<string, string[]> = {
-  'shop-xo-vsevolozhsk': ['LOT-XO-ETH-001', 'LOT-XO-COL-004', 'LOT-NS-KEN-002'],
+  'shop-xo-vsevolozhsk': ['LOT-XO-ETH-001', 'LOT-XO-COL-004', 'LOT-NS-KEN-002', 'LOT-NS-ETH-003'],
 };
 
 // useSyncExternalStore requires getServerSnapshot to return a referentially

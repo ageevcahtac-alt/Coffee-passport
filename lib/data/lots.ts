@@ -93,6 +93,36 @@ export const LOTS: Lot[] = [
         'Ньери, дающий ту самую ягодную яркость и томатную кислотность в чашке.',
     },
   },
+  {
+    id: 'LOT-NS-ETH-003',
+    roasterId: 'roaster-north',
+    name: 'Ethiopia Yirgacheffe',
+    country: 'Ethiopia',
+    region: 'Yirgacheffe',
+    variety: 'Heirloom',
+    process: 'Natural',
+    cropYear: '2024/2025',
+    qGrade: 89.0,
+    roastProfile: 'Light Filter',
+    roastType: 'filter',
+    descriptors: ['Blueberry', 'Bergamot', 'Dark chocolate'],
+    roasterFlavorProfile: {
+      acidity: 5,
+      sweetness: 4,
+      body: 2,
+      bitterness: 1,
+    },
+    producer: {
+      farmerName: 'Konga Cooperative',
+      farmName: 'Yirgacheffe Konga Washing Station',
+      altitude: '2000–2200 м',
+      story:
+        'Фермеры кооператива Конга в зоне Йиргачефф собирают вишню на высоте ' +
+        'свыше 2000 м. Натуральная обработка на солнце даёт плотную ягодную ' +
+        'сладость и парфюмерную бергамотовую кислотность в чашке — второй ' +
+        'взгляд на Эфиопию рядом с нашим основным лотом от XO.',
+    },
+  },
 ];
 
 export function getLotById(id: string): Lot | undefined {

@@ -3,55 +3,53 @@
 import { useEffect, useRef, useState } from 'react';
 import { useJourney } from '@/lib/journey/useJourney';
 import { getMergedLotById } from '@/lib/data/lotsStore';
-import { consumeCountryJustActivated } from '@/lib/journey/mapFlag';
+import { consumePinJustActivated } from '@/lib/journey/mapFlag';
 import { CoffeeJourney } from '@/components/coffee/CoffeeJourney';
-import { CoffeeBeltMap, type ActivatedRegion } from '@/components/coffee/CoffeeBeltMap';
+import {
+  CoffeeBeltMap,
+  type ActivatedPin,
+  type SelectedPin,
+} from '@/components/coffee/CoffeeBeltMap';
 import { ScanLotModal } from '@/components/coffee/ScanLotModal';
-import { TastingRecordCard } from '@/components/coffee/TastingRecordCard';
-import { TastingDetailModal } from '@/components/coffee/TastingDetailModal';
-import type { TastingRecord } from '@/lib/types/coffee';
+import { RoasterProfileCard } from '@/components/coffee/RoasterProfileCard';
 
 export default function JourneyPage() {
   const records = useJourney();
   const [scanOpen, setScanOpen] = useState(false);
-  const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
-  const [justActivatedCountry, setJustActivatedCountry] = useState<string | null>(null);
-  const [openRecord, setOpenRecord] = useState<TastingRecord | null>(null);
+  const [selectedPin, setSelectedPin] = useState<SelectedPin | null>(null);
+  const [justActivatedPin, setJustActivatedPin] = useState<SelectedPin | null>(null);
 
   // Consumes the one-shot flag set by the taste flow — guard with a ref
-  // since consumeCountryJustActivated deletes as it reads, and React Strict
+  // since consumePinJustActivated deletes as it reads, and React Strict
   // Mode double-invokes effects in dev (see the passport page for the same
   // pattern and why it matters).
   const activationChecked = useRef(false);
   useEffect(() => {
     if (!activationChecked.current) {
       activationChecked.current = true;
-      const country = consumeCountryJustActivated();
-      if (country) {
-        setJustActivatedCountry(country);
-        setSelectedCountry(country);
+      const pin = consumePinJustActivated();
+      if (pin) {
+        setJustActivatedPin(pin);
+        setSelectedPin(pin);
       }
     }
   }, []);
 
-  const recordsByCountry = new Map<string, TastingRecord[]>();
+  const pinKeys = new Set<string>();
+  const pins: ActivatedPin[] = [];
   for (const record of records) {
-    const country = getMergedLotById(record.lotId)?.country;
-    if (!country) continue;
-    const group = recordsByCountry.get(country) ?? [];
-    group.push(record);
-    recordsByCountry.set(country, group);
+    const lot = getMergedLotById(record.lotId);
+    if (!lot) continue;
+    const key = `${lot.country}::${lot.roasterId}`;
+    if (pinKeys.has(key)) continue;
+    pinKeys.add(key);
+    pins.push({
+      country: lot.country,
+      roasterId: lot.roasterId,
+      justActivated:
+        justActivatedPin?.country === lot.country && justActivatedPin?.roasterId === lot.roasterId,
+    });
   }
-
-  const activatedCountries: ActivatedRegion[] = Array.from(recordsByCountry.keys()).map(
-    (country) => ({ country, justActivated: country === justActivatedCountry })
-  );
-
-  const selectedLatestRecord = selectedCountry
-    ? [...(recordsByCountry.get(selectedCountry) ?? [])].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )[0] ?? null
-    : null;
 
   return (
     <main className="min-h-dvh flex flex-col px-6 py-16">
@@ -75,20 +73,22 @@ export default function JourneyPage() {
 
       <div className="max-w-md mx-auto w-full mb-4">
         <CoffeeBeltMap
-          activatedCountries={activatedCountries}
-          selectedCountry={selectedCountry}
-          onSelectCountry={(country) =>
-            setSelectedCountry((prev) => (prev === country ? null : country))
+          pins={pins}
+          selectedPin={selectedPin}
+          onSelectPin={(pin) =>
+            setSelectedPin((prev) =>
+              prev?.country === pin.country && prev?.roasterId === pin.roasterId ? null : pin
+            )
           }
         />
       </div>
 
-      {selectedLatestRecord && (
-        <div key={selectedCountry} className="max-w-md mx-auto w-full mb-4 reveal-rise">
-          <TastingRecordCard
-            record={selectedLatestRecord}
-            onClick={() => setOpenRecord(selectedLatestRecord)}
-          />
+      {selectedPin && (
+        <div
+          key={`${selectedPin.country}::${selectedPin.roasterId}`}
+          className="max-w-md mx-auto w-full mb-4 reveal-rise"
+        >
+          <RoasterProfileCard roasterId={selectedPin.roasterId} records={records} />
         </div>
       )}
 
@@ -99,9 +99,6 @@ export default function JourneyPage() {
       )}
 
       {scanOpen && <ScanLotModal onClose={() => setScanOpen(false)} />}
-      {openRecord && (
-        <TastingDetailModal record={openRecord} onClose={() => setOpenRecord(null)} />
-      )}
     </main>
   );
 }

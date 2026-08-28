@@ -13,7 +13,7 @@ import { BrewingMethodSelector } from '@/components/coffee/BrewingMethodSelector
 import { TastingForm, type TastingFormValues } from '@/components/coffee/TastingForm';
 import { addTastingRecord, getSnapshot as getJourneySnapshot } from '@/lib/journey/store';
 import { markJustRevealed } from '@/lib/journey/revealFlag';
-import { markCountryJustActivated } from '@/lib/journey/mapFlag';
+import { markPinJustActivated } from '@/lib/journey/mapFlag';
 import { getMergedLotById } from '@/lib/data/lotsStore';
 
 type Step = 'shop' | 'barista' | 'brew' | 'taste';
@@ -55,11 +55,15 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
     if (!coffeeShopId || !baristaId || !brewingMethod) return;
 
     // Checked before the save so the just-added record doesn't count as
-    // "already had this country" — drives the gold-pin drop on the Coffee
-    // Belt map (see CoffeeBeltMap) only the first time a country appears.
-    const hadCountryBefore = getJourneySnapshot().some(
-      (record) => getMergedLotById(record.lotId)?.country === lot.country
-    );
+    // "already had this pin" — drives the pin-drop animation on the Coffee
+    // Belt map (see CoffeeBeltMap) only the first time this exact
+    // (country, roaster) combination appears. The same country can carry
+    // more than one roaster's pin, so this is keyed by the pair, not just
+    // the country.
+    const hadPinBefore = getJourneySnapshot().some((record) => {
+      const recordLot = getMergedLotById(record.lotId);
+      return recordLot?.country === lot.country && recordLot?.roasterId === lot.roasterId;
+    });
 
     addTastingRecord({
       lotId: lot.id,
@@ -72,7 +76,7 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
       ...values,
     });
 
-    if (!hadCountryBefore) markCountryJustActivated(lot.country);
+    if (!hadPinBefore) markPinJustActivated(lot.country, lot.roasterId);
 
     // The passport page is where the unlock moment plays out — send the
     // guest straight there instead of showing a static "saved" screen here.

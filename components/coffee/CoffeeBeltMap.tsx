@@ -1,4 +1,5 @@
 import { COFFEE_BELT_POSITIONS } from '@/lib/data/coffeeBelt';
+import { getRoasterById } from '@/lib/data/roasters';
 
 const VIEW_W = 640;
 const VIEW_H = 300;
@@ -17,20 +18,48 @@ const AFRICA_PATH =
   'M380,58 C422,64 438,100 432,142 C426,182 414,212 400,242 ' +
   'C390,260 374,260 366,242 C352,206 342,170 342,128 C342,92 354,68 380,58 Z';
 
-export interface ActivatedRegion {
+// A country can carry more than one roaster's pin (see the task: "новая
+// дегустация лота от другого обжарщика в том же регионе добавляет новую
+// булавку ... сверху, снизу или сбоку от региона") — pins in the same
+// country cluster around the base position using these offsets, in order.
+const PIN_OFFSETS: [number, number][] = [
+  [0, 0],
+  [16, -13],
+  [-16, -13],
+  [16, 13],
+  [-16, 13],
+  [0, -22],
+];
+
+export interface ActivatedPin {
   country: string;
+  roasterId: string;
   justActivated?: boolean;
 }
 
+export interface SelectedPin {
+  country: string;
+  roasterId: string;
+}
+
 export function CoffeeBeltMap({
-  activatedCountries,
-  selectedCountry,
-  onSelectCountry,
+  pins,
+  selectedPin,
+  onSelectPin,
 }: {
-  activatedCountries: ActivatedRegion[];
-  selectedCountry: string | null;
-  onSelectCountry: (country: string) => void;
+  pins: ActivatedPin[];
+  selectedPin: SelectedPin | null;
+  onSelectPin: (pin: SelectedPin) => void;
 }) {
+  const byCountry = new Map<string, ActivatedPin[]>();
+  for (const pin of pins) {
+    const group = byCountry.get(pin.country) ?? [];
+    group.push(pin);
+    byCountry.set(pin.country, group);
+  }
+  // Stable order so re-renders don't jitter which pin sits at which offset.
+  for (const group of byCountry.values()) group.sort((a, b) => a.roasterId.localeCompare(b.roasterId));
+
   return (
     <div className="rounded-md border border-ink-200 bg-parchment-100 p-4">
       <svg
@@ -103,55 +132,82 @@ export function CoffeeBeltMap({
         <path d={SOUTH_AMERICA_PATH} fill="var(--color-ink-100)" stroke="var(--color-ink-300)" strokeWidth={1} />
         <path d={AFRICA_PATH} fill="var(--color-ink-100)" stroke="var(--color-ink-300)" strokeWidth={1} />
 
-        {activatedCountries.map(({ country, justActivated }) => {
-          const pos = COFFEE_BELT_POSITIONS[country];
-          if (!pos) return null;
-          const selected = selectedCountry === country;
+        {Array.from(byCountry.entries()).map(([country, group]) => {
+          const base = COFFEE_BELT_POSITIONS[country];
+          if (!base) return null;
+          const topY = Math.min(...group.map((_, i) => base.y + (PIN_OFFSETS[i % PIN_OFFSETS.length]?.[1] ?? 0)));
 
           return (
-            <g
-              key={country}
-              className={justActivated ? 'reveal-pop' : undefined}
-              onClick={() => onSelectCountry(country)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault();
-                  onSelectCountry(country);
-                }
-              }}
-              tabIndex={0}
-              role="button"
-              aria-label={`Регион ${country}${selected ? ', выбран' : ''}`}
-              style={{ cursor: 'pointer' }}
-            >
-              <circle
-                cx={pos.x}
-                cy={pos.y}
-                r={selected ? 9 : 7}
-                fill="var(--color-gold-500)"
-                stroke="var(--color-parchment-100)"
-                strokeWidth={1.5}
-              />
-              <circle cx={pos.x} cy={pos.y} r={2.5} fill="var(--color-parchment-100)" />
+            <g key={country}>
               <text
-                x={pos.x}
-                y={pos.y - 13}
+                x={base.x}
+                y={topY - 13}
                 textAnchor="middle"
                 fontSize={11}
-                fontWeight={selected ? 700 : 500}
+                fontWeight={500}
                 fill="var(--color-ink-900)"
               >
                 {country}
               </text>
+              {group.map((pin, i) => {
+                const [dx, dy] = PIN_OFFSETS[i % PIN_OFFSETS.length] ?? [0, 0];
+                const x = base.x + dx;
+                const y = base.y + dy;
+                const roaster = getRoasterById(pin.roasterId);
+                const color = roaster?.color ?? 'var(--color-gold-500)';
+                const selected = selectedPin?.country === country && selectedPin?.roasterId === pin.roasterId;
+
+                return (
+                  <g key={pin.roasterId}>
+                    {pin.justActivated && (
+                      <text
+                        x={x}
+                        y={y - 16}
+                        textAnchor="middle"
+                        fontSize={16}
+                        className="pin-farmer-drop"
+                        aria-hidden="true"
+                      >
+                        🧑‍🌾
+                      </text>
+                    )}
+                    <g
+                      className={pin.justActivated ? 'pin-plant' : undefined}
+                      onClick={() => onSelectPin({ country, roasterId: pin.roasterId })}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          onSelectPin({ country, roasterId: pin.roasterId });
+                        }
+                      }}
+                      tabIndex={0}
+                      role="button"
+                      aria-label={`${country}, ${roaster?.name ?? 'обжарщик'}${selected ? ', выбран' : ''}`}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <circle
+                        cx={x}
+                        cy={y}
+                        r={selected ? 9 : 7}
+                        fill={color}
+                        stroke="var(--color-parchment-100)"
+                        strokeWidth={1.5}
+                      />
+                      <circle cx={x} cy={y} r={2.5} fill="var(--color-parchment-100)" />
+                      <title>{roaster?.name ?? pin.roasterId}</title>
+                    </g>
+                  </g>
+                );
+              })}
             </g>
           );
         })}
       </svg>
 
       <p className="text-center text-[11px] text-ink-400 mt-3">
-        {activatedCountries.length === 0
+        {pins.length === 0
           ? 'Кофейный пояс Земли, 25° с.ш. – 30° ю.ш. Отсканируйте первый лот, чтобы отметить регион.'
-          : 'Кликните на булавку, чтобы увидеть последний угаданный лот региона.'}
+          : 'Кликните на булавку, чтобы открыть визитку обжарщика.'}
       </p>
     </div>
   );
