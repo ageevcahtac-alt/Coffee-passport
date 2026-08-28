@@ -92,6 +92,39 @@ export const SENSORY_TAGS = [
 
 export type SensoryTagId = (typeof SENSORY_TAGS)[number]['id'];
 
+export type StaffRole =
+  | 'barista'
+  | 'cook'
+  | 'confectioner'
+  | 'administrator'
+  | 'manager'
+  | 'staff';
+
+export const STAFF_ROLE_LABELS: Record<StaffRole, string> = {
+  barista: 'Бариста',
+  cook: 'Повар',
+  confectioner: 'Кондитер',
+  administrator: 'Администратор',
+  manager: 'Управляющий',
+  staff: 'Стафф',
+};
+
+// A cafe team member. Barista-role members intentionally reuse the ids from
+// lib/data/baristas.ts (see lib/data/staff.ts) so guest ratings recorded on
+// TastingRecord.baristaId/baristaRating/baristaNote resolve straight to
+// their staff card — no separate rating store needed for that role.
+export interface StaffMember {
+  id: string;
+  shopId: string;
+  name: string;
+  role: StaffRole;
+  hireDate: string; // ISO date, e.g. "2023-04-10"
+  achievements: string; // merits/achievements, in the manager's own words
+  hobbies: string;
+  leadershipQualities: string;
+  managerNote: string; // short brief for a new manager meeting this person
+}
+
 export interface TastingRecord {
   id: string;
   userId: string; // placeholder until this flow is wired to real auth
