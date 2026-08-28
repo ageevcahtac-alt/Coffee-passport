@@ -5,7 +5,10 @@ import Link from 'next/link';
 import { useLots } from '@/lib/data/useLots';
 import { useJourney } from '@/lib/journey/useJourney';
 import { consumeJustRevealed } from '@/lib/journey/revealFlag';
+import { markPendingShop } from '@/lib/journey/pendingShopFlag';
 import { getRoasterById } from '@/lib/data/roasters';
+import { COFFEE_SHOPS, getCoffeeShopById } from '@/lib/data/coffeeShops';
+import { CoffeeShopSelector } from '@/components/coffee/CoffeeShopSelector';
 import { LotPassport } from '@/components/coffee/LotPassport';
 import { ProducerRoasterCard } from '@/components/coffee/ProducerRoasterCard';
 import { BlindTastingLock } from '@/components/coffee/BlindTastingLock';
@@ -43,6 +46,11 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-check on lot id change
   }, [lot?.id]);
 
+  // The check-in gate: which shop is this visit at? No real geolocation, so
+  // this is an explicit pick, re-asked on every fresh visit to this page
+  // (component state, not persisted) — see CoffeeShopSelector below.
+  const [selectedShopId, setSelectedShopId] = useState<string | null>(null);
+
   if (!lot || !roaster) {
     if (!mounted) return null;
     return (
@@ -53,20 +61,41 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
     );
   }
 
-  const myTastings = journey
-    .filter((record) => record.lotId === lot.id)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  const latestTasting = myTastings[0] ?? null;
-
-  if (!latestTasting) {
+  if (!selectedShopId) {
     return (
       <main className="min-h-dvh flex flex-col px-6 py-16">
         <div className="max-w-md mx-auto w-full">
           <p className="text-xs uppercase tracking-widest2 text-ink-400 font-body mb-2">
             {roaster.name}
           </p>
+          <h1 className="font-display text-2xl text-ink-900 mb-8">
+            Где вы пробуете этот лот сегодня?
+          </h1>
+          <CoffeeShopSelector shops={COFFEE_SHOPS} value={selectedShopId} onChange={setSelectedShopId} />
+        </div>
+      </main>
+    );
+  }
+
+  const shop = getCoffeeShopById(selectedShopId);
+
+  // Scenario A vs. B is per (lot, coffee shop) — the same lot already
+  // tasted at a different shop still starts a clean session here, matching
+  // the task's "новая кофейня = новый опыт" requirement.
+  const shopTastings = journey
+    .filter((record) => record.lotId === lot.id && record.coffeeShopId === selectedShopId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const latestTasting = shopTastings[0] ?? null;
+
+  if (!latestTasting) {
+    return (
+      <main className="min-h-dvh flex flex-col px-6 py-16">
+        <div className="max-w-md mx-auto w-full">
+          <p className="text-xs uppercase tracking-widest2 text-ink-400 font-body mb-2">
+            {roaster.name} · {shop?.name ?? selectedShopId}
+          </p>
           <h1 className="font-display text-3xl leading-[1.1] text-ink-900 mb-8">{lot.name}</h1>
-          <BlindTastingLock lot={lot} />
+          <BlindTastingLock lot={lot} onStartTasting={() => markPendingShop(lot.id, selectedShopId)} />
         </div>
       </main>
     );
@@ -93,19 +122,29 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
         <TasteComparison lot={lot} tasting={latestTasting} animate={justRevealed} />
       </div>
 
+      <div className="max-w-md mx-auto w-full mt-6 rounded-md border border-ink-200 bg-parchment-100 p-5">
+        <p className="section-label mb-3">Ваша дегустация</p>
+        <p className="text-sm text-ink-900">
+          {shop?.name ?? selectedShopId}
+          {shop?.city ? ` · ${shop.city}` : ''}
+        </p>
+        <p className="text-xs text-ink-400 mt-1">Сохранённая карточка этого лота в этой кофейне</p>
+      </div>
+
       <div className="max-w-md mx-auto w-full mt-8">
         <ProducerRoasterCard lot={lot} />
       </div>
 
       <div className="max-w-md mx-auto w-full mt-8 text-center">
-        <p className="text-xs text-ink-400 mb-3">Хотите попробовать этот кофе ещё раз?</p>
+        <p className="text-xs text-ink-400 mb-3">Хотите попробовать этот лот ещё раз?</p>
         <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
-          <Link
-            href={`/passport/${lot.id}/taste`}
+          <button
+            type="button"
+            onClick={() => setSelectedShopId(null)}
             className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900"
           >
-            Записать новую дегустацию
-          </Link>
+            Выбрать кофейню заново
+          </button>
           <Link
             href="/journey"
             className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900"

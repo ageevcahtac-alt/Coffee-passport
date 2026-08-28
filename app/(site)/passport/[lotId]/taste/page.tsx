@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLots } from '@/lib/data/useLots';
 import { COFFEE_SHOPS } from '@/lib/data/coffeeShops';
 import { getBaristasForShop } from '@/lib/data/baristas';
@@ -13,6 +13,7 @@ import { TastingForm, type TastingFormValues } from '@/components/coffee/Tasting
 import { addTastingRecord, getSnapshot as getJourneySnapshot } from '@/lib/journey/store';
 import { markJustRevealed } from '@/lib/journey/revealFlag';
 import { markPinJustActivated } from '@/lib/journey/mapFlag';
+import { consumePendingShop } from '@/lib/journey/pendingShopFlag';
 import { getMergedLotById } from '@/lib/data/lotsStore';
 import { getRoasterById } from '@/lib/data/roasters';
 import { FarmerPinningModal } from '@/components/coffee/FarmerPinningModal';
@@ -51,6 +52,23 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
   const [baristaNote, setBaristaNote] = useState('');
   const [brewingMethod, setBrewingMethod] = useState<BrewingMethodId | null>(null);
   const [showPinningRitual, setShowPinningRitual] = useState(false);
+
+  // If the guest already picked a shop on the passport page's check-in gate
+  // (see markPendingShop there), skip asking again here — jump straight to
+  // the barista step. Guard with a ref since consumePendingShop deletes as
+  // it reads, and React Strict Mode double-invokes effects in dev (same
+  // pattern as revealFlag/mapFlag consumption elsewhere in this flow).
+  const pendingShopChecked = useRef(false);
+  useEffect(() => {
+    if (!pendingShopChecked.current) {
+      pendingShopChecked.current = true;
+      const pendingShopId = consumePendingShop(lot.id);
+      if (pendingShopId && COFFEE_SHOPS.some((shop) => shop.id === pendingShopId)) {
+        setCoffeeShopId(pendingShopId);
+        setStep('barista');
+      }
+    }
+  }, [lot.id]);
 
   function handleSave(values: TastingFormValues) {
     if (!coffeeShopId || !baristaId || !brewingMethod) return;

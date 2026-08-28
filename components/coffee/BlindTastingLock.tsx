@@ -7,7 +7,13 @@ import type { Lot } from '@/lib/types/coffee';
 // ProducerRoasterCard until a TastingRecord exists for the lot. A handful
 // of basic facts (origin, farm, process, Q-Score, crop year) stay visible
 // even locked — only the tasting-note content is a spoiler.
-export function BlindTastingLock({ lot }: { lot: Lot }) {
+export function BlindTastingLock({
+  lot,
+  onStartTasting,
+}: {
+  lot: Lot;
+  onStartTasting?: () => void;
+}) {
   return (
     <div>
       <div className="rounded-md border border-gold-400 bg-gold-400/10 px-5 py-4 mb-8">
@@ -61,6 +67,7 @@ export function BlindTastingLock({ lot }: { lot: Lot }) {
 
       <Link
         href={`/passport/${lot.id}/taste`}
+        onClick={onStartTasting}
         className="inline-flex items-center justify-center w-full rounded-md bg-ink-900
                    text-parchment-100 font-body font-medium text-sm px-6 py-4
                    hover:bg-ink-800 transition-colors"
