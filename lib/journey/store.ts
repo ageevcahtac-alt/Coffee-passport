@@ -29,6 +29,9 @@ function normalizeRecord(record: TastingRecord): TastingRecord {
   return {
     ...record,
     guestFlavorProfile: record.guestFlavorProfile ?? { acidity: 0, sweetness: 0, body: 0, bitterness: 0 },
+    subDescriptors: record.subDescriptors ?? {},
+    bodyTexture: record.bodyTexture ?? null,
+    defects: record.defects ?? [],
   };
 }
 

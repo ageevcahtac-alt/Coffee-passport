@@ -1,15 +1,26 @@
 'use client';
 
 import { useState } from 'react';
-import type { RoasterFlavorProfile, SensoryTagId } from '@/lib/types/coffee';
+import type {
+  BodyTexture,
+  DefectId,
+  FlavorSubDescriptors,
+  RoasterFlavorProfile,
+  SensoryTagId,
+} from '@/lib/types/coffee';
 import { RatingInput } from './RatingInput';
 import { SensoryTagPicker } from './SensoryTagPicker';
 import { FlavorSlider } from './FlavorSlider';
+import { BodyTextureSelector } from './BodyTextureSelector';
+import { DefectsAccordion } from './DefectsAccordion';
 
 export interface TastingFormValues {
   rating: number;
   guestFlavorProfile: RoasterFlavorProfile;
+  bodyTexture: BodyTexture | null;
   sensoryTags: SensoryTagId[];
+  subDescriptors: FlavorSubDescriptors;
+  defects: DefectId[];
   liked: string;
   disliked: string;
   note: string;
@@ -25,7 +36,10 @@ export function TastingForm({ onSave }: { onSave: (values: TastingFormValues) =>
   const [sweetness, setSweetness] = useState(3);
   const [body, setBody] = useState(3);
   const [bitterness, setBitterness] = useState(3);
+  const [bodyTexture, setBodyTexture] = useState<BodyTexture | null>(null);
   const [sensoryTags, setSensoryTags] = useState<SensoryTagId[]>([]);
+  const [subDescriptors, setSubDescriptors] = useState<FlavorSubDescriptors>({});
+  const [defects, setDefects] = useState<DefectId[]>([]);
   const [liked, setLiked] = useState('');
   const [disliked, setDisliked] = useState('');
   const [note, setNote] = useState('');
@@ -50,9 +64,21 @@ export function TastingForm({ onSave }: { onSave: (values: TastingFormValues) =>
       </div>
 
       <div>
-        <p className="section-label mb-4">Вкусовые впечатления</p>
-        <SensoryTagPicker value={sensoryTags} onChange={setSensoryTags} />
+        <p className="section-label mb-4">Текстура тела</p>
+        <BodyTextureSelector value={bodyTexture} onChange={setBodyTexture} />
       </div>
+
+      <div>
+        <p className="section-label mb-4">Вкусовые впечатления</p>
+        <SensoryTagPicker
+          sensoryTags={sensoryTags}
+          onSensoryTagsChange={setSensoryTags}
+          subDescriptors={subDescriptors}
+          onSubDescriptorsChange={setSubDescriptors}
+        />
+      </div>
+
+      <DefectsAccordion selected={defects} onChange={setDefects} />
 
       <div>
         <label htmlFor="liked" className="section-label mb-4 block">
@@ -103,7 +129,10 @@ export function TastingForm({ onSave }: { onSave: (values: TastingFormValues) =>
           onSave({
             rating,
             guestFlavorProfile: { acidity, sweetness, body, bitterness },
+            bodyTexture,
             sensoryTags,
+            subDescriptors,
+            defects,
             liked,
             disliked,
             note,

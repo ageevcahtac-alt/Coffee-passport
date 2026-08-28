@@ -106,6 +106,38 @@ export const SENSORY_TAGS = [
 
 export type SensoryTagId = (typeof SENSORY_TAGS)[number]['id'];
 
+// Flavor-wheel style refinements — only some top-level tags branch further
+// (a category missing here just has no expand arrow in SensoryTagPicker).
+// Picking any sub-descriptor implies its parent tag, so SENSORY_TAGS stays
+// the single source of truth for "what did the guest notice" elsewhere
+// (e.g. the roaster's "часто отмечают" tally).
+export const FLAVOR_SUB_DESCRIPTORS: Partial<Record<SensoryTagId, string[]>> = {
+  acidity: ['Цитрус', 'Яблоко', 'Апельсин', 'Вишня', 'Винная', 'Лимон'],
+  fruitiness: ['Персик', 'Манго', 'Красное яблоко', 'Абсолютные тропики'],
+  chocolate: ['Тёмный шоколад', 'Молочный шоколад', 'Какао-нибсы', 'Карамель'],
+  berry: ['Малина', 'Черника', 'Смородина', 'Клубника'],
+};
+
+export type FlavorSubDescriptors = Partial<Record<SensoryTagId, string[]>>;
+
+export type BodyTexture = 'watery' | 'medium' | 'syrupy';
+
+export const BODY_TEXTURE_OPTIONS: { id: BodyTexture; label: string; shortLabel: string }[] = [
+  { id: 'watery', label: 'Водянистое/Чайное', shortLabel: 'Водянистое тело' },
+  { id: 'medium', label: 'Среднее/Округлое', shortLabel: 'Округлое тело' },
+  { id: 'syrupy', label: 'Плотное/Сиропистое', shortLabel: 'Плотное тело' },
+];
+
+export const DEFECT_TAGS = [
+  { id: 'astringent', label: 'Сухость/Вяжет' },
+  { id: 'grassy', label: 'Травянистость/Недожар' },
+  { id: 'burnt', label: 'Гарь/Пережар' },
+  { id: 'woody', label: 'Древесный тон' },
+  { id: 'over_bitter', label: 'Чрезмерная горечь' },
+] as const;
+
+export type DefectId = (typeof DEFECT_TAGS)[number]['id'];
+
 export type StaffRole =
   | 'barista'
   | 'cook'
@@ -148,6 +180,9 @@ export interface TastingRecord {
   brewingMethod: BrewingMethodId;
   rating: number; // 1-5, the consumer's personal rating of this cup
   sensoryTags: SensoryTagId[];
+  subDescriptors: FlavorSubDescriptors; // flavor-wheel refinements, keyed by parent tag
+  bodyTexture: BodyTexture | null;
+  defects: DefectId[]; // quality issues flagged in the cup — feeds roaster + cafe analytics
   liked: string;
   disliked: string;
   note: string;

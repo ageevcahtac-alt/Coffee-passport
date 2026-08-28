@@ -5,7 +5,7 @@ import { getMergedLotById } from '@/lib/data/lotsStore';
 import { getBaristaById } from '@/lib/data/baristas';
 import { formatTastingDate } from '@/lib/utils/date';
 import { StarRating } from '@/components/coffee/StarRating';
-import type { TastingRecord } from '@/lib/types/coffee';
+import { DEFECT_TAGS, type TastingRecord } from '@/lib/types/coffee';
 
 const FEED_LIMIT = 5;
 
@@ -80,6 +80,11 @@ function CoffeeFeedItem({ record }: { record: TastingRecord }) {
       {record.liked && <p className="text-xs text-ink-500 mb-1">👍 {record.liked}</p>}
       {record.disliked && <p className="text-xs text-ink-500 mb-1">👎 {record.disliked}</p>}
       {record.note && <p className="text-xs text-ink-500 mb-1">{record.note}</p>}
+      {record.defects.length > 0 && (
+        <p className="text-xs text-ink-900 mb-1">
+          ⚠ Дефекты: {record.defects.map((id) => DEFECT_TAGS.find((tag) => tag.id === id)?.label ?? id).join(', ')}
+        </p>
+      )}
       <p className="text-[11px] text-ink-300 mt-1">{formatTastingDate(record.createdAt)}</p>
     </div>
   );

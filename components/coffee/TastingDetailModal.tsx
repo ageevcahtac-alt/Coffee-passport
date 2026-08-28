@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { BREWING_METHODS, SENSORY_TAGS, type TastingRecord } from '@/lib/types/coffee';
+import { BODY_TEXTURE_OPTIONS, BREWING_METHODS, DEFECT_TAGS, SENSORY_TAGS, type TastingRecord } from '@/lib/types/coffee';
 import { getMergedLotById } from '@/lib/data/lotsStore';
 import { getRoasterById } from '@/lib/data/roasters';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
@@ -77,21 +77,50 @@ export function TastingDetailModal({
         {record.sensoryTags.length > 0 && (
           <>
             <p className="section-label mb-3">Вкусовые впечатления</p>
-            <ul className="flex flex-wrap gap-2 mb-6">
+            <ul className="flex flex-col gap-1.5 mb-6">
               {record.sensoryTags.map((tagId) => {
                 const tag = SENSORY_TAGS.find((candidate) => candidate.id === tagId);
+                const subs = record.subDescriptors[tagId];
                 return (
-                  <li
-                    key={tagId}
-                    className="rounded-full border border-ink-200 bg-parchment-200 px-3 py-1.5
-                               text-xs text-ink-700"
-                  >
+                  <li key={tagId} className="text-sm text-ink-700">
                     {tag?.label ?? tagId}
+                    {subs && subs.length > 0 && (
+                      <span className="text-ink-400"> ({subs.join(', ')})</span>
+                    )}
                   </li>
                 );
               })}
             </ul>
           </>
+        )}
+
+        {record.bodyTexture && (
+          <div className="mb-6">
+            <p className="section-label mb-3">Текстура тела</p>
+            <p className="text-sm text-ink-700">
+              {BODY_TEXTURE_OPTIONS.find((option) => option.id === record.bodyTexture)?.label}
+            </p>
+          </div>
+        )}
+
+        {record.defects.length > 0 && (
+          <div className="mb-6">
+            <p className="section-label mb-3">Дефекты во вкусе</p>
+            <ul className="flex flex-wrap gap-2">
+              {record.defects.map((defectId) => {
+                const defect = DEFECT_TAGS.find((candidate) => candidate.id === defectId);
+                return (
+                  <li
+                    key={defectId}
+                    className="rounded-full border border-ink-700 bg-ink-100 px-3 py-1.5
+                               text-xs text-ink-900"
+                  >
+                    {defect?.label ?? defectId}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         )}
 
         {record.liked && (

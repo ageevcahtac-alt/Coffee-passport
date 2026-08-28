@@ -4,6 +4,7 @@ import { getMergedLotById } from '@/lib/data/lotsStore';
 import { getRoasterById } from '@/lib/data/roasters';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { formatTastingDate } from '@/lib/utils/date';
+import { summarizeTasting } from '@/lib/utils/tastingSummary';
 import { StarRating } from './StarRating';
 
 export function TastingRecordCard({
@@ -17,6 +18,7 @@ export function TastingRecordCard({
   const roaster = getRoasterById(record.roasterId);
   const shop = getCoffeeShopById(record.coffeeShopId);
   const brewingMethod = BREWING_METHODS.find((method) => method.id === record.brewingMethod);
+  const summary = summarizeTasting(record);
 
   if (!lot || !roaster || !shop) return null;
 
@@ -43,6 +45,12 @@ export function TastingRecordCard({
       <div className="mb-3">
         <StarRating value={record.rating} />
       </div>
+
+      {summary && <p className="text-sm text-ink-700 mb-2">{summary}</p>}
+
+      {record.defects.length > 0 && (
+        <p className="text-xs text-ink-500 mb-2">⚠ Дефекты: {record.defects.length}</p>
+      )}
 
       {lot.descriptors.length > 0 && (
         <p className="text-xs text-ink-400 mb-3">{lot.descriptors.join(' · ')}</p>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { FLAVOR_AXES, SENSORY_TAGS, type Lot, type TastingRecord } from '@/lib/types/coffee';
+import { DEFECT_TAGS, FLAVOR_AXES, SENSORY_TAGS, type Lot, type TastingRecord } from '@/lib/types/coffee';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { FlavorRadar } from '@/components/coffee/FlavorRadar';
 
@@ -24,6 +24,21 @@ function topSensoryTags(records: TastingRecord[], limit = 5) {
     }))
     .sort((a, b) => b.count - a.count)
     .slice(0, limit);
+}
+
+function topDefects(records: TastingRecord[]) {
+  const counts = new Map<string, number>();
+  for (const record of records) {
+    for (const defectId of record.defects) {
+      counts.set(defectId, (counts.get(defectId) ?? 0) + 1);
+    }
+  }
+  return Array.from(counts.entries())
+    .map(([defectId, count]) => ({
+      label: DEFECT_TAGS.find((tag) => tag.id === defectId)?.label ?? defectId,
+      count,
+    }))
+    .sort((a, b) => b.count - a.count);
 }
 
 // Every guest's blind-cupping read (guestFlavorProfile, rating, sensory
@@ -61,6 +76,7 @@ export function LotGuestAnalytics({ lot, records }: { lot: Lot; records: Tasting
   const roasterValues = FLAVOR_AXES.map(({ key }) => lot.roasterFlavorProfile[key]);
   const avgRating = filteredRecords.reduce((sum, r) => sum + r.rating, 0) / filteredRecords.length;
   const topTags = topSensoryTags(filteredRecords);
+  const defects = topDefects(filteredRecords);
 
   return (
     <div className="mt-4 pt-4 border-t border-ink-100">
@@ -132,7 +148,7 @@ export function LotGuestAnalytics({ lot, records }: { lot: Lot; records: Tasting
           </div>
 
           {topTags.length > 0 && (
-            <div>
+            <div className="mb-4">
               <p className="text-xs text-ink-400 mb-2">Гости часто отмечают</p>
               <ul className="flex flex-wrap gap-1.5">
                 {topTags.map((tag) => (
@@ -142,6 +158,25 @@ export function LotGuestAnalytics({ lot, records }: { lot: Lot; records: Tasting
                                text-[11px] text-ink-700"
                   >
                     {tag.label} · {tag.count}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {defects.length > 0 && (
+            <div>
+              <p className="text-xs text-ink-400 mb-2">
+                ⚠ Отмеченные дефекты — возможна проблема экстракции или сырья
+              </p>
+              <ul className="flex flex-wrap gap-1.5">
+                {defects.map((defect) => (
+                  <li
+                    key={defect.label}
+                    className="rounded-full border border-ink-700 bg-ink-100 px-2.5 py-1
+                               text-[11px] text-ink-900"
+                  >
+                    {defect.label} · {defect.count}
                   </li>
                 ))}
               </ul>
