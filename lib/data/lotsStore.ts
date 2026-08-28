@@ -14,11 +14,25 @@ const STORAGE_KEY = 'coffee-passport:lots';
 let cache: Lot[] | null = null;
 const listeners = new Set<() => void>();
 
+// Lot has grown fields since this store's earliest deploys (e.g. variety,
+// added after some roaster edits were already saved) — a browser with an
+// old-shaped override in localStorage would otherwise hand out a lot
+// missing that field. Backfilling here, once, means every consumer trusts
+// the Lot type instead of re-guessing a fallback (see the same idiom in
+// lib/journey/store.ts for TastingRecord).
+function normalizeLot(lot: Lot): Lot {
+  return {
+    ...lot,
+    variety: lot.variety ?? '',
+  };
+}
+
 function readOverrides(): Lot[] {
   if (typeof window === 'undefined') return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Lot[]) : [];
+    const parsed = raw ? (JSON.parse(raw) as Lot[]) : [];
+    return parsed.map(normalizeLot);
   } catch {
     return [];
   }

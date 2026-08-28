@@ -19,12 +19,26 @@ const EMPTY_RECORDS: TastingRecord[] = [];
 let cache: TastingRecord[] | null = null;
 const listeners = new Set<() => void>();
 
+// TastingRecord has grown fields since this store's earliest deploys (e.g.
+// guestFlavorProfile, added for blind-cupping comparisons) — a browser that
+// saved records before that still has old-shaped JSON in localStorage.
+// Backfilling missing fields here, once, at the read boundary means every
+// consumer (roaster analytics, TasteComparison, etc.) can trust the
+// TastingRecord type instead of each one re-guessing a fallback.
+function normalizeRecord(record: TastingRecord): TastingRecord {
+  return {
+    ...record,
+    guestFlavorProfile: record.guestFlavorProfile ?? { acidity: 0, sweetness: 0, body: 0, bitterness: 0 },
+  };
+}
+
 function read(): TastingRecord[] {
   if (typeof window === 'undefined') return EMPTY_RECORDS;
   if (cache) return cache;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    cache = raw ? (JSON.parse(raw) as TastingRecord[]) : [];
+    const parsed = raw ? (JSON.parse(raw) as TastingRecord[]) : [];
+    cache = parsed.map(normalizeRecord);
   } catch {
     cache = [];
   }
