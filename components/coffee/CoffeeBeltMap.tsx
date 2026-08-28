@@ -4,7 +4,7 @@ import { ComposableMap, Geographies, Geography, Marker } from 'react-simple-maps
 import { geoEqualEarth } from 'd3-geo';
 import worldTopology from '@/lib/data/worldAtlas110m.json';
 import { COFFEE_BELT_COORDINATES } from '@/lib/data/coffeeBelt';
-import { getRoasterById } from '@/lib/data/roasters';
+import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 
 // A real world atlas (Natural Earth 110m via the world-atlas package,
 // lib/data/worldAtlas110m.json) rendered through react-simple-maps/d3-geo
@@ -28,7 +28,7 @@ const beltTopY = beltProjection([0, TROPIC_LAT_TOP])![1];
 const beltBottomY = beltProjection([0, TROPIC_LAT_BOTTOM])![1];
 const equatorY = beltProjection([0, 0])![1];
 
-// A country can carry more than one roaster's pin — pins in the same
+// A country can carry more than one coffee shop's pin — pins in the same
 // country cluster around its real coordinate using small degree offsets.
 const PIN_OFFSETS_DEG: [number, number][] = [
   [0, 0],
@@ -47,13 +47,13 @@ const PIN_MARKER_PATH =
 
 export interface ActivatedPin {
   country: string;
-  roasterId: string;
+  coffeeShopId: string;
   justActivated?: boolean;
 }
 
 export interface SelectedPin {
   country: string;
-  roasterId: string;
+  coffeeShopId: string;
 }
 
 export function CoffeeBeltMap({
@@ -72,7 +72,7 @@ export function CoffeeBeltMap({
     byCountry.set(pin.country, group);
   }
   // Stable order so re-renders don't jitter which pin sits at which offset.
-  for (const group of byCountry.values()) group.sort((a, b) => a.roasterId.localeCompare(b.roasterId));
+  for (const group of byCountry.values()) group.sort((a, b) => a.coffeeShopId.localeCompare(b.coffeeShopId));
   const activatedCountryNames = new Set(byCountry.keys());
 
   return (
@@ -157,13 +157,13 @@ export function CoffeeBeltMap({
           return group.map((pin, i) => {
             const [dLon, dLat] = PIN_OFFSETS_DEG[i % PIN_OFFSETS_DEG.length] ?? [0, 0];
             const coordinates: [number, number] = [base[0] + dLon, base[1] + dLat];
-            const roaster = getRoasterById(pin.roasterId);
-            const color = roaster?.color ?? 'var(--color-gold-500)';
-            const selected = selectedPin?.country === country && selectedPin?.roasterId === pin.roasterId;
+            const shop = getCoffeeShopById(pin.coffeeShopId);
+            const color = shop?.brandColor ?? 'var(--color-gold-500)';
+            const selected = selectedPin?.country === country && selectedPin?.coffeeShopId === pin.coffeeShopId;
             const scale = selected ? 1.3 : 1;
 
             return (
-              <Marker key={`${country}-${pin.roasterId}`} coordinates={coordinates}>
+              <Marker key={`${country}-${pin.coffeeShopId}`} coordinates={coordinates}>
                 {pin.justActivated && (
                   <text
                     y={-42}
@@ -182,23 +182,23 @@ export function CoffeeBeltMap({
                     jump away from its geographic point. */}
                 <g
                   transform={`scale(${scale}) translate(-12,-22)`}
-                  onClick={() => onSelectPin({ country, roasterId: pin.roasterId })}
+                  onClick={() => onSelectPin({ country, coffeeShopId: pin.coffeeShopId })}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault();
-                      onSelectPin({ country, roasterId: pin.roasterId });
+                      onSelectPin({ country, coffeeShopId: pin.coffeeShopId });
                     }
                   }}
                   tabIndex={0}
                   role="button"
-                  aria-label={`${country}, ${roaster?.name ?? 'обжарщик'}${selected ? ', выбран' : ''}`}
+                  aria-label={`${country}, ${shop?.name ?? 'кофейня'}${selected ? ', выбран' : ''}`}
                   style={{ cursor: 'pointer' }}
                 >
                   <g className={pin.justActivated ? 'pin-plant' : undefined}>
                     <path d={PIN_MARKER_PATH} fill={color} stroke="var(--color-parchment-100)" strokeWidth={1} />
                     <circle cx={12} cy={9} r={2.6} fill="var(--color-parchment-100)" />
                   </g>
-                  <title>{roaster?.name ?? pin.roasterId}</title>
+                  <title>{shop?.name ?? pin.coffeeShopId}</title>
                 </g>
               </Marker>
             );

@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Lot, Roaster } from '@/lib/types/coffee';
+import type { CoffeeShop, Lot } from '@/lib/types/coffee';
 
 // Same teardrop marker silhouette as CoffeeBeltMap's real pins, reused here
 // so the ritual visually foreshadows the actual map.
@@ -20,7 +20,7 @@ const PIN_MARKER_PATH =
 // already lives), the gold CTA sends them to the Coffee Belt map instead —
 // both are real destinations, there's no plain "cancel" once the tasting
 // is already saved.
-export function FarmerPinningModal({ lot, roaster }: { lot: Lot; roaster: Roaster }) {
+export function FarmerPinningModal({ lot, shop }: { lot: Lot; shop: CoffeeShop }) {
   const router = useRouter();
 
   useEffect(() => {
@@ -64,13 +64,13 @@ export function FarmerPinningModal({ lot, roaster }: { lot: Lot; roaster: Roaste
               cy={64}
               r={12}
               fill="none"
-              stroke={roaster.color}
+              stroke={shop.brandColor}
               strokeWidth={2}
               className="animate-ping"
               style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
             />
             <g transform="translate(48,42) scale(1.4)">
-              <path d={PIN_MARKER_PATH} fill={roaster.color} stroke="var(--color-parchment-100)" strokeWidth={1} />
+              <path d={PIN_MARKER_PATH} fill={shop.brandColor} stroke="var(--color-parchment-100)" strokeWidth={1} />
               <circle cx={12} cy={9} r={2.6} fill="var(--color-parchment-100)" />
             </g>
           </svg>
@@ -83,10 +83,10 @@ export function FarmerPinningModal({ lot, roaster }: { lot: Lot; roaster: Roaste
             Фермер отметил <strong className="font-medium">{lot.country}</strong> булавкой{' '}
             <span
               className="inline-block w-2.5 h-2.5 rounded-full align-middle mx-0.5"
-              style={{ backgroundColor: roaster.color }}
+              style={{ backgroundColor: shop.brandColor }}
               aria-hidden="true"
             />{' '}
-            <strong className="font-medium">{roaster.name}</strong> на карте Кофейного пояса!
+            <strong className="font-medium">{shop.name}</strong> на карте Кофейного пояса!
           </p>
         </div>
 

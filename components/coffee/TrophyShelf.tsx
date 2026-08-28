@@ -1,59 +1,76 @@
-import { getRoasterById } from '@/lib/data/roasters';
+import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import type { ActivatedPin } from './CoffeeBeltMap';
 
-// The pin dropped on the map is mirrored down here permanently — a medal
-// shelf of every (country, roaster) pin the guest has ever earned. Clicking
-// a badge opens the full roaster profile (see RoasterProfileCard), distinct
-// from clicking the pin on the map itself, which opens just that pin's
-// latest lot.
+// The pin dropped on the map is mirrored down here permanently — grouped by
+// region (medallion), with a shop-colored, shop-labeled badge underneath
+// for every coffee shop the guest has checked in from for that region.
+// Clicking a badge opens the full shop profile (see CoffeeShopProfileCard),
+// distinct from clicking the pin on the map itself, which opens just that
+// pin's latest lot.
 export function TrophyShelf({
   pins,
-  selectedRoasterId,
-  onSelectRoaster,
+  selectedShopId,
+  onSelectShop,
 }: {
   pins: ActivatedPin[];
-  selectedRoasterId: string | null;
-  onSelectRoaster: (roasterId: string) => void;
+  selectedShopId: string | null;
+  onSelectShop: (coffeeShopId: string) => void;
 }) {
+  const byCountry = new Map<string, ActivatedPin[]>();
+  for (const pin of pins) {
+    const group = byCountry.get(pin.country) ?? [];
+    group.push(pin);
+    byCountry.set(pin.country, group);
+  }
+  const sortedCountries = Array.from(byCountry.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
   return (
     <div className="rounded-md border border-ink-200 bg-parchment-100 p-4">
       <p className="section-label mb-4">Трофейная витрина</p>
       {pins.length === 0 ? (
         <p className="text-xs text-ink-400">
-          Здесь появятся булавки открытых регионов — по одной за каждую пару страна/обжарщик.
+          Здесь появятся булавки открытых регионов — по одной за каждую кофейню, где вы
+          дегустировали лот из этой страны.
         </p>
       ) : (
-        <div className="flex flex-wrap gap-3">
-          {pins.map((pin) => {
-            const roaster = getRoasterById(pin.roasterId);
-            const selected = selectedRoasterId === pin.roasterId;
-            return (
-              <button
-                key={`${pin.country}::${pin.roasterId}`}
-                type="button"
-                onClick={() => onSelectRoaster(pin.roasterId)}
-                aria-label={`${pin.country} · ${roaster?.name ?? 'обжарщик'}`}
-                aria-pressed={selected}
-                className={`flex flex-col items-center gap-1 ${pin.justActivated ? 'reveal-pop' : ''}`}
-              >
-                <span
-                  className="flex items-center justify-center w-12 h-12 rounded-full border-2 shrink-0
-                             text-[10px] font-medium text-parchment-100 uppercase tracking-wide
-                             transition-transform hover:scale-105"
-                  style={{
-                    backgroundColor: roaster?.color ?? 'var(--color-gold-500)',
-                    borderColor: selected ? 'var(--color-ink-900)' : 'var(--color-parchment-100)',
-                    boxShadow: '0 1px 3px 0 rgba(26,20,16,0.25)',
-                  }}
-                >
-                  {pin.country.slice(0, 3)}
-                </span>
-                <span className="text-[10px] text-ink-400 max-w-[3.5rem] truncate">
-                  {roaster?.name.split(' ')[0] ?? pin.roasterId}
-                </span>
-              </button>
-            );
-          })}
+        <div className="flex flex-col gap-4">
+          {sortedCountries.map(([country, group]) => (
+            <div key={country}>
+              <p className="text-xs font-medium text-ink-900 mb-2">{country}</p>
+              <div className="flex flex-wrap gap-2">
+                {group.map((pin) => {
+                  const shop = getCoffeeShopById(pin.coffeeShopId);
+                  const selected = selectedShopId === pin.coffeeShopId;
+                  const color = shop?.brandColor ?? 'var(--color-gold-500)';
+                  return (
+                    <button
+                      key={`${pin.country}::${pin.coffeeShopId}`}
+                      type="button"
+                      onClick={() => onSelectShop(pin.coffeeShopId)}
+                      aria-pressed={selected}
+                      className={pin.justActivated ? 'reveal-pop' : undefined}
+                    >
+                      <span
+                        className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs
+                                   text-ink-900 transition-colors"
+                        style={{
+                          borderColor: color,
+                          backgroundColor: selected ? `${color}26` : 'var(--color-parchment-100)',
+                        }}
+                      >
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: color }}
+                          aria-hidden="true"
+                        />
+                        {shop?.name ?? pin.coffeeShopId}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>

@@ -15,7 +15,7 @@ import { markJustRevealed } from '@/lib/journey/revealFlag';
 import { markPinJustActivated } from '@/lib/journey/mapFlag';
 import { consumePendingShop } from '@/lib/journey/pendingShopFlag';
 import { getMergedLotById } from '@/lib/data/lotsStore';
-import { getRoasterById } from '@/lib/data/roasters';
+import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { FarmerPinningModal } from '@/components/coffee/FarmerPinningModal';
 
 type Step = 'shop' | 'barista' | 'brew' | 'taste';
@@ -76,12 +76,13 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
     // Checked before the save so the just-added record doesn't count as
     // "already had this pin" — drives the pin-drop animation on the Coffee
     // Belt map (see CoffeeBeltMap) only the first time this exact
-    // (country, roaster) combination appears. The same country can carry
-    // more than one roaster's pin, so this is keyed by the pair, not just
-    // the country.
+    // (country, coffee shop) combination appears. Pins are shop-colored, so
+    // the same country tasted at two different shops carries two pins; the
+    // same shop across two different roasters' lots in that country stays
+    // one pin.
     const hadPinBefore = getJourneySnapshot().some((record) => {
-      const recordLot = getMergedLotById(record.lotId);
-      return recordLot?.country === lot.country && recordLot?.roasterId === lot.roasterId;
+      if (record.coffeeShopId !== coffeeShopId) return false;
+      return getMergedLotById(record.lotId)?.country === lot.country;
     });
 
     addTastingRecord({
@@ -95,7 +96,7 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
       ...values,
     });
 
-    if (!hadPinBefore) markPinJustActivated(lot.country, lot.roasterId);
+    if (!hadPinBefore) markPinJustActivated(lot.country, coffeeShopId);
 
     // The passport page still plays its own unlock/comparison reveal
     // whenever the guest lands there (via the ritual's × or a later visit).
@@ -107,7 +108,7 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
     setShowPinningRitual(true);
   }
 
-  const roaster = getRoasterById(lot.roasterId);
+  const shop = coffeeShopId ? getCoffeeShopById(coffeeShopId) : undefined;
 
   return (
     <main className="min-h-dvh flex flex-col px-6 py-16">
@@ -230,7 +231,7 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
         )}
       </div>
 
-      {showPinningRitual && roaster && <FarmerPinningModal lot={lot} roaster={roaster} />}
+      {showPinningRitual && shop && <FarmerPinningModal lot={lot} shop={shop} />}
     </main>
   );
 }

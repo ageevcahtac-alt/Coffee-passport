@@ -12,7 +12,7 @@ import {
 } from '@/components/coffee/CoffeeBeltMap';
 import { TrophyShelf } from '@/components/coffee/TrophyShelf';
 import { ScanLotModal } from '@/components/coffee/ScanLotModal';
-import { RoasterProfileCard } from '@/components/coffee/RoasterProfileCard';
+import { CoffeeShopProfileCard } from '@/components/coffee/CoffeeShopProfileCard';
 import { TastingRecordCard } from '@/components/coffee/TastingRecordCard';
 import { TastingDetailModal } from '@/components/coffee/TastingDetailModal';
 import type { TastingRecord } from '@/lib/types/coffee';
@@ -21,10 +21,10 @@ export default function JourneyPage() {
   const records = useJourney();
   const [scanOpen, setScanOpen] = useState(false);
   // Clicking a pin ON THE MAP shows just that pin's latest lot; clicking its
-  // twin badge in the trophy shelf shows the full roaster profile — two
+  // twin badge in the trophy shelf shows the full coffee shop profile — two
   // independent selections per the task's "карта vs трофеи" interaction split.
   const [selectedMapPin, setSelectedMapPin] = useState<SelectedPin | null>(null);
-  const [selectedTrophyRoasterId, setSelectedTrophyRoasterId] = useState<string | null>(null);
+  const [selectedTrophyShopId, setSelectedTrophyShopId] = useState<string | null>(null);
   const [justActivatedPin, setJustActivatedPin] = useState<SelectedPin | null>(null);
   const [openRecord, setOpenRecord] = useState<TastingRecord | null>(null);
 
@@ -44,26 +44,31 @@ export default function JourneyPage() {
     }
   }, []);
 
+  // A pin is one (country, coffee shop) check-in — pins are colored and
+  // grouped by shop brand, so tasting the same country at two different
+  // shops drops two pins, while re-tasting different lots at the same shop
+  // in that country stays one.
   const pinKeys = new Set<string>();
   const pins: ActivatedPin[] = [];
   for (const record of records) {
     const lot = getMergedLotById(record.lotId);
     if (!lot) continue;
-    const key = `${lot.country}::${lot.roasterId}`;
+    const key = `${lot.country}::${record.coffeeShopId}`;
     if (pinKeys.has(key)) continue;
     pinKeys.add(key);
     pins.push({
       country: lot.country,
-      roasterId: lot.roasterId,
+      coffeeShopId: record.coffeeShopId,
       justActivated:
-        justActivatedPin?.country === lot.country && justActivatedPin?.roasterId === lot.roasterId,
+        justActivatedPin?.country === lot.country &&
+        justActivatedPin?.coffeeShopId === record.coffeeShopId,
     });
   }
 
   const latestPinRecord = selectedMapPin
     ? [...records]
         .filter((record) => {
-          if (record.roasterId !== selectedMapPin.roasterId) return false;
+          if (record.coffeeShopId !== selectedMapPin.coffeeShopId) return false;
           return getMergedLotById(record.lotId)?.country === selectedMapPin.country;
         })
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0] ?? null
@@ -95,7 +100,7 @@ export default function JourneyPage() {
           selectedPin={selectedMapPin}
           onSelectPin={(pin) =>
             setSelectedMapPin((prev) =>
-              prev?.country === pin.country && prev?.roasterId === pin.roasterId ? null : pin
+              prev?.country === pin.country && prev?.coffeeShopId === pin.coffeeShopId ? null : pin
             )
           }
         />
@@ -103,7 +108,7 @@ export default function JourneyPage() {
 
       {latestPinRecord && (
         <div
-          key={`${selectedMapPin?.country}::${selectedMapPin?.roasterId}`}
+          key={`${selectedMapPin?.country}::${selectedMapPin?.coffeeShopId}`}
           className="max-w-md mx-auto w-full mb-6 reveal-rise"
         >
           <TastingRecordCard record={latestPinRecord} onClick={() => setOpenRecord(latestPinRecord)} />
@@ -113,16 +118,16 @@ export default function JourneyPage() {
       <div className="max-w-md mx-auto w-full mb-4">
         <TrophyShelf
           pins={pins}
-          selectedRoasterId={selectedTrophyRoasterId}
-          onSelectRoaster={(roasterId) =>
-            setSelectedTrophyRoasterId((prev) => (prev === roasterId ? null : roasterId))
+          selectedShopId={selectedTrophyShopId}
+          onSelectShop={(coffeeShopId) =>
+            setSelectedTrophyShopId((prev) => (prev === coffeeShopId ? null : coffeeShopId))
           }
         />
       </div>
 
-      {selectedTrophyRoasterId && (
-        <div key={selectedTrophyRoasterId} className="max-w-md mx-auto w-full mb-6 reveal-rise">
-          <RoasterProfileCard roasterId={selectedTrophyRoasterId} records={records} />
+      {selectedTrophyShopId && (
+        <div key={selectedTrophyShopId} className="max-w-md mx-auto w-full mb-6 reveal-rise">
+          <CoffeeShopProfileCard coffeeShopId={selectedTrophyShopId} records={records} />
         </div>
       )}
 

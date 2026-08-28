@@ -72,6 +72,7 @@ export interface CoffeeShop {
   id: string;
   name: string;
   city: string;
+  brandColor: string; // pin color on the Coffee Belt map, e.g. "#00A896"
 }
 
 export interface Barista {
@@ -94,28 +95,35 @@ export type BrewingMethodId = (typeof BREWING_METHODS)[number]['id'];
 export const SENSORY_TAGS = [
   { id: 'sweetness', label: 'Сладость' },
   { id: 'acidity', label: 'Кислотность' },
-  { id: 'brightness', label: 'Яркость' },
-  { id: 'body', label: 'Плотность' },
-  { id: 'bitterness', label: 'Горечь' },
+  { id: 'brightness', label: 'Яркость / Сочность' },
+  { id: 'body', label: 'Плотность / Тело' },
+  { id: 'bitterness', label: 'Горечь (Приятная/Гармоничная)' },
   { id: 'fruitiness', label: 'Фруктовость' },
   { id: 'floral', label: 'Цветочность' },
-  { id: 'chocolate', label: 'Шоколадность' },
+  { id: 'chocolate', label: 'Шоколадность / Орехи' },
   { id: 'citrus', label: 'Цитрусовые' },
-  { id: 'berry', label: 'Ягодные' },
+  { id: 'berry', label: 'Ягодность' },
 ] as const;
 
 export type SensoryTagId = (typeof SENSORY_TAGS)[number]['id'];
 
-// Flavor-wheel style refinements — only some top-level tags branch further
-// (a category missing here just has no expand arrow in SensoryTagPicker).
-// Picking any sub-descriptor implies its parent tag, so SENSORY_TAGS stays
-// the single source of truth for "what did the guest notice" elsewhere
-// (e.g. the roaster's "часто отмечают" tally).
+// Flavor-wheel style refinements — every category is filled out with 7-10
+// tags so none of them expand into an empty plate. Picking any sub-
+// descriptor implies its parent tag, so SENSORY_TAGS stays the single
+// source of truth for "what did the guest notice" elsewhere (e.g. the
+// roaster's "часто отмечают" tally). Only `citrus` is left without a list
+// — "Цитрус" already lives under `acidity`'s own sub-descriptors, so a
+// second, redundant citrus wheel would just duplicate it.
 export const FLAVOR_SUB_DESCRIPTORS: Partial<Record<SensoryTagId, string[]>> = {
-  acidity: ['Цитрус', 'Яблоко', 'Апельсин', 'Вишня', 'Винная', 'Лимон'],
-  fruitiness: ['Персик', 'Манго', 'Красное яблоко', 'Абсолютные тропики'],
-  chocolate: ['Тёмный шоколад', 'Молочный шоколад', 'Какао-нибсы', 'Карамель'],
-  berry: ['Малина', 'Черника', 'Смородина', 'Клубника'],
+  acidity: ['Цитрус', 'Лимон', 'Лайм', 'Зелёное яблоко', 'Апельсин', 'Грейпфрут', 'Вишня', 'Винная/Тартар', 'Малина', 'Ананас'],
+  sweetness: ['Карамель', 'Тростниковый сахар', 'Мёд', 'Кленовый сироп', 'Молочный шоколад', 'Изюм', 'Финики', 'Сухофрукты'],
+  fruitiness: ['Персик', 'Абрикос', 'Манго', 'Красное яблоко', 'Груша', 'Слива', 'Нектарин', 'Маракуйя', 'Личи', 'Абсолютные тропики'],
+  berry: ['Малина', 'Черника', 'Смородина', 'Клубника', 'Ежевика', 'Брусника', 'Клюква', 'Земляника'],
+  floral: ['Жасмин', 'Бергамот', 'Роза', 'Цветок кофейного дерева', 'Лаванда', 'Липа', 'Ромашка'],
+  chocolate: ['Тёмный шоколад', 'Молочный шоколад', 'Какао-нибсы', 'Фундук', 'Миндаль', 'Грецкий орех', 'Пралине', 'Нуга'],
+  body: ['Чайное', 'Шелковистое', 'Бархатистое', 'Округлое', 'Сочное', 'Сиропистое', 'Густое', 'Кремовое'],
+  brightness: ['Игристая', 'Взрывная', 'Умеренная', 'Сочная', 'Свежая', 'Мягкая', 'Элегантная'],
+  bitterness: ['Грейпфрутовая цедра', 'Тёмный какао', 'Чёрный чай', 'Тонкая горчинка'],
 };
 
 export type FlavorSubDescriptors = Partial<Record<SensoryTagId, string[]>>;
