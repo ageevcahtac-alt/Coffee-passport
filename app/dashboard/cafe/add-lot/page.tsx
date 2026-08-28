@@ -6,6 +6,7 @@ import { useLots } from '@/lib/data/useLots';
 import { useCafeMenuLotIds } from '@/lib/data/useCafeMenu';
 import { addLotToMenu } from '@/lib/data/cafeMenuStore';
 import { getRoasterById } from '@/lib/data/roasters';
+import { extractLotId } from '@/lib/utils/lotId';
 import type { Lot } from '@/lib/types/coffee';
 
 const ACTIVE_SHOP_ID = 'shop-xo-vsevolozhsk';
@@ -30,10 +31,12 @@ export default function AddLotPage() {
 
   function handleCodeSubmit(event: FormEvent) {
     event.preventDefault();
-    const trimmed = code.trim().toUpperCase();
-    if (!trimmed) return;
+    // Accepts a bare code or a pasted passport URL/path alike — see
+    // extractLotId for why (QR codes encode the full URL).
+    const lotId = extractLotId(code);
+    if (!lotId) return;
 
-    const found = lots.find((lot) => lot.id.toUpperCase() === trimmed);
+    const found = lots.find((lot) => lot.id.toUpperCase() === lotId);
     if (!found) {
       setJustAdded(null);
       setError(`Лот с кодом «${code.trim()}» не найден в базе обжарщиков.`);

@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLots } from '@/lib/data/useLots';
 import { getMenuLotIds } from '@/lib/data/cafeMenuStore';
+import { extractLotId } from '@/lib/utils/lotId';
 
 // No real "which cafe am I in" check-in flow yet — scoped to the pilot shop,
 // same as the rest of the demo data in lib/data/ (see e.g. /dashboard/cafe).
@@ -22,10 +23,12 @@ export function ScanLotModal({ onClose }: { onClose: () => void }) {
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    const trimmed = code.trim().toUpperCase();
-    if (!trimmed) return;
+    // Accepts a bare code or a pasted passport URL/path alike — see
+    // extractLotId for why (QR codes encode the full URL).
+    const lotId = extractLotId(code);
+    if (!lotId) return;
 
-    const lot = lots.find((candidate) => candidate.id.toUpperCase() === trimmed);
+    const lot = lots.find((candidate) => candidate.id.toUpperCase() === lotId);
     if (!lot) {
       setError('Лот с таким кодом не найден у обжарщиков.');
       return;
