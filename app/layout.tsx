@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Fraunces, Inter, IBM_Plex_Mono } from 'next/font/google';
+import { DevRoleSwitcher } from '@/components/dev/DevRoleSwitcher';
 import './globals.css';
 
 const display = Fraunces({
@@ -36,7 +37,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${display.variable} ${body.variable} ${mono.variable}`}>
-      <body>{children}</body>
+      <body>
+        {children}
+        <DevRoleSwitcher />
+      </body>
     </html>
   );
 }

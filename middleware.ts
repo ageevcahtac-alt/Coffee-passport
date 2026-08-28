@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+// Same HTTP Basic Auth gate covers the /admin pages themselves AND their
+// API routes (app/api/admin/**) — the CRM UI is useless without the data
+// calls behind it also being protected.
 export function middleware(req: NextRequest) {
-  if (req.nextUrl.pathname.startsWith('/admin')) {
+  if (req.nextUrl.pathname.startsWith('/admin') || req.nextUrl.pathname.startsWith('/api/admin')) {
     const authHeader = req.headers.get('authorization');
 
     if (authHeader) {
@@ -29,5 +32,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: '/admin/:path*',
+  matcher: ['/admin/:path*', '/api/admin/:path*'],
 };

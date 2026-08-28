@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { BecomePartnerSection } from '@/components/site/BecomePartnerSection';
 
 const ROLES = [
   {
@@ -79,6 +80,8 @@ export default function LandingPage() {
             </Link>
           ))}
         </div>
+
+        <BecomePartnerSection />
       </section>
 
       <footer className="px-6 pb-8 text-center">

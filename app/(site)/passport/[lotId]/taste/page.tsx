@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useLots } from '@/lib/data/useLots';
-import { COFFEE_SHOPS } from '@/lib/data/coffeeShops';
+import { useCoffeeShops } from '@/lib/data/useCoffeeShops';
 import { getBaristasForShop } from '@/lib/data/baristas';
 import type { BrewingMethodId, Lot } from '@/lib/types/coffee';
 import { CoffeeShopSelector } from '@/components/coffee/CoffeeShopSelector';
@@ -45,6 +45,7 @@ export default function TasteLotPage({ params }: { params: { lotId: string } }) 
 }
 
 function TasteLotFlow({ lot }: { lot: Lot }) {
+  const coffeeShops = useCoffeeShops();
   const [step, setStep] = useState<Step>('shop');
   const [coffeeShopId, setCoffeeShopId] = useState<string | null>(null);
   const [baristaId, setBaristaId] = useState<string | null>(null);
@@ -63,7 +64,7 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
     if (!pendingShopChecked.current) {
       pendingShopChecked.current = true;
       const pendingShopId = consumePendingShop(lot.id);
-      if (pendingShopId && COFFEE_SHOPS.some((shop) => shop.id === pendingShopId)) {
+      if (pendingShopId && coffeeShops.some((shop) => shop.id === pendingShopId)) {
         setCoffeeShopId(pendingShopId);
         setStep('barista');
       }
@@ -123,7 +124,7 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
               Где вы пробуете этот кофе?
             </h1>
             <CoffeeShopSelector
-              shops={COFFEE_SHOPS}
+              shops={coffeeShops}
               value={coffeeShopId}
               onChange={setCoffeeShopId}
             />

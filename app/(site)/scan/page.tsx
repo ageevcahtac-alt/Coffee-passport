@@ -1,3 +1,5 @@
+'use client';
+
 import Link from 'next/link';
 import { LOTS } from '@/lib/data/lots';
 import { getRoasterById } from '@/lib/data/roasters';

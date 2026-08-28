@@ -7,7 +7,8 @@ import { useJourney } from '@/lib/journey/useJourney';
 import { consumeJustRevealed } from '@/lib/journey/revealFlag';
 import { markPendingShop } from '@/lib/journey/pendingShopFlag';
 import { getRoasterById } from '@/lib/data/roasters';
-import { COFFEE_SHOPS, getCoffeeShopById } from '@/lib/data/coffeeShops';
+import { getCoffeeShopById } from '@/lib/data/coffeeShops';
+import { useCoffeeShops } from '@/lib/data/useCoffeeShops';
 import { CoffeeShopSelector } from '@/components/coffee/CoffeeShopSelector';
 import { LotPassport } from '@/components/coffee/LotPassport';
 import { ProducerRoasterCard } from '@/components/coffee/ProducerRoasterCard';
@@ -18,6 +19,7 @@ import { TasteComparison } from '@/components/coffee/TasteComparison';
 export default function LotPassportPage({ params }: { params: { lotId: string } }) {
   const lots = useLots();
   const journey = useJourney();
+  const coffeeShops = useCoffeeShops();
   // Lots are seed data merged with anything the roaster cabinet saved to
   // localStorage. Seed lots are already in the server snapshot, so they
   // render immediately (SSR-visible, no blank flash). A lot created moments
@@ -71,7 +73,7 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
           <h1 className="font-display text-2xl text-ink-900 mb-8">
             Где вы пробуете этот лот сегодня?
           </h1>
-          <CoffeeShopSelector shops={COFFEE_SHOPS} value={selectedShopId} onChange={setSelectedShopId} />
+          <CoffeeShopSelector shops={coffeeShops} value={selectedShopId} onChange={setSelectedShopId} />
         </div>
       </main>
     );
