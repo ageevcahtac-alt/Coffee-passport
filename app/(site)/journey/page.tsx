@@ -10,14 +10,23 @@ import {
   type ActivatedPin,
   type SelectedPin,
 } from '@/components/coffee/CoffeeBeltMap';
+import { TrophyShelf } from '@/components/coffee/TrophyShelf';
 import { ScanLotModal } from '@/components/coffee/ScanLotModal';
 import { RoasterProfileCard } from '@/components/coffee/RoasterProfileCard';
+import { TastingRecordCard } from '@/components/coffee/TastingRecordCard';
+import { TastingDetailModal } from '@/components/coffee/TastingDetailModal';
+import type { TastingRecord } from '@/lib/types/coffee';
 
 export default function JourneyPage() {
   const records = useJourney();
   const [scanOpen, setScanOpen] = useState(false);
-  const [selectedPin, setSelectedPin] = useState<SelectedPin | null>(null);
+  // Clicking a pin ON THE MAP shows just that pin's latest lot; clicking its
+  // twin badge in the trophy shelf shows the full roaster profile — two
+  // independent selections per the task's "карта vs трофеи" interaction split.
+  const [selectedMapPin, setSelectedMapPin] = useState<SelectedPin | null>(null);
+  const [selectedTrophyRoasterId, setSelectedTrophyRoasterId] = useState<string | null>(null);
   const [justActivatedPin, setJustActivatedPin] = useState<SelectedPin | null>(null);
+  const [openRecord, setOpenRecord] = useState<TastingRecord | null>(null);
 
   // Consumes the one-shot flag set by the taste flow — guard with a ref
   // since consumePinJustActivated deletes as it reads, and React Strict
@@ -30,7 +39,7 @@ export default function JourneyPage() {
       const pin = consumePinJustActivated();
       if (pin) {
         setJustActivatedPin(pin);
-        setSelectedPin(pin);
+        setSelectedMapPin(pin);
       }
     }
   }, []);
@@ -51,6 +60,15 @@ export default function JourneyPage() {
     });
   }
 
+  const latestPinRecord = selectedMapPin
+    ? [...records]
+        .filter((record) => {
+          if (record.roasterId !== selectedMapPin.roasterId) return false;
+          return getMergedLotById(record.lotId)?.country === selectedMapPin.country;
+        })
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0] ?? null
+    : null;
+
   return (
     <main className="min-h-dvh flex flex-col px-6 py-16">
       <div className="max-w-md mx-auto w-full mb-6">
@@ -58,7 +76,7 @@ export default function JourneyPage() {
           Моё кофейное путешествие
         </h1>
         <p className="text-ink-500 text-sm mb-6">
-          Кофейный пояс Земли — отмечайте регионы, которые распознали вслепую.
+          Кофейный пояс Земли — рассейте туман, дегустируя лоты вслепую.
         </p>
         <button
           type="button"
@@ -74,31 +92,50 @@ export default function JourneyPage() {
       <div className="max-w-md mx-auto w-full mb-4">
         <CoffeeBeltMap
           pins={pins}
-          selectedPin={selectedPin}
+          selectedPin={selectedMapPin}
           onSelectPin={(pin) =>
-            setSelectedPin((prev) =>
+            setSelectedMapPin((prev) =>
               prev?.country === pin.country && prev?.roasterId === pin.roasterId ? null : pin
             )
           }
         />
       </div>
 
-      {selectedPin && (
+      {latestPinRecord && (
         <div
-          key={`${selectedPin.country}::${selectedPin.roasterId}`}
-          className="max-w-md mx-auto w-full mb-4 reveal-rise"
+          key={`${selectedMapPin?.country}::${selectedMapPin?.roasterId}`}
+          className="max-w-md mx-auto w-full mb-6 reveal-rise"
         >
-          <RoasterProfileCard roasterId={selectedPin.roasterId} records={records} />
+          <TastingRecordCard record={latestPinRecord} onClick={() => setOpenRecord(latestPinRecord)} />
+        </div>
+      )}
+
+      <div className="max-w-md mx-auto w-full mb-4">
+        <TrophyShelf
+          pins={pins}
+          selectedRoasterId={selectedTrophyRoasterId}
+          onSelectRoaster={(roasterId) =>
+            setSelectedTrophyRoasterId((prev) => (prev === roasterId ? null : roasterId))
+          }
+        />
+      </div>
+
+      {selectedTrophyRoasterId && (
+        <div key={selectedTrophyRoasterId} className="max-w-md mx-auto w-full mb-6 reveal-rise">
+          <RoasterProfileCard roasterId={selectedTrophyRoasterId} records={records} />
         </div>
       )}
 
       {records.length > 0 && (
-        <div className="mt-6">
+        <div className="mt-2">
           <CoffeeJourney records={records} />
         </div>
       )}
 
       {scanOpen && <ScanLotModal onClose={() => setScanOpen(false)} />}
+      {openRecord && (
+        <TastingDetailModal record={openRecord} onClose={() => setOpenRecord(null)} />
+      )}
     </main>
   );
 }

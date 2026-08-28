@@ -6,6 +6,8 @@ const VIEW_H = 300;
 const TROPIC_TOP = 95;
 const TROPIC_BOTTOM = 205;
 const EQUATOR = 150;
+const FOG_FILL = '#C7C2B6';
+const REVEAL_RADIUS = 78;
 
 // Rough, stylized silhouettes (not surveyed coastlines) — enough to read as
 // "South America" / "Africa" at a glance in the engraved-map aesthetic
@@ -60,6 +62,12 @@ export function CoffeeBeltMap({
   // Stable order so re-renders don't jitter which pin sits at which offset.
   for (const group of byCountry.values()) group.sort((a, b) => a.roasterId.localeCompare(b.roasterId));
 
+  const revealedCountries = Array.from(byCountry.keys()).filter((country) => COFFEE_BELT_POSITIONS[country]);
+  const revealedByContinent = {
+    africa: revealedCountries.filter((c) => COFFEE_BELT_POSITIONS[c].continent === 'africa'),
+    'south-america': revealedCountries.filter((c) => COFFEE_BELT_POSITIONS[c].continent === 'south-america'),
+  };
+
   return (
     <div className="rounded-md border border-ink-200 bg-parchment-100 p-4">
       <svg
@@ -68,6 +76,20 @@ export function CoffeeBeltMap({
         role="img"
         aria-label="Карта Кофейного пояса Земли"
       >
+        <defs>
+          <clipPath id="belt-clip-africa">
+            <path d={AFRICA_PATH} />
+          </clipPath>
+          <clipPath id="belt-clip-samerica">
+            <path d={SOUTH_AMERICA_PATH} />
+          </clipPath>
+          <radialGradient id="belt-reveal-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="var(--color-gold-300)" stopOpacity="1" />
+            <stop offset="55%" stopColor="var(--color-gold-400)" stopOpacity="0.75" />
+            <stop offset="100%" stopColor="var(--color-gold-400)" stopOpacity="0" />
+          </radialGradient>
+        </defs>
+
         <rect x={0} y={0} width={VIEW_W} height={VIEW_H} fill="var(--color-parchment-100)" />
 
         {Array.from({ length: 7 }, (_, i) => (
@@ -129,8 +151,28 @@ export function CoffeeBeltMap({
           strokeDasharray="2 3"
         />
 
-        <path d={SOUTH_AMERICA_PATH} fill="var(--color-ink-100)" stroke="var(--color-ink-300)" strokeWidth={1} />
-        <path d={AFRICA_PATH} fill="var(--color-ink-100)" stroke="var(--color-ink-300)" strokeWidth={1} />
+        {/* "Туман войны": континенты по умолчанию приглушённые/монохромные */}
+        <path d={SOUTH_AMERICA_PATH} fill={FOG_FILL} fillOpacity={0.55} stroke="var(--color-ink-300)" strokeWidth={1} />
+        <path d={AFRICA_PATH} fill={FOG_FILL} fillOpacity={0.55} stroke="var(--color-ink-300)" strokeWidth={1} />
+
+        {/* Раскраска: тёплое пятно на месте каждой продегустированной страны,
+            обрезанное по силуэту её континента, чтобы не "вытекать" за берег */}
+        <g clipPath="url(#belt-clip-samerica)">
+          {revealedByContinent['south-america'].map((country) => {
+            const pos = COFFEE_BELT_POSITIONS[country];
+            return (
+              <circle key={country} cx={pos.x} cy={pos.y} r={REVEAL_RADIUS} fill="url(#belt-reveal-glow)" />
+            );
+          })}
+        </g>
+        <g clipPath="url(#belt-clip-africa)">
+          {revealedByContinent.africa.map((country) => {
+            const pos = COFFEE_BELT_POSITIONS[country];
+            return (
+              <circle key={country} cx={pos.x} cy={pos.y} r={REVEAL_RADIUS} fill="url(#belt-reveal-glow)" />
+            );
+          })}
+        </g>
 
         {Array.from(byCountry.entries()).map(([country, group]) => {
           const base = COFFEE_BELT_POSITIONS[country];
@@ -206,8 +248,8 @@ export function CoffeeBeltMap({
 
       <p className="text-center text-[11px] text-ink-400 mt-3">
         {pins.length === 0
-          ? 'Кофейный пояс Земли, 25° с.ш. – 30° ю.ш. Отсканируйте первый лот, чтобы отметить регион.'
-          : 'Кликните на булавку, чтобы открыть визитку обжарщика.'}
+          ? 'Кофейный пояс Земли, 25° с.ш. – 30° ю.ш. Отсканируйте первый лот, чтобы рассеять туман.'
+          : 'Кликните на булавку, чтобы увидеть последний угаданный лот региона.'}
       </p>
     </div>
   );
