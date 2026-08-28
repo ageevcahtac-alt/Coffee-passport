@@ -11,8 +11,10 @@ import { BaristaSelector } from '@/components/coffee/BaristaSelector';
 import { RatingInput } from '@/components/coffee/RatingInput';
 import { BrewingMethodSelector } from '@/components/coffee/BrewingMethodSelector';
 import { TastingForm, type TastingFormValues } from '@/components/coffee/TastingForm';
-import { addTastingRecord } from '@/lib/journey/store';
+import { addTastingRecord, getSnapshot as getJourneySnapshot } from '@/lib/journey/store';
 import { markJustRevealed } from '@/lib/journey/revealFlag';
+import { markCountryJustActivated } from '@/lib/journey/mapFlag';
+import { getMergedLotById } from '@/lib/data/lotsStore';
 
 type Step = 'shop' | 'barista' | 'brew' | 'taste';
 
@@ -51,6 +53,14 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
 
   function handleSave(values: TastingFormValues) {
     if (!coffeeShopId || !baristaId || !brewingMethod) return;
+
+    // Checked before the save so the just-added record doesn't count as
+    // "already had this country" — drives the gold-pin drop on the Coffee
+    // Belt map (see CoffeeBeltMap) only the first time a country appears.
+    const hadCountryBefore = getJourneySnapshot().some(
+      (record) => getMergedLotById(record.lotId)?.country === lot.country
+    );
+
     addTastingRecord({
       lotId: lot.id,
       roasterId: lot.roasterId,
@@ -61,6 +71,9 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
       baristaNote,
       ...values,
     });
+
+    if (!hadCountryBefore) markCountryJustActivated(lot.country);
+
     // The passport page is where the unlock moment plays out — send the
     // guest straight there instead of showing a static "saved" screen here.
     markJustRevealed(lot.id);
