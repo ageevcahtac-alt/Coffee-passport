@@ -9,30 +9,44 @@ const EQUATOR = 150;
 const FOG_FILL = '#C7C2B6';
 const REVEAL_RADIUS = 78;
 
-// Rough, stylized silhouettes (not surveyed coastlines) drawn in a vintage-
-// cartography hand — enough to read as a world map at a glance, with the
-// coffee belt (Africa, South America) as the detailed focus and the rest
-// (North America, Eurasia, Australia) as muted, non-interactive context —
-// there's no lot data north of the tropics for them to ever "reveal".
+// Simplified polygon coastlines (straight segments, softened with
+// strokeLinejoin="round") tracing actual continent silhouettes — the Horn
+// of Africa, Africa's Gulf of Guinea notch, South America's Brazil
+// "shoulder" and Patagonia taper, India's subcontinent jut, Cape York on
+// Australia — rather than abstract ovals. Coordinates are hand-plotted
+// against this component's 640x300 viewBox, not a geographic projection.
 const SOUTH_AMERICA_PATH =
-  'M175,78 C212,88 228,130 222,172 C216,212 196,252 175,258 ' +
-  'C154,252 138,214 136,174 C134,130 148,93 175,78 Z';
+  'M155,80 L172,70 L192,76 L208,88 L224,94 L219,113 L213,138 L206,163 ' +
+  'L198,184 L189,208 L179,233 L172,254 L165,263 L159,249 L153,219 ' +
+  'L147,189 L142,159 L140,134 L144,109 Z';
 
 const AFRICA_PATH =
-  'M380,58 C422,64 438,100 432,142 C426,182 414,212 400,242 ' +
-  'C390,260 374,260 366,242 C352,206 342,170 342,128 C342,92 354,68 380,58 Z';
+  'M365,48 L393,44 L416,50 L406,64 L434,71 L460,98 L446,121 L434,149 ' +
+  'L421,176 L407,201 L393,226 L379,247 L363,236 L354,210 L346,182 ' +
+  'L338,156 L332,132 L322,120 L334,105 L344,87 L336,68 L350,54 Z';
 
 const NORTH_AMERICA_PATH =
-  'M70,-10 C120,-6 160,18 158,46 C156,70 128,78 104,70 C80,62 54,50 46,28 ' +
-  'C40,10 44,-6 70,-10 Z';
+  'M55,-40 L30,10 L35,35 L55,55 L75,68 L95,78 L115,85 L130,90 ' +
+  'L140,75 L120,60 L135,45 L115,30 L95,15 L75,0 L60,-20 Z';
 
 const EURASIA_PATH =
-  'M330,-14 C420,-20 560,-8 610,14 C632,24 624,44 596,48 C540,56 460,40 410,50 ' +
-  'C380,56 350,44 344,20 C340,4 316,-8 330,-14 Z';
+  'M335,-30 L330,10 L345,30 L365,20 L385,35 L400,55 L392,70 L410,60 ' +
+  'L430,50 L445,65 L455,90 L468,70 L485,55 L505,65 L520,80 L540,60 ' +
+  'L565,45 L590,25 L615,10 L625,-10 Z';
 
 const AUSTRALIA_PATH =
-  'M520,232 C556,226 588,238 592,256 C596,272 572,282 546,280 ' +
-  'C522,278 502,264 506,248 C508,238 512,234 520,232 Z';
+  'M525,225 L545,215 L558,222 L568,235 L562,215 L572,205 L582,218 ' +
+  'L592,240 L596,258 L585,270 L565,278 L545,275 L528,265 L520,248 Z';
+
+// A few small islands between Southeast Asia and Australia — just enough
+// dotting to read as an archipelago, not an attempt at Indonesia's real
+// geography.
+const ISLAND_DOTS: [number, number, number][] = [
+  [510, 108, 4],
+  [524, 116, 3],
+  [538, 110, 3.5],
+  [502, 130, 3],
+];
 
 // A country can carry more than one roaster's pin (see the task: "новая
 // дегустация лота от другого обжарщика в том же регионе добавляет новую
@@ -122,9 +136,12 @@ export function CoffeeBeltMap({
 
         {/* Приглушённый контекст остального мира — никогда не "раскрашивается",
             для этих регионов пока нет лотов */}
-        <path d={NORTH_AMERICA_PATH} fill={FOG_FILL} fillOpacity={0.3} stroke="var(--color-ink-200)" strokeWidth={0.75} />
-        <path d={EURASIA_PATH} fill={FOG_FILL} fillOpacity={0.3} stroke="var(--color-ink-200)" strokeWidth={0.75} />
-        <path d={AUSTRALIA_PATH} fill={FOG_FILL} fillOpacity={0.3} stroke="var(--color-ink-200)" strokeWidth={0.75} />
+        <path d={NORTH_AMERICA_PATH} fill={FOG_FILL} fillOpacity={0.3} stroke="var(--color-ink-200)" strokeWidth={0.75} strokeLinejoin="round" />
+        <path d={EURASIA_PATH} fill={FOG_FILL} fillOpacity={0.3} stroke="var(--color-ink-200)" strokeWidth={0.75} strokeLinejoin="round" />
+        <path d={AUSTRALIA_PATH} fill={FOG_FILL} fillOpacity={0.3} stroke="var(--color-ink-200)" strokeWidth={0.75} strokeLinejoin="round" />
+        {ISLAND_DOTS.map(([ix, iy, ir]) => (
+          <circle key={`${ix}-${iy}`} cx={ix} cy={iy} r={ir} fill={FOG_FILL} fillOpacity={0.3} stroke="var(--color-ink-200)" strokeWidth={0.5} />
+        ))}
 
         <rect
           x={0}
@@ -139,8 +156,8 @@ export function CoffeeBeltMap({
         <line x1={0} y1={EQUATOR} x2={VIEW_W} y2={EQUATOR} stroke="var(--color-ink-300)" strokeWidth={0.75} strokeDasharray="2 3" />
 
         {/* "Туман войны": континенты кофейного пояса по умолчанию приглушённые */}
-        <path d={SOUTH_AMERICA_PATH} fill={FOG_FILL} fillOpacity={0.55} stroke="var(--color-ink-300)" strokeWidth={1} />
-        <path d={AFRICA_PATH} fill={FOG_FILL} fillOpacity={0.55} stroke="var(--color-ink-300)" strokeWidth={1} />
+        <path d={SOUTH_AMERICA_PATH} fill={FOG_FILL} fillOpacity={0.55} stroke="var(--color-ink-300)" strokeWidth={1} strokeLinejoin="round" />
+        <path d={AFRICA_PATH} fill={FOG_FILL} fillOpacity={0.55} stroke="var(--color-ink-300)" strokeWidth={1} strokeLinejoin="round" />
 
         {/* Раскраска: тёплое пятно на месте каждой продегустированной страны,
             обрезанное по силуэту её континента, чтобы не "вытекать" за берег */}
