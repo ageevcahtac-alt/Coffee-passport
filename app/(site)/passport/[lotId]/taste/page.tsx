@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useLots } from '@/lib/data/useLots';
 import { COFFEE_SHOPS } from '@/lib/data/coffeeShops';
 import { getBaristasForShop } from '@/lib/data/baristas';
@@ -15,6 +14,8 @@ import { addTastingRecord, getSnapshot as getJourneySnapshot } from '@/lib/journ
 import { markJustRevealed } from '@/lib/journey/revealFlag';
 import { markPinJustActivated } from '@/lib/journey/mapFlag';
 import { getMergedLotById } from '@/lib/data/lotsStore';
+import { getRoasterById } from '@/lib/data/roasters';
+import { FarmerPinningModal } from '@/components/coffee/FarmerPinningModal';
 
 type Step = 'shop' | 'barista' | 'brew' | 'taste';
 
@@ -43,13 +44,13 @@ export default function TasteLotPage({ params }: { params: { lotId: string } }) 
 }
 
 function TasteLotFlow({ lot }: { lot: Lot }) {
-  const router = useRouter();
   const [step, setStep] = useState<Step>('shop');
   const [coffeeShopId, setCoffeeShopId] = useState<string | null>(null);
   const [baristaId, setBaristaId] = useState<string | null>(null);
   const [baristaRating, setBaristaRating] = useState(0);
   const [baristaNote, setBaristaNote] = useState('');
   const [brewingMethod, setBrewingMethod] = useState<BrewingMethodId | null>(null);
+  const [showPinningRitual, setShowPinningRitual] = useState(false);
 
   function handleSave(values: TastingFormValues) {
     if (!coffeeShopId || !baristaId || !brewingMethod) return;
@@ -78,11 +79,17 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
 
     if (!hadPinBefore) markPinJustActivated(lot.country, lot.roasterId);
 
-    // The passport page is where the unlock moment plays out — send the
-    // guest straight there instead of showing a static "saved" screen here.
+    // The passport page still plays its own unlock/comparison reveal
+    // whenever the guest lands there (via the ritual's × or a later visit).
     markJustRevealed(lot.id);
-    router.push(`/passport/${lot.id}`);
+
+    // Intercept the flow here instead of navigating away immediately — the
+    // Farmer Pinning ritual (fullscreen modal) is now the reward moment;
+    // its own buttons decide where the guest goes next.
+    setShowPinningRitual(true);
   }
+
+  const roaster = getRoasterById(lot.roasterId);
 
   return (
     <main className="min-h-dvh flex flex-col px-6 py-16">
@@ -204,6 +211,8 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
           </>
         )}
       </div>
+
+      {showPinningRitual && roaster && <FarmerPinningModal lot={lot} roaster={roaster} />}
     </main>
   );
 }
