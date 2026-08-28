@@ -15,6 +15,7 @@ interface LotFormState {
   name: string;
   country: string;
   region: string;
+  variety: string;
   process: string;
   roastType: RoastType;
   qGrade: string;
@@ -36,6 +37,7 @@ function toFormState(lot?: Lot): LotFormState {
       name: '',
       country: '',
       region: '',
+      variety: '',
       process: '',
       roastType: 'filter',
       qGrade: '',
@@ -55,6 +57,7 @@ function toFormState(lot?: Lot): LotFormState {
     name: lot.name,
     country: lot.country,
     region: lot.region,
+    variety: lot.variety,
     process: lot.process,
     roastType: lot.roastType,
     qGrade: String(lot.qGrade),
@@ -107,6 +110,7 @@ export function LotBuilderForm({
       name: form.name.trim(),
       country: form.country.trim(),
       region: form.region.trim(),
+      variety: form.variety.trim(),
       process: form.process.trim(),
       cropYear: form.cropYear.trim(),
       qGrade: Number(form.qGrade) || 0,
@@ -178,17 +182,31 @@ export function LotBuilderForm({
               />
             </div>
           </div>
-          <div>
-            <label htmlFor="lot-process" className="block text-xs text-ink-400 mb-1.5">
-              Способ обработки
-            </label>
-            <input
-              id="lot-process"
-              value={form.process}
-              onChange={(e) => update('process', e.target.value)}
-              placeholder="Washed"
-              className={fieldClasses}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="lot-variety" className="block text-xs text-ink-400 mb-1.5">
+                Разновидность
+              </label>
+              <input
+                id="lot-variety"
+                value={form.variety}
+                onChange={(e) => update('variety', e.target.value)}
+                placeholder="Heirloom"
+                className={fieldClasses}
+              />
+            </div>
+            <div>
+              <label htmlFor="lot-process" className="block text-xs text-ink-400 mb-1.5">
+                Способ обработки
+              </label>
+              <input
+                id="lot-process"
+                value={form.process}
+                onChange={(e) => update('process', e.target.value)}
+                placeholder="Washed"
+                className={fieldClasses}
+              />
+            </div>
           </div>
           <div>
             <label htmlFor="lot-descriptors" className="block text-xs text-ink-400 mb-1.5">

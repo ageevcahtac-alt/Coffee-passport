@@ -43,6 +43,7 @@ export interface Lot {
   name: string; // "Ethiopia Guji"
   country: string;
   region: string;
+  variety: string; // botanical varietal, e.g. "Heirloom", "SL28, SL34" — distinct from `process`
   process: string;
   cropYear: string; // e.g. "2025/2026"
   qGrade: number;

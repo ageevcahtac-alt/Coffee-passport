@@ -19,6 +19,15 @@ const ROLES = [
     cta: 'Кабинет обжарщика',
     href: '/dashboard/roaster',
   },
+  {
+    icon: '🏪',
+    title: 'Кофейня / B2B',
+    tag: 'XO Coffee · Всеволожск',
+    description:
+      'Управление меню зерна, команда бариста и фидбек от гостей.',
+    cta: 'Кабинет кофейни',
+    href: '/dashboard/cafe',
+  },
 ] as const;
 
 export default function LandingPage() {
@@ -69,33 +78,6 @@ export default function LandingPage() {
               </span>
             </Link>
           ))}
-
-          <div className="flex flex-col rounded-md border border-ink-200 bg-parchment-100 p-6">
-            <div className="flex items-start justify-between mb-4">
-              <span className="text-3xl" aria-hidden="true">
-                🏪
-              </span>
-              <span
-                className="rounded-full bg-parchment-300 text-ink-400 text-[11px]
-                           uppercase tracking-widest2 px-2.5 py-1"
-              >
-                Скоро
-              </span>
-            </div>
-            <h2 className="font-display text-xl text-ink-900 mb-1">Кофейня / B2B</h2>
-            <p className="text-xs uppercase tracking-widest2 text-ink-400 mb-4">
-              Партнёрский кабинет
-            </p>
-            <p className="text-ink-500 text-sm leading-relaxed mb-6 flex-1">
-              Управление меню зерна, команда бариста и фидбек от гостей.
-            </p>
-            <span
-              className="inline-flex items-center justify-center rounded-md border border-ink-200
-                         text-ink-400 font-body font-medium text-sm px-5 py-3 cursor-not-allowed"
-            >
-              Кабинет кофейни
-            </span>
-          </div>
         </div>
       </section>
 
