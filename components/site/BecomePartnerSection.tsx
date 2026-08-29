@@ -10,7 +10,7 @@ export function BecomePartnerSection() {
     <div className="mt-10 pt-8 border-t border-ink-200 text-center">
       <p className="font-display text-lg text-ink-900 mb-2">Стать партнёром</p>
       <p className="text-ink-500 text-sm max-w-sm mx-auto mb-5">
-        Подключите свою кофейню или обжарню к платформе — оставьте заявку, и менеджер свяжется с
+        Подключите свою кофейню или ростерию к платформе — оставьте заявку, и менеджер свяжется с
         вами.
       </p>
       <button
