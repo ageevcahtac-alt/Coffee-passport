@@ -1,37 +1,36 @@
-import Link from 'next/link';
 import { BecomePartnerSection } from '@/components/site/BecomePartnerSection';
+import { EnthusiastAuthForm } from '@/components/site/EnthusiastAuthForm';
 
-const ROLES = [
+// The "экосистема 360°" cards — purely explanatory (no href/CTA): the
+// enthusiast form below is now the one entry point on this page, coffee
+// shop / roaster cabinets are reached after a real account exists, not by
+// picking a role here.
+const ECOSYSTEM = [
   {
     icon: '☕',
-    title: 'Кофейный энтузиаст',
-    tag: 'Гость · Дневник',
+    title: 'Энтузиаст',
     description:
-      'Сканируйте QR-коды зерна, ведите личный дневник дегустаций и оценивайте вкус.',
-    cta: 'Войти как гость',
-    href: '/journey',
-  },
-  {
-    icon: '🏭',
-    title: 'Обжарщик',
-    tag: 'XO COFFEE Roasters',
-    description:
-      'Управление лотами, составление дескрипторов вкуса, Q-Score и генерация паспортов.',
-    cta: 'Кабинет обжарщика',
-    href: '/dashboard/roaster',
+      'Фиксирует дескрипторы, ведёт личный дневник вкуса и влияет на индустрию своей оценкой.',
   },
   {
     icon: '🏪',
-    title: 'Кофейня / B2B',
-    tag: 'XO Coffee · Всеволожск',
+    title: 'Кофейня',
     description:
-      'Управление меню зерна, команда бариста и фидбек от гостей.',
-    cta: 'Кабинет кофейни',
-    href: '/dashboard/cafe',
+      'Видит честный фидбек от гостей в зале и оттачивает качество заваривания Specialty-зерна.',
+  },
+  {
+    icon: '⚙️',
+    title: 'Обжарщик',
+    description:
+      'Получает аналитику с полей — как раскрывается профиль его обжарки в чашках у гостей.',
   },
 ] as const;
 
-export default function LandingPage() {
+export default function LandingPage({
+  searchParams,
+}: {
+  searchParams: { error?: string };
+}) {
   return (
     <main className="min-h-dvh flex flex-col bg-parchment-200">
       <section className="flex-1 px-6 py-16 max-w-4xl mx-auto w-full">
@@ -40,46 +39,29 @@ export default function LandingPage() {
             Coffee Passport
           </p>
           <h1 className="font-display text-4xl leading-[1.1] text-ink-900 mb-4">
-            Выберите свою роль
+            От зерна до чашки — один прозрачный диалог
           </h1>
           <p className="text-ink-500 text-base leading-relaxed max-w-sm mx-auto">
-            Одна платформа — три взгляда на кофе: от чашки до зерна.
+            Платформа для Specialty Coffee сообщества, объединяющая гостя, кофейню и обжарщика.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-          {ROLES.map((role) => (
-            <Link
-              key={role.title}
-              href={role.href}
-              className="group flex flex-col rounded-md border border-ink-200 bg-parchment-100 p-6
-                         transition-all duration-300 ease-out
-                         hover:-translate-y-1 hover:border-gold-400
-                         hover:shadow-[0_16px_28px_-16px_rgba(26,20,16,0.35)]"
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-12">
+          {ECOSYSTEM.map((item) => (
+            <div
+              key={item.title}
+              className="flex flex-col rounded-md border border-ink-200 bg-parchment-100 p-6"
             >
-              <span
-                className="text-3xl mb-4 inline-block w-fit transition-transform duration-300
-                           ease-out group-hover:-translate-y-0.5 group-hover:scale-110
-                           group-hover:-rotate-3"
-                aria-hidden="true"
-              >
-                {role.icon}
+              <span className="text-3xl mb-4 inline-block w-fit" aria-hidden="true">
+                {item.icon}
               </span>
-              <h2 className="font-display text-xl text-ink-900 mb-1">{role.title}</h2>
-              <p className="text-xs uppercase tracking-widest2 text-ink-400 mb-4">{role.tag}</p>
-              <p className="text-ink-500 text-sm leading-relaxed mb-6 flex-1">
-                {role.description}
-              </p>
-              <span
-                className="inline-flex items-center justify-center rounded-md bg-ink-900
-                           text-parchment-100 font-body font-medium text-sm px-5 py-3
-                           transition-colors group-hover:bg-gold-500"
-              >
-                {role.cta}
-              </span>
-            </Link>
+              <h2 className="font-display text-xl text-ink-900 mb-2">{item.title}</h2>
+              <p className="text-ink-500 text-sm leading-relaxed">{item.description}</p>
+            </div>
           ))}
         </div>
+
+        <EnthusiastAuthForm error={searchParams.error} />
 
         <BecomePartnerSection />
       </section>
