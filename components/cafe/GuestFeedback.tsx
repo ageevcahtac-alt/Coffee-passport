@@ -3,8 +3,11 @@
 import { useJourney } from '@/lib/journey/useJourney';
 import { getMergedLotById } from '@/lib/data/lotsStore';
 import { getBaristaById } from '@/lib/data/baristas';
+import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { formatTastingDate } from '@/lib/utils/date';
 import { StarRating } from '@/components/coffee/StarRating';
+import { GuestTasteProfileWidget } from '@/components/coffee/GuestTasteProfileWidget';
+import { ReviewReplyThread } from '@/components/shared/ReviewReplyThread';
 import { DEFECT_TAGS, type TastingRecord } from '@/lib/types/coffee';
 
 const FEED_LIMIT = 5;
@@ -39,7 +42,7 @@ export function GuestFeedback({ shopId }: { shopId: string }) {
           ) : (
             <div className="flex flex-col gap-4">
               {coffeeFeed.map((record) => (
-                <CoffeeFeedItem key={record.id} record={record} />
+                <CoffeeFeedItem key={record.id} record={record} allRecords={records} shopId={shopId} />
               ))}
             </div>
           )}
@@ -67,8 +70,17 @@ export function GuestFeedback({ shopId }: { shopId: string }) {
   );
 }
 
-function CoffeeFeedItem({ record }: { record: TastingRecord }) {
+function CoffeeFeedItem({
+  record,
+  allRecords,
+  shopId,
+}: {
+  record: TastingRecord;
+  allRecords: TastingRecord[];
+  shopId: string;
+}) {
   const lot = getMergedLotById(record.lotId);
+  const shop = getCoffeeShopById(shopId);
   if (!lot) return null;
 
   return (
@@ -86,6 +98,19 @@ function CoffeeFeedItem({ record }: { record: TastingRecord }) {
         </p>
       )}
       <p className="text-[11px] text-ink-300 mt-1">{formatTastingDate(record.createdAt)}</p>
+
+      <GuestTasteProfileWidget
+        guestUserId={record.userId}
+        allRecords={allRecords}
+        currentLotProfile={lot.roasterFlavorProfile}
+      />
+
+      <ReviewReplyThread
+        tastingRecordId={record.id}
+        responderType="coffee_shop"
+        responderId={shopId}
+        responderName={shop?.name ?? 'Кофейня'}
+      />
     </div>
   );
 }

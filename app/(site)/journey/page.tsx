@@ -15,6 +15,7 @@ import { ScanLotModal } from '@/components/coffee/ScanLotModal';
 import { CoffeeShopProfileCard } from '@/components/coffee/CoffeeShopProfileCard';
 import { TastingRecordCard } from '@/components/coffee/TastingRecordCard';
 import { TastingDetailModal } from '@/components/coffee/TastingDetailModal';
+import { TastePassportCard } from '@/components/coffee/TastePassportCard';
 import type { TastingRecord } from '@/lib/types/coffee';
 
 export default function JourneyPage() {
@@ -93,6 +94,12 @@ export default function JourneyPage() {
           📷 Отсканировать новый лот
         </button>
       </div>
+
+      {records.length > 0 && (
+        <div className="max-w-md mx-auto w-full mb-6">
+          <TastePassportCard records={records} />
+        </div>
+      )}
 
       <div className="max-w-md mx-auto w-full mb-4">
         <CoffeeBeltMap

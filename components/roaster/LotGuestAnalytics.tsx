@@ -3,7 +3,12 @@
 import { useMemo, useState } from 'react';
 import { DEFECT_TAGS, FLAVOR_AXES, SENSORY_TAGS, type Lot, type TastingRecord } from '@/lib/types/coffee';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
+import { getRoasterById } from '@/lib/data/roasters';
+import { formatTastingDate } from '@/lib/utils/date';
 import { FlavorRadar } from '@/components/coffee/FlavorRadar';
+import { StarRating } from '@/components/coffee/StarRating';
+import { GuestTasteProfileWidget } from '@/components/coffee/GuestTasteProfileWidget';
+import { ReviewReplyThread } from '@/components/shared/ReviewReplyThread';
 
 function average(records: TastingRecord[], key: (typeof FLAVOR_AXES)[number]['key']): number {
   if (records.length === 0) return 0;
@@ -165,7 +170,7 @@ export function LotGuestAnalytics({ lot, records }: { lot: Lot; records: Tasting
           )}
 
           {defects.length > 0 && (
-            <div>
+            <div className="mb-4">
               <p className="text-xs text-ink-400 mb-2">
                 ⚠ Отмеченные дефекты — возможна проблема экстракции или сырья
               </p>
@@ -182,8 +187,56 @@ export function LotGuestAnalytics({ lot, records }: { lot: Lot; records: Tasting
               </ul>
             </div>
           )}
+
+          <div className="pt-4 border-t border-ink-100">
+            <p className="text-xs text-ink-400 mb-3">Отзывы гостей ({filteredRecords.length})</p>
+            <div className="flex flex-col gap-4">
+              {filteredRecords.map((record) => (
+                <GuestReviewItem key={record.id} lot={lot} record={record} allRecords={lotRecords} />
+              ))}
+            </div>
+          </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function GuestReviewItem({
+  lot,
+  record,
+  allRecords,
+}: {
+  lot: Lot;
+  record: TastingRecord;
+  allRecords: TastingRecord[];
+}) {
+  const shop = getCoffeeShopById(record.coffeeShopId);
+  const roaster = getRoasterById(lot.roasterId);
+
+  return (
+    <div className="border-t border-ink-100 pt-4 first:border-t-0 first:pt-0">
+      <div className="flex items-start justify-between gap-3 mb-1.5">
+        <p className="text-sm text-ink-900 font-medium leading-tight">{shop?.name ?? record.coffeeShopId}</p>
+        <StarRating value={record.rating} label={`Оценка кофе ${record.rating} из 5`} />
+      </div>
+      {record.liked && <p className="text-xs text-ink-500 mb-1">👍 {record.liked}</p>}
+      {record.disliked && <p className="text-xs text-ink-500 mb-1">👎 {record.disliked}</p>}
+      {record.note && <p className="text-xs text-ink-500 mb-1">{record.note}</p>}
+      <p className="text-[11px] text-ink-300 mt-1">{formatTastingDate(record.createdAt)}</p>
+
+      <GuestTasteProfileWidget
+        guestUserId={record.userId}
+        allRecords={allRecords}
+        currentLotProfile={lot.roasterFlavorProfile}
+      />
+
+      <ReviewReplyThread
+        tastingRecordId={record.id}
+        responderType="roaster"
+        responderId={lot.roasterId}
+        responderName={roaster?.name ?? 'Обжарщик'}
+      />
     </div>
   );
 }
