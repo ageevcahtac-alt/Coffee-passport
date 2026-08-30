@@ -13,6 +13,7 @@ const TABS = [
   { href: '/dashboard/cafe', label: 'Меню зерна' },
   { href: '/dashboard/cafe/team', label: 'Команда / Персонал' },
   { href: '/dashboard/cafe/analytics', label: 'Аналитика и Отзывы' },
+  { href: '/dashboard/cafe/equipment', label: 'Оборудование' },
 ] as const;
 
 export default function CafeHubLayout({ children }: { children: React.ReactNode }) {

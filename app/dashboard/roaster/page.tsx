@@ -30,6 +30,12 @@ export default function RoasterDashboardPage() {
               {roaster?.name ?? 'Обжарщик'}
             </p>
             <h1 className="font-display text-3xl text-ink-900">Лоты</h1>
+            <Link
+              href="/dashboard/roaster/equipment"
+              className="text-xs text-ink-500 underline underline-offset-2 hover:text-ink-900 mt-2 inline-block"
+            >
+              ⚙️ Оборудование ростерии
+            </Link>
           </div>
           <Link
             href="/dashboard/roaster/new"
