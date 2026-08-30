@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useJourney } from '@/lib/journey/useJourney';
 import { getMergedLotById } from '@/lib/data/lotsStore';
 import { consumePinJustActivated } from '@/lib/journey/mapFlag';
+import { DEMO_USER_ID } from '@/lib/journey/store';
 import { CoffeeJourney } from '@/components/coffee/CoffeeJourney';
+import { MyRecipesShelf } from '@/components/coffee/MyRecipesShelf';
 import {
   CoffeeBeltMap,
   type ActivatedPin,
@@ -137,6 +139,8 @@ export default function JourneyPage() {
           <CoffeeShopProfileCard coffeeShopId={selectedTrophyShopId} records={records} />
         </div>
       )}
+
+      <MyRecipesShelf userId={DEMO_USER_ID} />
 
       {records.length > 0 && (
         <div className="mt-2">

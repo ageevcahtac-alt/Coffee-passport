@@ -8,7 +8,7 @@ import type { TastingRecord } from '@/lib/types/coffee';
 // drop-in replacement, not a rewrite.
 
 const STORAGE_KEY = 'coffee-passport:journey';
-const DEMO_USER_ID = 'demo-user';
+export const DEMO_USER_ID = 'demo-user';
 
 // useSyncExternalStore requires getServerSnapshot to return a referentially
 // stable value — a fresh `[]` literal on every call trips React's "should be

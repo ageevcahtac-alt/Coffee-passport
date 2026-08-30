@@ -4,9 +4,15 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLots } from '@/lib/data/useLots';
 import { getRoasterById } from '@/lib/data/roasters';
+import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { saveLot } from '@/lib/data/lotsStore';
+import { useBrewingRecipes } from '@/lib/data/useBrewingRecipes';
+import { addBrewingRecipe } from '@/lib/data/brewingRecipesStore';
 import { LotBuilderForm } from '@/components/roaster/LotBuilderForm';
-import type { Lot } from '@/lib/types/coffee';
+import { SignatureRecipeForm } from '@/components/cafe/SignatureRecipeForm';
+import { BREWING_METHODS, type Lot } from '@/lib/types/coffee';
+
+const ACTIVE_SHOP_ID = 'shop-xo-vsevolozhsk';
 
 export default function CafeEditLotPage({ params }: { params: { lotId: string } }) {
   const router = useRouter();
@@ -19,13 +25,19 @@ export default function CafeEditLotPage({ params }: { params: { lotId: string } 
 
   const lot = lots.find((candidate) => candidate.id === params.lotId);
   const roaster = lot ? getRoasterById(lot.roasterId) : undefined;
+  const shop = getCoffeeShopById(ACTIVE_SHOP_ID);
+
+  const signatureRecipes = useBrewingRecipes().filter(
+    (recipe) => lot && recipe.lotId === lot.id && recipe.authorType === 'coffee_shop' && recipe.authorId === ACTIVE_SHOP_ID
+  );
+  const [addingRecipe, setAddingRecipe] = useState(false);
 
   function handleSave(updated: Lot) {
     saveLot(updated);
     router.push('/dashboard/cafe');
   }
 
-  if (!lot || !roaster) {
+  if (!lot || !roaster || !shop) {
     if (!mounted) return null;
     return (
       <main className="min-h-dvh flex flex-col items-center justify-center px-6 text-center">
@@ -48,6 +60,42 @@ export default function CafeEditLotPage({ params }: { params: { lotId: string } 
           onSave={handleSave}
           onCancel={() => router.push('/dashboard/cafe')}
         />
+
+        <div className="mt-14">
+          <p className="section-label mb-4">Фирменный рецепт кофейни</p>
+          {addingRecipe ? (
+            <SignatureRecipeForm
+              lot={lot}
+              shop={shop}
+              onSave={(recipe) => {
+                addBrewingRecipe(recipe);
+                setAddingRecipe(false);
+              }}
+              onCancel={() => setAddingRecipe(false)}
+            />
+          ) : (
+            <>
+              {signatureRecipes.length === 0 ? (
+                <p className="text-sm text-ink-400 mb-4">Кофейня ещё не опубликовала свою адаптацию рецепта.</p>
+              ) : (
+                <div className="flex flex-col gap-2 mb-4">
+                  {signatureRecipes.map((recipe) => {
+                    const methodLabel = BREWING_METHODS.find((method) => method.id === recipe.brewingMethodId)?.label ?? recipe.brewingMethodId;
+                    return (
+                      <div key={recipe.id} className="rounded-md border border-ink-200 bg-parchment-100 p-4">
+                        <p className="text-sm text-ink-900">{methodLabel} · {recipe.doseG}г → {recipe.yieldG}г</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <button type="button" onClick={() => setAddingRecipe(true)}
+                className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900">
+                + Добавить фирменный рецепт
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </main>
   );

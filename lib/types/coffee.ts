@@ -88,6 +88,7 @@ export const BREWING_METHODS = [
   { id: 'aeropress', label: 'AeroPress / Аэропресс' },
   { id: 'siphon', label: 'Сифон' },
   { id: 'batch_brew', label: 'Batch Brew / Батч-брю' },
+  { id: 'cupping', label: 'Каппинг' },
 ] as const;
 
 export type BrewingMethodId = (typeof BREWING_METHODS)[number]['id'];
@@ -201,5 +202,94 @@ export interface TastingRecord {
   // as RoasterFlavorProfile so the two can be compared directly once the
   // roaster's reference profile unlocks (see TasteComparison).
   guestFlavorProfile: RoasterFlavorProfile;
+  createdAt: string; // ISO timestamp
+}
+
+// =========================================================
+// Roast profiles — roaster-only curve data attached to a Lot, imported from
+// roasting software (Cropster/Artisan CSV/JSON exports) or entered by hand.
+// See lib/utils/roastImport.ts for the parser and lib/data/roastProfilesStore.ts
+// for persistence.
+// =========================================================
+
+export interface RoastCurvePoint {
+  timeSec: number;
+  bt: number | null; // bean temp, °C
+  et: number | null; // environment temp, °C
+  ror: number | null; // rate of rise, °C/min
+}
+
+export type RoastSourceFormat = 'manual' | 'csv' | 'json';
+
+export const ROAST_MACHINE_MODELS = [
+  'Diedrich IR-12',
+  'Diedrich CR-35',
+  'Giesen W6A',
+  'Giesen W15A',
+  'Loring S15 Falcon',
+  'Loring S35 Kestrel',
+  'Probat P12',
+  'Probat PROBATONE 5',
+  'Ambex YM-25',
+];
+
+export interface RoastProfile {
+  id: string;
+  lotId: string;
+  roasterId: string;
+  machineModel: string;
+  chargeTemp: number; // °C
+  dropTemp: number; // °C
+  firstCrackTimeSec: number | null; // null when the roaster hasn't logged it — DTR then falls back to manual entry
+  totalTimeSec: number;
+  dtrPercent: number | null; // Development Time Ratio, % — computed from firstCrackTimeSec when available
+  curve: RoastCurvePoint[];
+  sourceFormat: RoastSourceFormat;
+  sourceFileName: string | null;
+  notes: string;
+  createdAt: string; // ISO timestamp
+}
+
+// =========================================================
+// Brewing recipes — multi-author, grouped by BrewingMethodId under a Lot.
+// Roaster (official benchmark) / Coffee Shop (commercial adaptation) /
+// Enthusiast (personal log + community, including "Adapt to My Setup"
+// copies — see parentRecipeId) all share this one shape.
+// See lib/data/brewingRecipesStore.ts for persistence.
+// =========================================================
+
+export type RecipeAuthorType = 'roaster' | 'coffee_shop' | 'enthusiast';
+
+export const PRO_GRINDER_MODELS = ['Mahlkönig EK43', 'Mahlkönig Peak', 'Ditting KR804', 'Mythos One', 'Compak E10'];
+export const HOME_GRINDER_MODELS = ['Comandante C40', 'Timemore C2/C3', '1Zpresso J-Max', 'Baratza Encore/Sette', 'Fellow Ode', 'DF64'];
+export const ESPRESSO_MACHINE_MODELS = ['La Marzocco Linea PB', 'Victoria Arduino Eagle One', 'Slayer', 'Nuova Simonelli Aurelia', 'Synesso MVP Hydra'];
+export const HOME_BREWER_MODELS = ['Hario V60', 'Chemex', 'Fellow Stagg X/EKG', 'AeroPress', 'Kalita Wave'];
+
+export interface BrewingRecipe {
+  id: string;
+  lotId: string;
+  brewingMethodId: BrewingMethodId;
+  authorType: RecipeAuthorType;
+  authorId: string; // roasterId / coffeeShopId / demo user id, depending on authorType
+  authorName: string; // display label
+  isBenchmark: boolean; // roaster's official default recipe for this method
+  parentRecipeId: string | null; // set when this recipe was copied via "Адаптировать под себя"
+  doseG: number;
+  yieldG: number; // brew ratio is derived at render time: yieldG / doseG
+  measuredTdsPercent: number | null; // TDS% of the BREWED cup (refractometer reading) — distinct from waterTds below, which is the source water's mineral ppm, not the resulting cup's strength. Powers the extraction-yield chart, see lib/utils/extraction.ts.
+  grinderModel: string;
+  grinderSetting: string; // clicks, dial number, or microns — free text, unit varies by grinder
+  waterTempC: number;
+  waterBrand: string;
+  waterTds: number | null; // ppm
+  waterCustomMineralization: string; // e.g. "Ca 60 / Mg 15 ppm, Third Wave Water Classic"
+  bloomTimeSec: number | null;
+  preInfusionSec: number | null;
+  flowRateGPerSec: number | null;
+  totalTimeSec: number;
+  equipmentModel: string; // espresso machine / brewer model
+  pressureBar: number | null; // espresso only
+  pressureProfile: string; // free text, e.g. "9 bar flat" or "ramp 6→9 over 10s"
+  notes: string; // author notes / expected flavor outcome
   createdAt: string; // ISO timestamp
 }

@@ -9,12 +9,15 @@ import { markPendingShop } from '@/lib/journey/pendingShopFlag';
 import { getRoasterById } from '@/lib/data/roasters';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { useCoffeeShops } from '@/lib/data/useCoffeeShops';
+import { DEMO_USER_ID } from '@/lib/journey/store';
 import { CoffeeShopSelector } from '@/components/coffee/CoffeeShopSelector';
 import { LotPassport } from '@/components/coffee/LotPassport';
 import { ProducerRoasterCard } from '@/components/coffee/ProducerRoasterCard';
 import { BlindTastingLock } from '@/components/coffee/BlindTastingLock';
 import { FarmerRevealCard } from '@/components/coffee/FarmerRevealCard';
 import { TasteComparison } from '@/components/coffee/TasteComparison';
+import { RoastingTab } from '@/components/coffee/RoastingTab';
+import { ExtractionTab } from '@/components/coffee/ExtractionTab';
 
 export default function LotPassportPage({ params }: { params: { lotId: string } }) {
   const lots = useLots();
@@ -135,6 +138,16 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
 
       <div className="max-w-md mx-auto w-full mt-8">
         <ProducerRoasterCard lot={lot} />
+      </div>
+
+      <div className="max-w-md mx-auto w-full mt-10">
+        <p className="section-label mb-4">Обжарка</p>
+        <RoastingTab lot={lot} />
+      </div>
+
+      <div className="max-w-md mx-auto w-full mt-10">
+        <p className="section-label mb-4">Экстракция</p>
+        <ExtractionTab lot={lot} currentUserId={DEMO_USER_ID} currentUserName="Вы" />
       </div>
 
       <div className="max-w-md mx-auto w-full mt-8 text-center">
