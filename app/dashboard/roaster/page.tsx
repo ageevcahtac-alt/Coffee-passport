@@ -113,7 +113,7 @@ function LotRow({ lot, records }: { lot: Lot; records: TastingRecord[] }) {
           Редактировать
         </Link>
         <Link
-          href={`/passport/${lot.id}`}
+          href={`/passport/${lot.id}?preview=1`}
           className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900"
         >
           Предпросмотр паспорта

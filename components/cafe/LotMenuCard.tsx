@@ -38,7 +38,7 @@ export function LotMenuCard({ lot, onRemove }: { lot: Lot; onRemove: () => void 
           Редактировать
         </Link>
         <Link
-          href={`/passport/${lot.id}`}
+          href={`/passport/${lot.id}?preview=1`}
           className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900"
         >
           Паспорт лота

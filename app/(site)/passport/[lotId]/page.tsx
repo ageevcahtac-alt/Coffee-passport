@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useLots } from '@/lib/data/useLots';
 import { useJourney } from '@/lib/journey/useJourney';
 import { consumeJustRevealed } from '@/lib/journey/revealFlag';
@@ -23,6 +24,14 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
   const lots = useLots();
   const journey = useJourney();
   const coffeeShops = useCoffeeShops();
+  // Business preview mode: Roaster/Cafe cabinets link here with ?preview=1
+  // (see "Предпросмотр паспорта" in app/dashboard/roaster/page.tsx and
+  // "Паспорт лота" in components/cafe/LotMenuCard.tsx) to check how the Lot
+  // Card reads without pretending to be a guest — skips the coffee-shop
+  // check-in gate and the blind-tasting unlock entirely, since neither
+  // applies to someone previewing their own catalog entry.
+  const searchParams = useSearchParams();
+  const isPreview = searchParams.get('preview') === '1';
   // Lots are seed data merged with anything the roaster cabinet saved to
   // localStorage. Seed lots are already in the server snapshot, so they
   // render immediately (SSR-visible, no blank flash). A lot created moments
@@ -62,6 +71,37 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
       <main className="min-h-dvh flex flex-col items-center justify-center px-6 text-center">
         <h1 className="font-display text-2xl text-ink-900 mb-2">Лот не найден</h1>
         <p className="text-ink-500 text-sm">Проверьте ссылку или отсканируйте другой QR-код.</p>
+      </main>
+    );
+  }
+
+  if (isPreview) {
+    return (
+      <main className="min-h-dvh flex flex-col px-6 py-16">
+        <div className="max-w-md mx-auto w-full mb-6 rounded-md border border-dashed border-gold-400 bg-gold-50 px-4 py-3">
+          <p className="text-xs text-ink-700">
+            Режим предпросмотра — так карточку лота увидит гость после дегустации. Раздел «Ваша дегустация» и
+            профиль фермера здесь не показываются.
+          </p>
+        </div>
+
+        <div className="max-w-md mx-auto w-full">
+          <LotPassport lot={lot} roaster={roaster} />
+        </div>
+
+        <div className="max-w-md mx-auto w-full mt-8">
+          <ProducerRoasterCard lot={lot} />
+        </div>
+
+        <div className="max-w-md mx-auto w-full mt-10">
+          <p className="section-label mb-4">Обжарка</p>
+          <RoastingTab lot={lot} />
+        </div>
+
+        <div className="max-w-md mx-auto w-full mt-10">
+          <p className="section-label mb-4">Экстракция</p>
+          <ExtractionTab lot={lot} currentUserId={DEMO_USER_ID} currentUserName="Вы" />
+        </div>
       </main>
     );
   }
