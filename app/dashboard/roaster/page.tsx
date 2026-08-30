@@ -8,6 +8,7 @@ import { useJourney } from '@/lib/journey/useJourney';
 import { getRoasterById } from '@/lib/data/roasters';
 import { ROAST_TYPE_LABELS, type Lot, type TastingRecord } from '@/lib/types/coffee';
 import { LotGuestAnalytics } from '@/components/roaster/LotGuestAnalytics';
+import { CommunityHighlights } from '@/components/coffee/CommunityHighlights';
 
 // No real roaster auth wired up yet (see /dashboard for the Supabase-gated
 // membership flow) — this cabinet is scoped to the pilot roaster for now,
@@ -39,6 +40,8 @@ export default function RoasterDashboardPage() {
             + Добавить лот
           </Link>
         </div>
+
+        <CommunityHighlights scopeLots={myLots} canApprove canBadge />
 
         {myLots.length === 0 ? (
           <p className="text-ink-500 text-sm">

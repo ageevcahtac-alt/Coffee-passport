@@ -59,3 +59,18 @@ export function addBrewingRecipe(input: Omit<BrewingRecipe, 'id' | 'createdAt'>)
   write([recipe, ...read()]);
   return recipe;
 }
+
+// Used by the Roaster/Admin "Отметить Community Choice" toggle (see
+// components/coffee/CommunityHighlights.tsx) — the only in-place edit any
+// recipe gets today, so this stays a narrow patch rather than a general
+// "edit recipe" form.
+export function updateBrewingRecipe(id: string, patch: Partial<BrewingRecipe>): BrewingRecipe | null {
+  const existing = read();
+  const index = existing.findIndex((recipe) => recipe.id === id);
+  if (index === -1) return null;
+  const updated: BrewingRecipe = { ...existing[index], ...patch, id };
+  const next = [...existing];
+  next[index] = updated;
+  write(next);
+  return updated;
+}

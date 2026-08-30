@@ -5,6 +5,8 @@ import type { BrewingMethodId, BrewingRecipe, Lot } from '@/lib/types/coffee';
 import { BREWING_METHODS } from '@/lib/types/coffee';
 import { useBrewingRecipes } from '@/lib/data/useBrewingRecipes';
 import { addBrewingRecipe } from '@/lib/data/brewingRecipesStore';
+import { useRecipeVotes } from '@/lib/data/useRecipeVotes';
+import { getNetVotes } from '@/lib/data/recipeVotesStore';
 import { BrewingMethodSelector } from '@/components/coffee/BrewingMethodSelector';
 import { RecipeCard } from '@/components/coffee/RecipeCard';
 import { EnthusiastRecipeForm } from '@/components/coffee/EnthusiastRecipeForm';
@@ -19,6 +21,7 @@ export function ExtractionTab({
   currentUserName: string;
 }) {
   const allRecipes = useBrewingRecipes().filter((recipe) => recipe.lotId === lot.id);
+  const votes = useRecipeVotes();
 
   const methodsWithRecipes = useMemo(() => {
     const ids = new Set(allRecipes.map((recipe) => recipe.brewingMethodId));
@@ -38,7 +41,19 @@ export function ExtractionTab({
   const forMethod = selectedMethod ? allRecipes.filter((recipe) => recipe.brewingMethodId === selectedMethod) : [];
   const benchmarkRecipes = forMethod.filter((recipe) => recipe.authorType === 'roaster');
   const shopRecipes = forMethod.filter((recipe) => recipe.authorType === 'coffee_shop');
-  const communityRecipes = forMethod.filter((recipe) => recipe.authorType === 'enthusiast');
+  // Only opted-in ("Опубликовать рецепт...") enthusiast recipes show here —
+  // an unpublished personal log stays visible only to its author, via
+  // MyRecipesShelf on /journey. Community Choice picks (see
+  // components/coffee/CommunityHighlights.tsx) pin to the top, then by net
+  // votes, then newest first.
+  const communityRecipes = forMethod
+    .filter((recipe) => recipe.authorType === 'enthusiast' && recipe.isPublic)
+    .sort((a, b) => {
+      if (a.communityChoice !== b.communityChoice) return a.communityChoice ? -1 : 1;
+      const voteDelta = getNetVotes(b.id, votes) - getNetVotes(a.id, votes);
+      if (voteDelta !== 0) return voteDelta;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
 
   function handleSaveEnthusiastRecipe(input: Omit<BrewingRecipe, 'id' | 'createdAt'>) {
     addBrewingRecipe(input);
@@ -68,11 +83,11 @@ export function ExtractionTab({
             emptyText="Пока ни одна кофейня не поделилась своей адаптацией."
           />
           <RecipeGroup
-            title="Сообщество"
+            title="Рецепты сообщества"
             recipes={communityRecipes}
             currentUserId={currentUserId}
             onAdapt={setAdaptingRecipe}
-            emptyText="Пока нет рецептов от энтузиастов — станьте первым."
+            emptyText="Пока нет опубликованных рецептов от энтузиастов — станьте первым."
           />
 
           <button

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useJourney } from '@/lib/journey/useJourney';
 import { getMergedLotById } from '@/lib/data/lotsStore';
 import { consumePinJustActivated } from '@/lib/journey/mapFlag';
@@ -95,6 +96,14 @@ export default function JourneyPage() {
         >
           📷 Отсканировать новый лот
         </button>
+        <Link
+          href="/journey/equipment"
+          className="inline-flex items-center justify-center w-full rounded-md border border-ink-200
+                     text-ink-700 font-body font-medium text-sm px-6 py-3.5 mt-2
+                     hover:bg-parchment-300 transition-colors"
+        >
+          ⚙ Моё оборудование
+        </Link>
       </div>
 
       {records.length > 0 && (

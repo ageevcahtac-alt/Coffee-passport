@@ -10,12 +10,15 @@ import { useState } from 'react';
 import { PartnerRequestsTab } from '@/components/admin/PartnerRequestsTab';
 import { PartnersRegistryTab } from '@/components/admin/PartnersRegistryTab';
 import { LegacyLotCreator } from '@/components/admin/LegacyLotCreator';
+import { CommunityHighlights } from '@/components/coffee/CommunityHighlights';
+import { useLots } from '@/lib/data/useLots';
 
-type Tab = 'requests' | 'registry' | 'legacy';
+type Tab = 'requests' | 'registry' | 'community' | 'legacy';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'requests', label: 'Заявки' },
   { id: 'registry', label: 'Реестр партнёров' },
+  { id: 'community', label: 'Сообщество' },
   { id: 'legacy', label: 'Создать лот (Supabase)' },
 ];
 
@@ -23,6 +26,7 @@ const TABS: { id: Tab; label: string }[] = [
 // further auth of its own.
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>('requests');
+  const allLots = useLots();
 
   return (
     <main className="min-h-dvh bg-parchment-200 px-6 py-12">
@@ -53,6 +57,7 @@ export default function AdminPage() {
 
         {tab === 'requests' && <PartnerRequestsTab />}
         {tab === 'registry' && <PartnersRegistryTab />}
+        {tab === 'community' && <CommunityHighlights scopeLots={allLots} canApprove canBadge />}
         {tab === 'legacy' && <LegacyLotCreator />}
       </div>
     </main>

@@ -291,5 +291,50 @@ export interface BrewingRecipe {
   pressureBar: number | null; // espresso only
   pressureProfile: string; // free text, e.g. "9 bar flat" or "ramp 6→9 over 10s"
   notes: string; // author notes / expected flavor outcome
+  isPublic: boolean; // opt-in consent to list this recipe in Community Brews — always true for roaster/coffee_shop (already public by nature), defaults false for enthusiast unless the consent checkbox is checked
+  communityChoice: boolean; // "Рекомендован сообществом" badge, set only via the Roaster/Admin dashboard (see components/coffee/CommunityHighlights.tsx)
+  createdAt: string; // ISO timestamp
+}
+
+// =========================================================
+// Equipment Garage — the enthusiast's saved personal setup, read by
+// EnthusiastRecipeForm to auto-fill grinder/machine/water fields based on
+// the chosen brewing method. See lib/data/equipmentStore.ts.
+// =========================================================
+
+export const FILTER_DEVICE_PRESETS = [
+  { id: 'v60', label: 'V60' },
+  { id: 'chemex', label: 'Chemex' },
+  { id: 'aeropress', label: 'AeroPress' },
+  { id: 'kalita_wave', label: 'Kalita Wave' },
+  { id: 'batch_brew', label: 'Batch Brew' },
+  { id: 'french_press', label: 'French Press' },
+  { id: 'clever_dripper', label: 'Clever Dripper' },
+] as const;
+
+export type FilterDevicePresetId = (typeof FILTER_DEVICE_PRESETS)[number]['id'];
+
+export interface EquipmentSetup {
+  userId: string;
+  espressoGrinder: string;
+  espressoMachine: string;
+  espressoWater: string;
+  filterGrinder: string;
+  filterWater: string;
+  favoriteDeviceIds: string[]; // a FilterDevicePresetId, or a CustomDevice.id
+  updatedAt: string; // ISO timestamp
+}
+
+// A user-submitted filter device not in FILTER_DEVICE_PRESETS. Starts
+// unapproved (visible only in its submitter's own picker) until a
+// Roaster/Admin promotes it into the platform-wide preset list — see
+// lib/data/customDevicesStore.ts.
+export interface CustomDevice {
+  id: string;
+  label: string;
+  description: string; // required — the submission form won't save without it
+  submittedByUserId: string;
+  submittedByName: string;
+  approved: boolean;
   createdAt: string; // ISO timestamp
 }

@@ -1,11 +1,12 @@
 'use client';
 
-import { useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { BrewingMethodId, BrewingRecipe, Lot } from '@/lib/types/coffee';
 import { HOME_BREWER_MODELS, HOME_GRINDER_MODELS } from '@/lib/types/coffee';
 import { useGrindConfirmations } from '@/lib/data/useGrindConfirmations';
 import { addGrindConfirmation } from '@/lib/data/grindConfirmationsStore';
 import { estimateGrindSetting } from '@/lib/utils/grindConvert';
+import { useEquipment } from '@/lib/data/useEquipment';
 import { ComboSelect } from '@/components/shared/ComboSelect';
 import { BrewingMethodSelector } from '@/components/coffee/BrewingMethodSelector';
 
@@ -30,6 +31,7 @@ interface FormState {
   totalTimeSec: string;
   equipmentModel: string;
   notes: string;
+  isPublic: boolean;
 }
 
 function toFormState(source?: BrewingRecipe): FormState {
@@ -48,6 +50,7 @@ function toFormState(source?: BrewingRecipe): FormState {
     totalTimeSec: source ? String(source.totalTimeSec) : '',
     equipmentModel: '',
     notes: source?.notes ?? '',
+    isPublic: false,
   };
 }
 
@@ -72,10 +75,31 @@ export function EnthusiastRecipeForm({
 }) {
   const [form, setForm] = useState<FormState>(() => toFormState(sourceRecipe));
   const grindConfirmations = useGrindConfirmations();
+  const myEquipment = useEquipment().find((setup) => setup.userId === currentUserId);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
+
+  // Auto-fill from the saved Equipment Garage setup (see
+  // app/(site)/journey/equipment/page.tsx) whenever the brewing method
+  // changes — espresso pulls the espresso setup, every other method pulls
+  // the filter setup. Only fills fields that are still empty, so it never
+  // clobbers an adapt-flow prefill or something the user already typed.
+  useEffect(() => {
+    if (!form.brewingMethodId || !myEquipment) return;
+    const isEspressoMethod = form.brewingMethodId === 'espresso';
+    const grinder = isEspressoMethod ? myEquipment.espressoGrinder : myEquipment.filterGrinder;
+    const water = isEspressoMethod ? myEquipment.espressoWater : myEquipment.filterWater;
+
+    setForm((prev) => ({
+      ...prev,
+      grinderModel: prev.grinderModel || grinder,
+      equipmentModel: isEspressoMethod ? prev.equipmentModel || myEquipment.espressoMachine : prev.equipmentModel,
+      waterCustomMineralization: prev.waterCustomMineralization || water,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when the method changes, not on every equipment/form update
+  }, [form.brewingMethodId]);
 
   // Only meaningful in the adapt flow, once the user has picked a grinder
   // that differs from the source recipe's — see lib/utils/grindConvert.ts.
@@ -141,6 +165,8 @@ export function EnthusiastRecipeForm({
       pressureBar: null,
       pressureProfile: '',
       notes: form.notes.trim(),
+      isPublic: form.isPublic,
+      communityChoice: false,
     };
 
     onSave(recipe);
@@ -240,6 +266,19 @@ export function EnthusiastRecipeForm({
         <textarea id="er-notes" rows={4} value={form.notes} onChange={(e) => update('notes', e.target.value)}
           className={fieldClasses} />
       </div>
+
+      <label className="flex items-start gap-3 rounded-md border border-ink-200 bg-parchment-100 p-4 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={form.isPublic}
+          onChange={(e) => update('isPublic', e.target.checked)}
+          className="mt-0.5 h-4 w-4 accent-current text-gold-500 shrink-0"
+        />
+        <span className="text-xs text-ink-700 leading-relaxed">
+          Опубликовать рецепт в общедоступной базе Coffee Passport (отказываюсь от авторских претензий, разрешаю
+          свободное использование рецепта сообществом).
+        </span>
+      </label>
 
       <div className="flex gap-3">
         {onCancel && (

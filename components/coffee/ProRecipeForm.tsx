@@ -120,6 +120,8 @@ export function ProRecipeForm({
       pressureBar: isEspresso && form.pressureBar ? Number(form.pressureBar) : null,
       pressureProfile: isEspresso ? form.pressureProfile.trim() : '',
       notes: form.notes.trim(),
+      isPublic: true, // roaster/coffee_shop recipes are always public by nature
+      communityChoice: false, // only ever set via the Roaster/Admin dashboard toggle
     };
 
     onSave(recipe);

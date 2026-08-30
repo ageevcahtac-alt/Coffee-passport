@@ -6,6 +6,7 @@ import { useCafeMenuLotIds } from '@/lib/data/useCafeMenu';
 import { removeLotFromMenu } from '@/lib/data/cafeMenuStore';
 import { LotMenuCard } from '@/components/cafe/LotMenuCard';
 import { GuestFeedback } from '@/components/cafe/GuestFeedback';
+import { CommunityHighlights } from '@/components/coffee/CommunityHighlights';
 
 const ACTIVE_SHOP_ID = 'shop-xo-vsevolozhsk';
 
@@ -25,6 +26,8 @@ export default function CafeMenuPage() {
   return (
     <>
       <GuestFeedback shopId={ACTIVE_SHOP_ID} />
+
+      <CommunityHighlights scopeLots={menuLots} canApprove={false} canBadge={false} />
 
       <div className="flex items-start justify-between gap-4 mb-8">
         <p className="section-label flex-1">Меню зерна по регионам</p>

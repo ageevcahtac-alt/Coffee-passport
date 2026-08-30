@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { BrewingRecipe } from '@/lib/types/coffee';
 import { computeExtraction } from '@/lib/utils/extraction';
 import { ExtractionChart, type ExtractionPoint } from '@/components/coffee/ExtractionChart';
+import { VoteButtons } from '@/components/coffee/VoteButtons';
 
 export function RecipeCard({
   recipe,
@@ -17,6 +18,8 @@ export function RecipeCard({
   const isOwn = recipe.authorType === 'enthusiast' && recipe.authorId === currentUserId;
   const ratio = recipe.doseG > 0 ? recipe.yieldG / recipe.doseG : null;
   const isEspresso = recipe.brewingMethodId === 'espresso';
+  const badge = getAuthorBadge(recipe, isOwn);
+  const isVotable = recipe.authorType === 'enthusiast' && recipe.isPublic;
 
   const [showExtraction, setShowExtraction] = useState(false);
   const [myTds, setMyTds] = useState('');
@@ -38,19 +41,28 @@ export function RecipeCard({
   ];
 
   return (
-    <div className="rounded-md border border-ink-200 bg-parchment-100 p-5">
+    <div
+      className={`rounded-md border bg-parchment-100 p-5 ${
+        recipe.communityChoice ? 'border-gold-400 ring-1 ring-gold-400/40' : 'border-ink-200'
+      }`}
+    >
       <div className="flex items-start justify-between gap-4 mb-3">
-        <div>
-          <p className="text-xs uppercase tracking-widest2 text-ink-400">{recipe.authorName}</p>
-          {isOwn && (
-            <span className="inline-block mt-1 rounded-full border border-gold-400 text-gold-500 text-[10px] uppercase tracking-widest2 px-2 py-0.5">
-              Ваш рецепт
+        <div className="min-w-0">
+          {recipe.communityChoice && (
+            <span className="inline-block mb-1.5 rounded-full bg-gold-400 text-ink-900 text-[10px] font-medium uppercase tracking-widest2 px-2 py-0.5">
+              🏆 Рекомендован сообществом
             </span>
           )}
-          {recipe.isBenchmark && (
-            <span className="inline-block mt-1 rounded-full border border-gold-400 text-gold-500 text-[10px] uppercase tracking-widest2 px-2 py-0.5">
-              Официальный бенчмарк
-            </span>
+          <p className="text-xs uppercase tracking-widest2 text-ink-400 truncate">{recipe.authorName}</p>
+          <span
+            className={`inline-block mt-1 rounded-full border text-[10px] uppercase tracking-widest2 px-2 py-0.5 ${badge.className}`}
+          >
+            {badge.text}
+          </span>
+          {isOwn && (recipe.grinderModel || recipe.equipmentModel) && (
+            <p className="text-[11px] text-ink-400 mt-1.5 break-words">
+              {[recipe.grinderModel, recipe.equipmentModel].filter(Boolean).join(' · ')}
+            </p>
           )}
         </div>
         {ratio !== null && (
@@ -58,15 +70,16 @@ export function RecipeCard({
         )}
       </div>
 
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm mb-4">
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm mb-4">
         <Row label="Доза" value={`${recipe.doseG} г`} />
         <Row label="Выход" value={`${recipe.yieldG} г`} />
-        {recipe.grinderModel && <Row label="Кофемолка" value={recipe.grinderModel} />}
-        {recipe.grinderSetting && <Row label="Помол" value={recipe.grinderSetting} />}
+        {recipe.grinderModel && <Row label="Кофемолка" value={recipe.grinderModel} full />}
+        {recipe.grinderSetting && <Row label="Помол" value={recipe.grinderSetting} full />}
         {recipe.waterTempC > 0 && <Row label="Вода" value={`${recipe.waterTempC}°C`} />}
         {(recipe.waterBrand || recipe.waterTds || recipe.waterCustomMineralization) && (
           <Row
             label="Минерализация"
+            full
             value={[recipe.waterBrand, recipe.waterTds ? `${recipe.waterTds} ppm` : '', recipe.waterCustomMineralization]
               .filter(Boolean)
               .join(' · ')}
@@ -76,9 +89,9 @@ export function RecipeCard({
         {recipe.preInfusionSec !== null && <Row label="Пре-инфузия" value={`${recipe.preInfusionSec} сек`} />}
         {recipe.flowRateGPerSec !== null && <Row label="Поток" value={`${recipe.flowRateGPerSec} г/сек`} />}
         {recipe.totalTimeSec > 0 && <Row label="Общее время" value={`${recipe.totalTimeSec} сек`} />}
-        {recipe.equipmentModel && <Row label="Оборудование" value={recipe.equipmentModel} />}
+        {recipe.equipmentModel && <Row label="Оборудование" value={recipe.equipmentModel} full />}
         {isEspresso && recipe.pressureBar !== null && <Row label="Давление" value={`${recipe.pressureBar} bar`} />}
-        {isEspresso && recipe.pressureProfile && <Row label="Профиль давления" value={recipe.pressureProfile} />}
+        {isEspresso && recipe.pressureProfile && <Row label="Профиль давления" value={recipe.pressureProfile} full />}
         {recipe.measuredTdsPercent !== null && <Row label="TDS чашки" value={`${recipe.measuredTdsPercent}%`} />}
       </dl>
 
@@ -121,25 +134,61 @@ export function RecipeCard({
         )}
       </div>
 
-      {!isOwn && onAdapt && (
-        <button
-          type="button"
-          onClick={() => onAdapt(recipe)}
-          className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900"
-        >
-          Адаптировать под себя
-        </button>
-      )}
+      <div className="flex items-center justify-between gap-4">
+        {!isOwn && onAdapt && (
+          <button
+            type="button"
+            onClick={() => onAdapt(recipe)}
+            className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900"
+          >
+            Адаптировать под себя
+          </button>
+        )}
+        {isVotable && <VoteButtons recipeId={recipe.id} currentUserId={currentUserId} />}
+      </div>
     </div>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+// Who authored this recipe determines both the label and the accent color
+// — gold is reserved for "official" (roaster) content per DESIGN.md, moss
+// marks a coffee shop's own adaptation, and rating (not gold) marks the
+// viewer's own recipe so it never reads as if it were an official pick.
+function getAuthorBadge(recipe: BrewingRecipe, isOwn: boolean): { text: string; className: string } {
+  if (recipe.authorType === 'roaster') {
+    return {
+      text: recipe.isBenchmark ? `Официальный бенчмарк · ${recipe.authorName}` : `Рецепт обжарщика · ${recipe.authorName}`,
+      className: 'border-gold-400 text-gold-500',
+    };
+  }
+  if (recipe.authorType === 'coffee_shop') {
+    return { text: `Рецепт кофейни · ${recipe.authorName}`, className: 'border-moss-500 text-moss-500' };
+  }
+  if (isOwn) {
+    return { text: 'Ваш рецепт', className: 'border-rating text-rating' };
+  }
+  return { text: `Рецепт сообщества · ${recipe.authorName}`, className: 'border-ink-200 text-ink-400' };
+}
+
+// `full` spans both grid columns — needed for any value that can run long
+// (grinder/equipment model names, the combined water-mineralization
+// string) so it wraps onto its own line instead of colliding with its
+// label in a cramped half-width mobile column. Short numeric fields keep
+// the compact two-up label/value row.
+function Row({ label, value, full = false }: { label: string; value: string; full?: boolean }) {
   if (!value) return null;
+  if (full) {
+    return (
+      <div className="col-span-2 min-w-0">
+        <dt className="text-ink-400 text-xs mb-0.5">{label}</dt>
+        <dd className="data-value text-ink-900 break-words">{value}</dd>
+      </div>
+    );
+  }
   return (
-    <div className="flex justify-between gap-3">
-      <dt className="text-ink-400">{label}</dt>
-      <dd className="data-value text-ink-900 text-right">{value}</dd>
+    <div className="flex items-baseline justify-between gap-2 min-w-0">
+      <dt className="text-ink-400 shrink-0">{label}</dt>
+      <dd className="data-value text-ink-900 text-right truncate">{value}</dd>
     </div>
   );
 }
