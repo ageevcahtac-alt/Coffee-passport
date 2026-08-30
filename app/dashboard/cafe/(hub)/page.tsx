@@ -27,7 +27,7 @@ export default function CafeMenuPage() {
     <>
       <GuestFeedback shopId={ACTIVE_SHOP_ID} />
 
-      <CommunityHighlights scopeLots={menuLots} canApprove={false} canBadge={false} />
+      <CommunityHighlights scopeLots={menuLots} canApprove={false} />
 
       <div className="flex items-start justify-between gap-4 mb-8">
         <p className="section-label flex-1">Меню зерна по регионам</p>

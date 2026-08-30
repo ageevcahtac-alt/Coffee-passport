@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { BrewingMethodId, BrewingRecipe, Lot } from '@/lib/types/coffee';
-import { BREWING_METHODS } from '@/lib/types/coffee';
+import { BREWING_METHODS, COMMUNITY_TOP_MIN_NET_VOTES, COMMUNITY_TOP_SLOTS } from '@/lib/types/coffee';
 import { useBrewingRecipes } from '@/lib/data/useBrewingRecipes';
 import { addBrewingRecipe } from '@/lib/data/brewingRecipesStore';
 import { useRecipeVotes } from '@/lib/data/useRecipeVotes';
@@ -43,17 +43,23 @@ export function ExtractionTab({
   const shopRecipes = forMethod.filter((recipe) => recipe.authorType === 'coffee_shop');
   // Only opted-in ("Опубликовать рецепт...") enthusiast recipes show here —
   // an unpublished personal log stays visible only to its author, via
-  // MyRecipesShelf on /journey. Community Choice picks (see
-  // components/coffee/CommunityHighlights.tsx) pin to the top, then by net
-  // votes, then newest first.
+  // MyRecipesShelf on /journey. Sorted purely by net votes (👍 minus 👎),
+  // then newest first — no manual curation, so ranking always reflects
+  // live community sentiment.
   const communityRecipes = forMethod
     .filter((recipe) => recipe.authorType === 'enthusiast' && recipe.isPublic)
     .sort((a, b) => {
-      if (a.communityChoice !== b.communityChoice) return a.communityChoice ? -1 : 1;
       const voteDelta = getNetVotes(b.id, votes) - getNetVotes(a.id, votes);
       if (voteDelta !== 0) return voteDelta;
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
+
+  // The top COMMUNITY_TOP_SLOTS recipes by that same sort qualify for the
+  // "🔥 Топ сообщества" badge only once they clear COMMUNITY_TOP_MIN_NET_VOTES
+  // — a recipe with 1 net vote never gets pinned just for being first.
+  const communityTopIds = new Set(
+    communityRecipes.slice(0, COMMUNITY_TOP_SLOTS).filter((recipe) => getNetVotes(recipe.id, votes) >= COMMUNITY_TOP_MIN_NET_VOTES).map((recipe) => recipe.id)
+  );
 
   function handleSaveEnthusiastRecipe(input: Omit<BrewingRecipe, 'id' | 'createdAt'>) {
     addBrewingRecipe(input);
@@ -88,6 +94,7 @@ export function ExtractionTab({
             currentUserId={currentUserId}
             onAdapt={setAdaptingRecipe}
             emptyText="Пока нет опубликованных рецептов от энтузиастов — станьте первым."
+            topRecipeIds={communityTopIds}
           />
 
           <button
@@ -153,12 +160,14 @@ function RecipeGroup({
   currentUserId,
   onAdapt,
   emptyText,
+  topRecipeIds,
 }: {
   title: string;
   recipes: BrewingRecipe[];
   currentUserId: string;
   onAdapt: (recipe: BrewingRecipe) => void;
   emptyText: string;
+  topRecipeIds?: Set<string>;
 }) {
   return (
     <div>
@@ -168,7 +177,13 @@ function RecipeGroup({
       ) : (
         <div className="flex flex-col gap-4">
           {recipes.map((recipe) => (
-            <RecipeCard key={recipe.id} recipe={recipe} currentUserId={currentUserId} onAdapt={onAdapt} />
+            <RecipeCard
+              key={recipe.id}
+              recipe={recipe}
+              currentUserId={currentUserId}
+              onAdapt={onAdapt}
+              isCommunityTop={topRecipeIds?.has(recipe.id) ?? false}
+            />
           ))}
         </div>
       )}

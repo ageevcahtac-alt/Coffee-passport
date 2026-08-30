@@ -57,7 +57,7 @@ export default function AdminPage() {
 
         {tab === 'requests' && <PartnerRequestsTab />}
         {tab === 'registry' && <PartnersRegistryTab />}
-        {tab === 'community' && <CommunityHighlights scopeLots={allLots} canApprove canBadge />}
+        {tab === 'community' && <CommunityHighlights scopeLots={allLots} canApprove />}
         {tab === 'legacy' && <LegacyLotCreator />}
       </div>
     </main>

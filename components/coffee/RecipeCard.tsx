@@ -10,10 +10,15 @@ export function RecipeCard({
   recipe,
   currentUserId,
   onAdapt,
+  isCommunityTop = false,
 }: {
   recipe: BrewingRecipe;
   currentUserId: string;
   onAdapt?: (recipe: BrewingRecipe) => void;
+  // Computed by the caller (see ExtractionTab.tsx) from live vote counts —
+  // never a stored flag. There is deliberately no manual "assign this"
+  // action anywhere; the algorithm is the only source of this badge.
+  isCommunityTop?: boolean;
 }) {
   const isOwn = recipe.authorType === 'enthusiast' && recipe.authorId === currentUserId;
   const ratio = recipe.doseG > 0 ? recipe.yieldG / recipe.doseG : null;
@@ -43,14 +48,14 @@ export function RecipeCard({
   return (
     <div
       className={`rounded-md border bg-parchment-100 p-5 ${
-        recipe.communityChoice ? 'border-gold-400 ring-1 ring-gold-400/40' : 'border-ink-200'
+        isCommunityTop ? 'border-gold-400 ring-1 ring-gold-400/40' : 'border-ink-200'
       }`}
     >
       <div className="flex items-start justify-between gap-4 mb-3">
         <div className="min-w-0">
-          {recipe.communityChoice && (
+          {isCommunityTop && (
             <span className="inline-block mb-1.5 rounded-full bg-gold-400 text-ink-900 text-[10px] font-medium uppercase tracking-widest2 px-2 py-0.5">
-              🏆 Рекомендован сообществом
+              🔥 Топ сообщества
             </span>
           )}
           <p className="text-xs uppercase tracking-widest2 text-ink-400 truncate">{recipe.authorName}</p>

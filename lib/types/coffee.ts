@@ -292,9 +292,18 @@ export interface BrewingRecipe {
   pressureProfile: string; // free text, e.g. "9 bar flat" or "ramp 6→9 over 10s"
   notes: string; // author notes / expected flavor outcome
   isPublic: boolean; // opt-in consent to list this recipe in Community Brews — always true for roaster/coffee_shop (already public by nature), defaults false for enthusiast unless the consent checkbox is checked
-  communityChoice: boolean; // "Рекомендован сообществом" badge, set only via the Roaster/Admin dashboard (see components/coffee/CommunityHighlights.tsx)
   createdAt: string; // ISO timestamp
 }
+
+// "Community Top" ranking threshold — a public recipe needs at least this
+// many net votes (👍 minus 👎) to ever qualify for the algorithmic "🔥 Топ
+// сообщества" badge. Deliberately NOT a stored field on BrewingRecipe: rank
+// is recomputed from live vote counts every render (see
+// components/coffee/ExtractionTab.tsx), so there is no manual "Community
+// Choice" toggle for a Roaster/Admin to assign — the whole point is to
+// remove that subjectivity.
+export const COMMUNITY_TOP_MIN_NET_VOTES = 3;
+export const COMMUNITY_TOP_SLOTS = 3;
 
 // =========================================================
 // Equipment Garage — the enthusiast's saved personal setup, read by

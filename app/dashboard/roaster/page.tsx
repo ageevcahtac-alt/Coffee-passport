@@ -41,7 +41,7 @@ export default function RoasterDashboardPage() {
           </Link>
         </div>
 
-        <CommunityHighlights scopeLots={myLots} canApprove canBadge />
+        <CommunityHighlights scopeLots={myLots} canApprove />
 
         {myLots.length === 0 ? (
           <p className="text-ink-500 text-sm">

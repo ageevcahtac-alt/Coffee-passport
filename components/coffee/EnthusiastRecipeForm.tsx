@@ -166,7 +166,6 @@ export function EnthusiastRecipeForm({
       pressureProfile: '',
       notes: form.notes.trim(),
       isPublic: form.isPublic,
-      communityChoice: false,
     };
 
     onSave(recipe);

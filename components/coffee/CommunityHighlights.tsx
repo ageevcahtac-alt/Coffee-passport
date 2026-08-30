@@ -1,10 +1,9 @@
 'use client';
 
-import type { Lot } from '@/lib/types/coffee';
+import { COMMUNITY_TOP_MIN_NET_VOTES, type Lot } from '@/lib/types/coffee';
 import { useCustomDevices } from '@/lib/data/useCustomDevices';
 import { approveCustomDevice } from '@/lib/data/customDevicesStore';
 import { useBrewingRecipes } from '@/lib/data/useBrewingRecipes';
-import { updateBrewingRecipe } from '@/lib/data/brewingRecipesStore';
 import { useRecipeVotes } from '@/lib/data/useRecipeVotes';
 import { getNetVotes } from '@/lib/data/recipeVotesStore';
 import { getMergedLotById } from '@/lib/data/lotsStore';
@@ -14,17 +13,18 @@ const FEED_LIMIT = 5;
 
 // Dashboard notification widget shared by Roaster, Cafe, and Admin — visual
 // template borrowed from components/cafe/GuestFeedback.tsx. Roaster/Admin
-// get action buttons (canApprove/canBadge); Cafe sees the same two feeds
-// read-only, per the task ("выводить уведомления" for all three, but only
-// "Администратору и Обжарщику" get the approve/badge powers).
+// get the device-approval action (canApprove); Cafe sees both feeds
+// read-only. There is deliberately no manual "assign Community Choice"
+// action anywhere — the "🔥 Топ сообщества" badge is purely algorithmic
+// (top COMMUNITY_TOP_SLOTS by net votes, min COMMUNITY_TOP_MIN_NET_VOTES —
+// see components/coffee/ExtractionTab.tsx for the same rule applied on the
+// Lot Card), so nobody can hand-pick a "favorite" and introduce bias.
 export function CommunityHighlights({
   scopeLots,
   canApprove,
-  canBadge,
 }: {
   scopeLots: Lot[];
   canApprove: boolean;
-  canBadge: boolean;
 }) {
   const customDevices = useCustomDevices();
   const pendingDevices = customDevices
@@ -94,18 +94,8 @@ export function CommunityHighlights({
                       <span className="data-value text-xs text-ink-500 shrink-0">{net} 👍</span>
                     </div>
                     <p className="text-xs text-ink-500 mb-1">{recipe.authorName}</p>
-                    {recipe.communityChoice ? (
-                      <p className="text-[11px] text-gold-500">🏆 Уже отмечен как Community Choice</p>
-                    ) : (
-                      canBadge && (
-                        <button
-                          type="button"
-                          onClick={() => updateBrewingRecipe(recipe.id, { communityChoice: true })}
-                          className="text-xs text-ink-700 underline underline-offset-2 hover:text-ink-900"
-                        >
-                          Отметить Community Choice
-                        </button>
-                      )
+                    {net >= COMMUNITY_TOP_MIN_NET_VOTES && (
+                      <p className="text-[11px] text-gold-500">🔥 Топ сообщества</p>
                     )}
                   </div>
                 );
