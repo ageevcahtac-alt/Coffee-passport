@@ -1,8 +1,11 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { BrewingMethodId, BrewingRecipe, Lot, RecipeAuthorType } from '@/lib/types/coffee';
-import { ESPRESSO_MACHINE_MODELS, HOME_BREWER_MODELS } from '@/lib/types/coffee';
+import { ESPRESSO_MACHINE_MODELS } from '@/lib/types/coffee';
+import { useEquipment } from '@/lib/data/useEquipment';
+import { useCustomDevices } from '@/lib/data/useCustomDevices';
+import { buildFilterDeviceCatalog } from '@/lib/utils/filterDeviceCatalog';
 import { ComboSelect } from '@/components/shared/ComboSelect';
 import { BrewingMethodSelector } from '@/components/coffee/BrewingMethodSelector';
 
@@ -82,13 +85,38 @@ export function ProRecipeForm({
   onCancel?: () => void;
 }) {
   const [form, setForm] = useState<FormState>(() => toFormState(initialRecipe));
+  const myEquipment = useEquipment().find((setup) => setup.userId === authorId);
+  const approvedCustomDevices = useCustomDevices().filter((device) => device.approved);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
   const isEspresso = form.brewingMethodId === 'espresso';
-  const equipmentOptions = isEspresso ? ESPRESSO_MACHINE_MODELS : HOME_BREWER_MODELS;
+  const filterDeviceCatalog = useMemo(
+    () => buildFilterDeviceCatalog(approvedCustomDevices, myEquipment?.favoriteDeviceIds ?? []),
+    [approvedCustomDevices, myEquipment]
+  );
+
+  // Auto-fill from the Roaster's/Coffee Shop's own Equipment Garage setup
+  // (see components/coffee/EquipmentGarage.tsx, keyed by this recipe's
+  // authorId — the roasterId or coffee-shop id) whenever the brewing
+  // method changes. Same "only fill empty fields" rule as
+  // EnthusiastRecipeForm, so it never overwrites an edit-in-progress.
+  useEffect(() => {
+    if (!form.brewingMethodId || !myEquipment) return;
+    const grinder = isEspresso ? myEquipment.espressoGrinder : myEquipment.filterGrinder;
+    const water = isEspresso ? myEquipment.espressoWater : myEquipment.filterWater;
+
+    setForm((prev) => ({
+      ...prev,
+      grinderModel: prev.grinderModel || grinder,
+      equipmentModel: isEspresso ? prev.equipmentModel || myEquipment.espressoMachine : prev.equipmentModel,
+      waterCustomMineralization: prev.waterCustomMineralization || water,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when the method changes, not on every equipment/form update
+  }, [form.brewingMethodId]);
+
   const canSave = Boolean(form.brewingMethodId && form.doseG && form.yieldG);
 
   function handleSubmit(event: FormEvent) {
@@ -215,12 +243,20 @@ export function ProRecipeForm({
           className={fieldClasses} />
       </div>
 
-      <ComboSelect
-        label={isEspresso ? 'Кофемашина' : 'Пуровер / кофеварка'}
-        options={equipmentOptions}
-        value={form.equipmentModel}
-        onChange={(v) => update('equipmentModel', v)}
-      />
+      {form.brewingMethodId && (
+        isEspresso ? (
+          <ComboSelect label="Эспрессо-машина" options={ESPRESSO_MACHINE_MODELS} value={form.equipmentModel}
+            onChange={(v) => update('equipmentModel', v)} />
+        ) : (
+          <ComboSelect
+            label="Устройство для фильтра"
+            options={filterDeviceCatalog.options}
+            priorityOptions={filterDeviceCatalog.priorityOptions}
+            value={form.equipmentModel}
+            onChange={(v) => update('equipmentModel', v)}
+          />
+        )
+      )}
 
       {isEspresso && (
         <div className="grid grid-cols-2 gap-3">

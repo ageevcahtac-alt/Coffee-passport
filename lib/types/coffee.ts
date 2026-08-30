@@ -263,7 +263,6 @@ export type RecipeAuthorType = 'roaster' | 'coffee_shop' | 'enthusiast';
 export const PRO_GRINDER_MODELS = ['Mahlkönig EK43', 'Mahlkönig Peak', 'Ditting KR804', 'Mythos One', 'Compak E10'];
 export const HOME_GRINDER_MODELS = ['Comandante C40', 'Timemore C2/C3', '1Zpresso J-Max', 'Baratza Encore/Sette', 'Fellow Ode', 'DF64'];
 export const ESPRESSO_MACHINE_MODELS = ['La Marzocco Linea PB', 'Victoria Arduino Eagle One', 'Slayer', 'Nuova Simonelli Aurelia', 'Synesso MVP Hydra'];
-export const HOME_BREWER_MODELS = ['Hario V60', 'Chemex', 'Fellow Stagg X/EKG', 'AeroPress', 'Kalita Wave'];
 
 export interface BrewingRecipe {
   id: string;

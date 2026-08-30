@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { BrewingMethodId, BrewingRecipe, Lot } from '@/lib/types/coffee';
-import { HOME_BREWER_MODELS, HOME_GRINDER_MODELS } from '@/lib/types/coffee';
+import { ESPRESSO_MACHINE_MODELS, HOME_GRINDER_MODELS } from '@/lib/types/coffee';
 import { useGrindConfirmations } from '@/lib/data/useGrindConfirmations';
 import { addGrindConfirmation } from '@/lib/data/grindConfirmationsStore';
 import { estimateGrindSetting } from '@/lib/utils/grindConvert';
 import { useEquipment } from '@/lib/data/useEquipment';
+import { useCustomDevices } from '@/lib/data/useCustomDevices';
+import { buildFilterDeviceCatalog } from '@/lib/utils/filterDeviceCatalog';
 import { ComboSelect } from '@/components/shared/ComboSelect';
 import { BrewingMethodSelector } from '@/components/coffee/BrewingMethodSelector';
 
@@ -76,19 +78,28 @@ export function EnthusiastRecipeForm({
   const [form, setForm] = useState<FormState>(() => toFormState(sourceRecipe));
   const grindConfirmations = useGrindConfirmations();
   const myEquipment = useEquipment().find((setup) => setup.userId === currentUserId);
+  const approvedCustomDevices = useCustomDevices().filter((device) => device.approved);
+  const isEspressoMethod = form.brewingMethodId === 'espresso';
+  const filterDeviceCatalog = useMemo(
+    () => buildFilterDeviceCatalog(approvedCustomDevices, myEquipment?.favoriteDeviceIds ?? []),
+    [approvedCustomDevices, myEquipment]
+  );
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
   // Auto-fill from the saved Equipment Garage setup (see
-  // app/(site)/journey/equipment/page.tsx) whenever the brewing method
-  // changes — espresso pulls the espresso setup, every other method pulls
-  // the filter setup. Only fills fields that are still empty, so it never
-  // clobbers an adapt-flow prefill or something the user already typed.
+  // components/coffee/EquipmentGarage.tsx) whenever the brewing method
+  // changes — espresso pulls the espresso setup (grinder + machine + water),
+  // every other method pulls the filter setup (grinder + water only — the
+  // filter *device* field below is deliberately left for the user to pick,
+  // since a Filter Setup can have several favorite devices with no single
+  // unambiguous default; it's reordered instead, garage favorites first).
+  // Only fills fields that are still empty, so it never clobbers an
+  // adapt-flow prefill or something the user already typed.
   useEffect(() => {
     if (!form.brewingMethodId || !myEquipment) return;
-    const isEspressoMethod = form.brewingMethodId === 'espresso';
     const grinder = isEspressoMethod ? myEquipment.espressoGrinder : myEquipment.filterGrinder;
     const water = isEspressoMethod ? myEquipment.espressoWater : myEquipment.filterWater;
 
@@ -255,8 +266,20 @@ export function EnthusiastRecipeForm({
           className={fieldClasses} />
       </div>
 
-      <ComboSelect label="Оборудование (пуровер, кофеварка)" options={HOME_BREWER_MODELS} value={form.equipmentModel}
-        onChange={(v) => update('equipmentModel', v)} />
+      {form.brewingMethodId && (
+        isEspressoMethod ? (
+          <ComboSelect label="Эспрессо-машина" options={ESPRESSO_MACHINE_MODELS} value={form.equipmentModel}
+            onChange={(v) => update('equipmentModel', v)} />
+        ) : (
+          <ComboSelect
+            label="Устройство для фильтра"
+            options={filterDeviceCatalog.options}
+            priorityOptions={filterDeviceCatalog.priorityOptions}
+            value={form.equipmentModel}
+            onChange={(v) => update('equipmentModel', v)}
+          />
+        )
+      )}
 
       <div>
         <label htmlFor="er-notes" className="section-label mb-4 block">

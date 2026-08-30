@@ -11,20 +11,29 @@ const fieldClasses =
 // Reused across the roasting/extraction forms for every "pick a known model
 // or type your own" field (grinder, roast machine, brewer/espresso machine)
 // instead of duplicating the select+custom-input pattern in each form.
+//
+// `priorityOptions` — when given, renders as its own <optgroup> above the
+// regular `options` (e.g. a user's Equipment Garage favorites ahead of the
+// full device catalog). Omit it and this behaves exactly as before — a flat
+// list — so every existing caller is unaffected.
 export function ComboSelect({
   label,
   options,
   value,
   onChange,
   placeholder = 'Другое — введите вручную',
+  priorityOptions = [],
+  priorityLabel = 'Из вашего гаража',
 }: {
   label: string;
   options: string[];
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  priorityOptions?: string[];
+  priorityLabel?: string;
 }) {
-  const isKnownOption = value === '' || options.includes(value);
+  const isKnownOption = value === '' || options.includes(value) || priorityOptions.includes(value);
   const [customMode, setCustomMode] = useState(!isKnownOption);
 
   if (customMode) {
@@ -69,11 +78,32 @@ export function ComboSelect({
         className={fieldClasses}
       >
         <option value="">Не выбрано</option>
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
+        {priorityOptions.length > 0 ? (
+          <>
+            <optgroup label={priorityLabel}>
+              {priorityOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </optgroup>
+            {options.length > 0 && (
+              <optgroup label="Остальные варианты">
+                {options.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </>
+        ) : (
+          options.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))
+        )}
         <option value={OTHER_VALUE}>Другое…</option>
       </select>
     </div>
