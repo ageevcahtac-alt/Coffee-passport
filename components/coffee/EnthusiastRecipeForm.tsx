@@ -80,6 +80,7 @@ export function EnthusiastRecipeForm({
   const myEquipment = useEquipment().find((setup) => setup.userId === currentUserId);
   const approvedCustomDevices = useCustomDevices().filter((device) => device.approved);
   const isEspressoMethod = form.brewingMethodId === 'espresso';
+  const isCustomMethod = form.brewingMethodId === 'custom';
   const filterDeviceCatalog = useMemo(
     () => buildFilterDeviceCatalog(approvedCustomDevices, myEquipment?.favoriteDeviceIds ?? []),
     [approvedCustomDevices, myEquipment]
@@ -270,6 +271,14 @@ export function EnthusiastRecipeForm({
         isEspressoMethod ? (
           <ComboSelect label="Эспрессо-машина" options={ESPRESSO_MACHINE_MODELS} value={form.equipmentModel}
             onChange={(v) => update('equipmentModel', v)} />
+        ) : isCustomMethod ? (
+          <div>
+            <label htmlFor="er-custom-device" className="block text-xs text-ink-400 mb-1.5">
+              Свой способ / кастомный девайс
+            </label>
+            <input id="er-custom-device" value={form.equipmentModel} onChange={(e) => update('equipmentModel', e.target.value)}
+              placeholder="Например: перколятор, турка, кемекс-самоделка…" className={fieldClasses} />
+          </div>
         ) : (
           <ComboSelect
             label="Устройство для фильтра"

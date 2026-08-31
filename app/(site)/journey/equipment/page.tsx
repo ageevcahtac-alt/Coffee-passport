@@ -2,12 +2,15 @@
 
 import Link from 'next/link';
 import { HOME_GRINDER_MODELS, ESPRESSO_MACHINE_MODELS } from '@/lib/types/coffee';
-import { DEMO_USER_ID } from '@/lib/journey/store';
+import { useCurrentUser } from '@/lib/auth/currentUser';
 import { EquipmentGarage } from '@/components/coffee/EquipmentGarage';
 
 const CURRENT_USER_NAME = 'Вы';
 
 export default function EquipmentGaragePage() {
+  const { userId, ready } = useCurrentUser();
+  if (!ready || !userId) return null;
+
   return (
     <main className="min-h-dvh px-6 py-16">
       <div className="max-w-md mx-auto w-full">
@@ -19,7 +22,7 @@ export default function EquipmentGaragePage() {
         </p>
 
         <EquipmentGarage
-          ownerId={DEMO_USER_ID}
+          ownerId={userId}
           ownerName={CURRENT_USER_NAME}
           grinderOptions={HOME_GRINDER_MODELS}
           machineOptions={ESPRESSO_MACHINE_MODELS}

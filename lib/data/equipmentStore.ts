@@ -63,3 +63,12 @@ export function saveEquipment(setup: Omit<EquipmentSetup, 'updatedAt'>): Equipme
   write(next);
   return updated;
 }
+
+// Called on a real account switch on this device/browser (see
+// lib/journey/userScope.ts) — drops the outgoing user's saved Garage setup.
+// Only ever removes an *enthusiast* entry in practice: cafe/roaster owner
+// ids are fixed pilot ids (ACTIVE_SHOP_ID/ACTIVE_ROASTER_ID), never a
+// switching account's userId.
+export function purgeEquipmentForUser(userId: string): void {
+  write(read().filter((setup) => setup.userId !== userId));
+}

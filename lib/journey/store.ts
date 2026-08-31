@@ -73,14 +73,25 @@ export function getServerSnapshot(): TastingRecord[] {
 }
 
 export function addTastingRecord(
-  input: Omit<TastingRecord, 'id' | 'userId' | 'createdAt'>
+  input: Omit<TastingRecord, 'id' | 'userId' | 'createdAt'>,
+  userId: string
 ): TastingRecord {
   const record: TastingRecord = {
     ...input,
     id: `tasting-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    userId: DEMO_USER_ID,
+    userId,
     createdAt: new Date().toISOString(),
   };
   write([record, ...read()]);
   return record;
+}
+
+// Called on a real account switch on this device/browser (see
+// lib/journey/userScope.ts) — drops the outgoing user's own tasting
+// history so it can't leak into the next account's view of this shared
+// local store. Goes through write() (not a raw localStorage overwrite) so
+// this store's own in-memory cache and useSyncExternalStore subscribers
+// stay consistent regardless of call order.
+export function purgeRecordsForUser(userId: string): void {
+  write(read().filter((record) => record.userId !== userId));
 }

@@ -87,3 +87,9 @@ export function getNetVotes(recipeId: string, votes: RecipeVote[]): number {
 export function getUserVote(recipeId: string, userId: string, votes: RecipeVote[]): 1 | -1 | null {
   return votes.find((vote) => vote.recipeId === recipeId && vote.userId === userId)?.value ?? null;
 }
+
+// Called on a real account switch on this device/browser (see
+// lib/journey/userScope.ts) — drops the outgoing user's own votes.
+export function purgeVotesForUser(userId: string): void {
+  write(read().filter((vote) => vote.userId !== userId));
+}

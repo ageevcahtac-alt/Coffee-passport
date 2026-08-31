@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useJourney } from '@/lib/journey/useJourney';
 import { getMergedLotById } from '@/lib/data/lotsStore';
 import { consumePinJustActivated } from '@/lib/journey/mapFlag';
-import { DEMO_USER_ID } from '@/lib/journey/store';
+import { useCurrentUser } from '@/lib/auth/currentUser';
 import { CoffeeJourney } from '@/components/coffee/CoffeeJourney';
 import { MyRecipesShelf } from '@/components/coffee/MyRecipesShelf';
 import {
@@ -22,7 +22,13 @@ import { TastePassportCard } from '@/components/coffee/TastePassportCard';
 import type { TastingRecord } from '@/lib/types/coffee';
 
 export default function JourneyPage() {
-  const records = useJourney();
+  const { userId, ready } = useCurrentUser();
+  // Scoped to the resolved account/anonymous-device id — this store is one
+  // flat local array with no server-side per-account partition, so without
+  // this filter a second account signed in on the same browser would see
+  // the first account's entire tasting history. See lib/journey/userScope.ts
+  // for the complementary purge-on-account-switch guard.
+  const records = useJourney().filter((record) => record.userId === userId);
   const [scanOpen, setScanOpen] = useState(false);
   // Clicking a pin ON THE MAP shows just that pin's latest lot; clicking its
   // twin badge in the trophy shelf shows the full coffee shop profile — two
@@ -77,6 +83,12 @@ export default function JourneyPage() {
         })
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0] ?? null
     : null;
+
+  // Not resolved yet (identity comes from a client-side effect — see
+  // CurrentUserProvider) — bail out rather than render against a
+  // momentarily-null userId, same "wait for the client" pattern used for
+  // localStorage-backed reads elsewhere in this app.
+  if (!ready || !userId) return null;
 
   return (
     <main className="min-h-dvh flex flex-col px-6 py-16">
@@ -149,7 +161,7 @@ export default function JourneyPage() {
         </div>
       )}
 
-      <MyRecipesShelf userId={DEMO_USER_ID} />
+      <MyRecipesShelf userId={userId} />
 
       {records.length > 0 && (
         <div className="mt-2">

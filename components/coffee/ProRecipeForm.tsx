@@ -93,6 +93,7 @@ export function ProRecipeForm({
   }
 
   const isEspresso = form.brewingMethodId === 'espresso';
+  const isCustomMethod = form.brewingMethodId === 'custom';
   const filterDeviceCatalog = useMemo(
     () => buildFilterDeviceCatalog(approvedCustomDevices, myEquipment?.favoriteDeviceIds ?? []),
     [approvedCustomDevices, myEquipment]
@@ -247,6 +248,14 @@ export function ProRecipeForm({
         isEspresso ? (
           <ComboSelect label="Эспрессо-машина" options={ESPRESSO_MACHINE_MODELS} value={form.equipmentModel}
             onChange={(v) => update('equipmentModel', v)} />
+        ) : isCustomMethod ? (
+          <div>
+            <label htmlFor="pr-custom-device" className="block text-xs text-ink-400 mb-1.5">
+              Свой способ / кастомный девайс
+            </label>
+            <input id="pr-custom-device" value={form.equipmentModel} onChange={(e) => update('equipmentModel', e.target.value)}
+              placeholder="Название метода или аппарата" className={fieldClasses} />
+          </div>
         ) : (
           <ComboSelect
             label="Устройство для фильтра"

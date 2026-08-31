@@ -12,7 +12,7 @@ import { getRoasterById } from '@/lib/data/roasters';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { useCoffeeShops } from '@/lib/data/useCoffeeShops';
 import { useRoasters } from '@/lib/data/useRoasters';
-import { DEMO_USER_ID } from '@/lib/journey/store';
+import { useCurrentUser } from '@/lib/auth/currentUser';
 import { LocationStep } from '@/components/coffee/LocationStep';
 import { LotPassport } from '@/components/coffee/LotPassport';
 import { ProducerRoasterCard } from '@/components/coffee/ProducerRoasterCard';
@@ -27,6 +27,11 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
   const journey = useJourney();
   const coffeeShops = useCoffeeShops();
   const roasters = useRoasters();
+  // Empty string pre-hydration (see CurrentUserProvider) — harmlessly
+  // matches nothing until the real id resolves, same "settles after mount"
+  // behavior useJourney() already has via its empty server snapshot.
+  const { userId: resolvedUserId } = useCurrentUser();
+  const currentUserId = resolvedUserId ?? '';
   // Business preview mode: Roaster/Cafe cabinets link here with ?preview=1
   // (see "Предпросмотр паспорта" in app/dashboard/roaster/page.tsx and
   // "Паспорт лота" in components/cafe/LotMenuCard.tsx) to check how the Lot
@@ -107,7 +112,7 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
 
         <div className="max-w-md mx-auto w-full mt-10">
           <p className="section-label mb-4">Экстракция</p>
-          <ExtractionTab lot={lot} currentUserId={DEMO_USER_ID} currentUserName="Вы" />
+          <ExtractionTab lot={lot} currentUserId={currentUserId} currentUserName="Вы" />
         </div>
       </main>
     );
@@ -143,7 +148,10 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
   // tasted at a different shop still starts a clean session here, matching
   // the task's "новая кофейня = новый опыт" requirement.
   const shopTastings = journey
-    .filter((record) => record.lotId === lot.id && record.coffeeShopId === selectedShopId)
+    .filter(
+      (record) =>
+        record.lotId === lot.id && record.coffeeShopId === selectedShopId && record.userId === currentUserId
+    )
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const latestTasting = shopTastings[0] ?? null;
 
@@ -208,7 +216,7 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
 
       <div className="max-w-md mx-auto w-full mt-10">
         <p className="section-label mb-4">Экстракция</p>
-        <ExtractionTab lot={lot} currentUserId={DEMO_USER_ID} currentUserName="Вы" />
+        <ExtractionTab lot={lot} currentUserId={currentUserId} currentUserName="Вы" />
       </div>
 
       <div className="max-w-md mx-auto w-full mt-8 text-center">

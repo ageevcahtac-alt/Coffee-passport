@@ -89,9 +89,16 @@ export const BREWING_METHODS = [
   { id: 'siphon', label: 'Сифон' },
   { id: 'batch_brew', label: 'Batch Brew / Батч-брю' },
   { id: 'cupping', label: 'Каппинг' },
+  { id: 'custom', label: 'Свой способ' },
 ] as const;
 
 export type BrewingMethodId = (typeof BREWING_METHODS)[number]['id'];
+
+// Every non-espresso method — what the "Фильтр" macro choice in
+// BrewingMethodSelector expands into, 'custom' included as the last entry
+// ("Свой способ / кастомный девайс" — see ProRecipeForm/EnthusiastRecipeForm,
+// which render a free-text device input only when this is selected).
+export const FILTER_BREWING_METHODS = BREWING_METHODS.filter((method) => method.id !== 'espresso');
 
 export const SENSORY_TAGS = [
   { id: 'sweetness', label: 'Сладость' },

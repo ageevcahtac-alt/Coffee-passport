@@ -18,6 +18,7 @@ import { consumePendingShop } from '@/lib/journey/pendingShopFlag';
 import { consumePendingRoaster } from '@/lib/journey/pendingRoasterFlag';
 import { getMergedLotById } from '@/lib/data/lotsStore';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
+import { useCurrentUser } from '@/lib/auth/currentUser';
 import { FarmerPinningModal } from '@/components/coffee/FarmerPinningModal';
 
 // Blind-tasting flow, in the product's mandated order:
@@ -55,6 +56,7 @@ export default function TasteLotPage({ params }: { params: { lotId: string } }) 
 function TasteLotFlow({ lot }: { lot: Lot }) {
   const coffeeShops = useCoffeeShops();
   const roasters = useRoasters();
+  const { userId, ready } = useCurrentUser();
   const [step, setStep] = useState<Step>('location');
   const [coffeeShopId, setCoffeeShopId] = useState<string | null>(null);
   const [roasterId, setRoasterId] = useState<string | null>(null);
@@ -91,7 +93,7 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
   }
 
   function handleFinish() {
-    if (!coffeeShopId || !baristaId || !brewingMethod || !pendingTasteValues) return;
+    if (!coffeeShopId || !baristaId || !brewingMethod || !pendingTasteValues || !userId) return;
 
     // Checked before the save so the just-added record doesn't count as
     // "already had this pin" — drives the pin-drop animation on the Coffee
@@ -99,22 +101,27 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
     // (country, coffee shop) combination appears. Pins are shop-colored, so
     // the same country tasted at two different shops carries two pins; the
     // same shop across two different roasters' lots in that country stays
-    // one pin.
+    // one pin. Scoped to this user's own records — this is a per-account
+    // map, not a shop's aggregate visit count.
     const hadPinBefore = getJourneySnapshot().some((record) => {
+      if (record.userId !== userId) return false;
       if (record.coffeeShopId !== coffeeShopId) return false;
       return getMergedLotById(record.lotId)?.country === lot.country;
     });
 
-    addTastingRecord({
-      lotId: lot.id,
-      roasterId: roasterId ?? lot.roasterId,
-      coffeeShopId,
-      brewingMethod,
-      baristaId,
-      baristaRating,
-      baristaNote,
-      ...pendingTasteValues,
-    });
+    addTastingRecord(
+      {
+        lotId: lot.id,
+        roasterId: roasterId ?? lot.roasterId,
+        coffeeShopId,
+        brewingMethod,
+        baristaId,
+        baristaRating,
+        baristaNote,
+        ...pendingTasteValues,
+      },
+      userId
+    );
 
     if (!hadPinBefore) markPinJustActivated(lot.country, coffeeShopId);
 
@@ -220,7 +227,7 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
               </button>
               <button
                 type="button"
-                disabled={!baristaId || !brewingMethod}
+                disabled={!baristaId || !brewingMethod || !ready || !userId}
                 onClick={handleFinish}
                 className="flex-1 inline-flex items-center justify-center rounded-md
                            bg-ink-900 text-parchment-100 font-body font-medium text-sm px-6 py-4

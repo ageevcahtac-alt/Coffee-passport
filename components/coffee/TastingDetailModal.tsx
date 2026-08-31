@@ -16,7 +16,6 @@ import { getBaristaById } from '@/lib/data/baristas';
 import { formatTastingDate } from '@/lib/utils/date';
 import { useBrewingRecipes } from '@/lib/data/useBrewingRecipes';
 import { addBrewingRecipe } from '@/lib/data/brewingRecipesStore';
-import { DEMO_USER_ID } from '@/lib/journey/store';
 import { StarRating } from './StarRating';
 import { ProducerRoasterCard } from './ProducerRoasterCard';
 import { RecipeCard } from './RecipeCard';
@@ -29,6 +28,11 @@ export function TastingDetailModal({
   record: TastingRecord;
   onClose: () => void;
 }) {
+  // This modal only ever opens on the current user's own tasting record —
+  // reached from /journey or the CoffeeJourney feed, both already scoped to
+  // the signed-in/anonymous-device user — so the record's own userId IS the
+  // current user, no separate prop needed.
+  const currentUserId = record.userId;
   // undefined = adapt modal closed; null = standalone "log my own recipe"
   // (no source); a BrewingRecipe = adapting from that specific recipe.
   const [adaptingFrom, setAdaptingFrom] = useState<BrewingRecipe | null | undefined>(undefined);
@@ -110,7 +114,7 @@ export function TastingDetailModal({
             {featuredRecipe ? (
               <RecipeCard
                 recipe={featuredRecipe}
-                currentUserId={DEMO_USER_ID}
+                currentUserId={currentUserId}
                 onAdapt={(recipe) => setAdaptingFrom(recipe)}
               />
             ) : (
@@ -246,7 +250,7 @@ export function TastingDetailModal({
             </div>
             <EnthusiastRecipeForm
               lot={lot}
-              currentUserId={DEMO_USER_ID}
+              currentUserId={currentUserId}
               currentUserName="Вы"
               sourceRecipe={adaptingFrom ?? undefined}
               onSave={handleSaveAdapted}

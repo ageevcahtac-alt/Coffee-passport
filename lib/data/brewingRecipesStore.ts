@@ -59,3 +59,11 @@ export function addBrewingRecipe(input: Omit<BrewingRecipe, 'id' | 'createdAt'>)
   write([recipe, ...read()]);
   return recipe;
 }
+
+// Called on a real account switch on this device/browser (see
+// lib/journey/userScope.ts) — drops only the outgoing user's own enthusiast
+// recipes, never roaster/coffee_shop entries (those are shared catalog
+// data, not personal to any one account).
+export function purgeEnthusiastRecipesForUser(userId: string): void {
+  write(read().filter((recipe) => !(recipe.authorType === 'enthusiast' && recipe.authorId === userId)));
+}
