@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { PILOT_STAFF_ROLES, type PilotStaffRole } from '@/lib/auth/pilotStaff'
+import { PILOT_STAFF_PASSWORD, PILOT_STAFF_ROLES, type PilotStaffRole } from '@/lib/auth/pilotStaff'
 
 export async function signInWithPassword(formData: FormData) {
   const supabase = await createClient()
@@ -57,30 +57,24 @@ export async function signOut() {
   redirect('/auth/login')
 }
 
-// Dev-only convenience for DevRoleSwitcher's Кофейня/Обжарщик/Бариста
-// buttons (components/dev/DevRoleSwitcher.tsx): each one is a fixed pilot
-// account whose email/password live in env vars, never in this repo. This
-// still goes through a real signInWithPassword — it doesn't fabricate a
-// session or bypass the profile-role check in requireStaffRole.ts — so it
-// only actually lands on the dashboard once that account:
-//   1. exists (sign up once via /auth/login with the same email/password
-//      you put in the env vars below), and
-//   2. has its public.profiles row promoted to the right role/scope (see
-//      the commented UPDATE statements in
-//      supabase/migrations/0007_staff_profiles_rls.sql).
-// Until both of those are done by hand, this just bounces to /auth/login
-// with an explanatory error — same as any other wrong-role attempt.
+// Dev-only, zero-setup convenience for DevRoleSwitcher's Кофейня/
+// Обжарщик/Бариста buttons (components/dev/DevRoleSwitcher.tsx): each one
+// is a fixed *@test.com pilot account (see lib/auth/pilotStaff.ts) that
+// this action signs into, auto-creating it on first click if it doesn't
+// exist yet, then seeds/heals its role via the
+// public.dev_seed_staff_profile() RPC (see
+// supabase/migrations/0008_dev_seed_staff_profile.sql) before landing on
+// the dashboard. Every step is a real Supabase call — signInWithPassword,
+// signUp, an RPC gated server-side by an email allowlist — nothing here
+// fabricates a session or bypasses requireStaffRole.ts's own check; it
+// just automates what a human would otherwise type by hand.
 //
-// Required env vars, one pair per role (unset = that button's error state):
-//   DEV_CAFE_ADMIN_EMAIL / DEV_CAFE_ADMIN_PASSWORD
-//   DEV_ROASTER_ADMIN_EMAIL / DEV_ROASTER_ADMIN_PASSWORD
-//   DEV_BARISTA_EMAIL / DEV_BARISTA_PASSWORD
-const PILOT_ENV_KEYS: Record<PilotStaffRole, { email: string; password: string }> = {
-  cafe_admin: { email: 'DEV_CAFE_ADMIN_EMAIL', password: 'DEV_CAFE_ADMIN_PASSWORD' },
-  roaster_admin: { email: 'DEV_ROASTER_ADMIN_EMAIL', password: 'DEV_ROASTER_ADMIN_PASSWORD' },
-  barista: { email: 'DEV_BARISTA_EMAIL', password: 'DEV_BARISTA_PASSWORD' },
-}
-
+// The one thing this can't work around: if this Supabase project has
+// "Confirm email" enabled (Authentication → Providers → Email), signUp
+// won't hand back an active session until the address is confirmed, and
+// there's no inbox for a *@test.com fixture to confirm from. If that's
+// the case here, disable it once for this project — everything else is
+// already zero-touch.
 export async function signInAsPilotStaff(formData: FormData) {
   const role = String(formData.get('role') || '') as PilotStaffRole
   const target = PILOT_STAFF_ROLES.find((candidate) => candidate.role === role)
@@ -89,25 +83,44 @@ export async function signInAsPilotStaff(formData: FormData) {
     redirect('/')
   }
 
-  const envKeys = PILOT_ENV_KEYS[role]
-  const email = process.env[envKeys.email]
-  const password = process.env[envKeys.password]
+  const supabase = await createClient()
+  const credentials = { email: target.email, password: PILOT_STAFF_PASSWORD }
 
-  if (!email || !password) {
-    redirect(
-      `/auth/login?next=${encodeURIComponent(target.dashboardPath)}&error=${encodeURIComponent(
-        `Демо-аккаунт «${target.label}» не настроен — задайте ${envKeys.email} и ${envKeys.password} в .env.local.`
-      )}`
-    )
+  const { error: signInError } = await supabase.auth.signInWithPassword(credentials)
+
+  if (signInError) {
+    // Most likely cause: this pilot account doesn't exist on this
+    // Supabase project yet — create it. If some other problem caused the
+    // sign-in to fail, signUp will surface its own (different) error
+    // below instead of silently retrying forever.
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp(credentials)
+
+    if (signUpError) {
+      redirect(
+        `/auth/login?next=${encodeURIComponent(target.dashboardPath)}&error=${encodeURIComponent(
+          `Не удалось создать демо-аккаунт «${target.label}»: ${signUpError.message}`
+        )}`
+      )
+    }
+
+    if (!signUpData.session) {
+      redirect(
+        `/auth/login?next=${encodeURIComponent(target.dashboardPath)}&error=${encodeURIComponent(
+          `Демо-аккаунт «${target.label}» создан, но проект Supabase требует подтверждения email — отключите "Confirm email" в Authentication → Providers для мгновенного входа.`
+        )}`
+      )
+    }
   }
 
-  const supabase = await createClient()
-  const { error } = await supabase.auth.signInWithPassword({ email, password })
+  // Idempotent — also heals the profile if it somehow reverted to the
+  // trigger's default 'enthusiast' role, so this is safe to run on every
+  // click, not just the first one.
+  const { error: seedError } = await supabase.rpc('dev_seed_staff_profile')
 
-  if (error) {
+  if (seedError) {
     redirect(
       `/auth/login?next=${encodeURIComponent(target.dashboardPath)}&error=${encodeURIComponent(
-        `Не удалось войти демо-аккаунтом «${target.label}»: ${error.message}`
+        `Не удалось назначить роль «${target.label}»: ${seedError.message}`
       )}`
     )
   }

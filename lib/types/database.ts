@@ -161,6 +161,11 @@ export type Database = {
     Views: {
       checkins_roaster_view: { Row: CheckinRoasterViewRow } & NoRelationships;
     };
-    Functions: Record<string, never>;
+    Functions: {
+      // See supabase/migrations/0008_dev_seed_staff_profile.sql — dev-only,
+      // self-targeting (auth.uid()), and only actually promotes one of the
+      // three hardcoded pilot demo emails; no arguments.
+      dev_seed_staff_profile: { Args: Record<string, never>; Returns: ProfileRow };
+    };
   };
 };
