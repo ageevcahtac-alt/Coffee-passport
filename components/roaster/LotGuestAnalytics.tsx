@@ -1,24 +1,23 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { DEFECT_TAGS, FLAVOR_AXES, SENSORY_TAGS, type Lot, type TastingRecord } from '@/lib/types/coffee';
-import { getCoffeeShopById } from '@/lib/data/coffeeShops';
+import { DEFECT_TAGS, FLAVOR_AXES, SENSORY_TAGS, type Lot } from '@/lib/types/coffee';
 import { getRoasterById } from '@/lib/data/roasters';
+import type { AnonymizedCheckin } from '@/lib/data/checkinsRoasterView';
 import { formatTastingDate } from '@/lib/utils/date';
 import { FlavorRadar } from '@/components/coffee/FlavorRadar';
 import { StarRating } from '@/components/coffee/StarRating';
-import { GuestTasteProfileWidget } from '@/components/coffee/GuestTasteProfileWidget';
 import { ReviewReplyThread } from '@/components/shared/ReviewReplyThread';
 
-function average(records: TastingRecord[], key: (typeof FLAVOR_AXES)[number]['key']): number {
-  if (records.length === 0) return 0;
-  return records.reduce((sum, record) => sum + record.guestFlavorProfile[key], 0) / records.length;
+function average(checkins: AnonymizedCheckin[], key: (typeof FLAVOR_AXES)[number]['key']): number {
+  if (checkins.length === 0) return 0;
+  return checkins.reduce((sum, checkin) => sum + checkin.guestFlavorProfile[key], 0) / checkins.length;
 }
 
-function topSensoryTags(records: TastingRecord[], limit = 5) {
+function topSensoryTags(checkins: AnonymizedCheckin[], limit = 5) {
   const counts = new Map<string, number>();
-  for (const record of records) {
-    for (const tagId of record.sensoryTags) {
+  for (const checkin of checkins) {
+    for (const tagId of checkin.sensoryTags) {
       counts.set(tagId, (counts.get(tagId) ?? 0) + 1);
     }
   }
@@ -31,10 +30,10 @@ function topSensoryTags(records: TastingRecord[], limit = 5) {
     .slice(0, limit);
 }
 
-function topDefects(records: TastingRecord[]) {
+function topDefects(checkins: AnonymizedCheckin[]) {
   const counts = new Map<string, number>();
-  for (const record of records) {
-    for (const defectId of record.defects) {
+  for (const checkin of checkins) {
+    for (const defectId of checkin.defects) {
       counts.set(defectId, (counts.get(defectId) ?? 0) + 1);
     }
   }
@@ -46,26 +45,41 @@ function topDefects(records: TastingRecord[]) {
     .sort((a, b) => b.count - a.count);
 }
 
-// Every guest's blind-cupping read (guestFlavorProfile, rating, sensory
-// tags — see TastingRecord in lib/types/coffee.ts) feeds this straight from
-// the shared journey store, no separate analytics pipeline: this is the
-// "Шкала предпочтений гостей" on the roaster's own lot card, averaged
-// across all shops by default with an optional per-shop breakdown.
-export function LotGuestAnalytics({ lot, records }: { lot: Lot; records: TastingRecord[] }) {
+// The "Шкала предпочтений гостей" on the roaster's own lot card — sourced
+// from public.checkins_roaster_view (see lib/data/checkinsRoasterView.ts
+// and supabase/migrations/0007_staff_profiles_rls.sql), NOT the shared
+// local journey store guests/staff read. That view only ever exposes
+// grain/extraction/flavor data (rating, guestFlavorProfile, sensory tags,
+// defects, liked/disliked/note) for this roaster's own lots — no guest
+// identity, no coffee-shop identity, and structurally no
+// barista_id/barista_rating/barista_note columns at all, so there is no
+// code path here that could render service/staff feedback even by
+// mistake. That's also why the old per-shop filter and per-guest "taste
+// profile" cross-reference are gone: both needed data this view
+// deliberately doesn't carry.
+export function LotGuestAnalytics({
+  lot,
+  checkins,
+  loading,
+}: {
+  lot: Lot;
+  checkins: AnonymizedCheckin[];
+  loading: boolean;
+}) {
   const [open, setOpen] = useState(false);
-  const [shopFilter, setShopFilter] = useState<string>('all');
 
-  const lotRecords = useMemo(
-    () => records.filter((record) => record.lotId === lot.id),
-    [records, lot.id]
-  );
+  const lotCheckins = useMemo(() => checkins.filter((checkin) => checkin.lotId === lot.id), [checkins, lot.id]);
 
-  const shopIds = useMemo(
-    () => Array.from(new Set(lotRecords.map((record) => record.coffeeShopId))),
-    [lotRecords]
-  );
+  if (loading) {
+    return (
+      <div className="mt-4 pt-4 border-t border-ink-100">
+        <p className="section-label mb-0">Шкала предпочтений гостей</p>
+        <p className="text-xs text-ink-400 mt-3">Загрузка отзывов гостей…</p>
+      </div>
+    );
+  }
 
-  if (lotRecords.length === 0) {
+  if (lotCheckins.length === 0) {
     return (
       <div className="mt-4 pt-4 border-t border-ink-100">
         <p className="section-label mb-0">Шкала предпочтений гостей</p>
@@ -74,14 +88,11 @@ export function LotGuestAnalytics({ lot, records }: { lot: Lot; records: Tasting
     );
   }
 
-  const filteredRecords =
-    shopFilter === 'all' ? lotRecords : lotRecords.filter((record) => record.coffeeShopId === shopFilter);
-
-  const guestValues = FLAVOR_AXES.map(({ key }) => average(filteredRecords, key));
+  const guestValues = FLAVOR_AXES.map(({ key }) => average(lotCheckins, key));
   const roasterValues = FLAVOR_AXES.map(({ key }) => lot.roasterFlavorProfile[key]);
-  const avgRating = filteredRecords.reduce((sum, r) => sum + r.rating, 0) / filteredRecords.length;
-  const topTags = topSensoryTags(filteredRecords);
-  const defects = topDefects(filteredRecords);
+  const avgRating = lotCheckins.reduce((sum, c) => sum + c.rating, 0) / lotCheckins.length;
+  const topTags = topSensoryTags(lotCheckins);
+  const defects = topDefects(lotCheckins);
 
   return (
     <div className="mt-4 pt-4 border-t border-ink-100">
@@ -92,34 +103,12 @@ export function LotGuestAnalytics({ lot, records }: { lot: Lot; records: Tasting
       >
         <span className="section-label mb-0 flex-1">Шкала предпочтений гостей</span>
         <span className="data-value text-xs text-ink-400 shrink-0 ml-3">
-          {lotRecords.length} · {open ? 'скрыть ▲' : 'показать ▼'}
+          {lotCheckins.length} · {open ? 'скрыть ▲' : 'показать ▼'}
         </span>
       </button>
 
       {open && (
         <div className="mt-4">
-          {shopIds.length > 1 && (
-            <div className="flex flex-wrap gap-1.5 mb-4">
-              <FilterPill
-                active={shopFilter === 'all'}
-                onClick={() => setShopFilter('all')}
-                label={`Все кофейни (${lotRecords.length})`}
-              />
-              {shopIds.map((shopId) => {
-                const shop = getCoffeeShopById(shopId);
-                const count = lotRecords.filter((record) => record.coffeeShopId === shopId).length;
-                return (
-                  <FilterPill
-                    key={shopId}
-                    active={shopFilter === shopId}
-                    onClick={() => setShopFilter(shopId)}
-                    label={`${shop?.name ?? shopId} (${count})`}
-                  />
-                );
-              })}
-            </div>
-          )}
-
           <div className="flex items-center gap-6 mb-4">
             <FlavorRadar
               series={[
@@ -134,7 +123,7 @@ export function LotGuestAnalytics({ lot, records }: { lot: Lot; records: Tasting
                 {avgRating.toFixed(1)}
                 <span className="text-xs text-ink-400">/5</span>
               </p>
-              <p className="text-xs text-ink-400">{filteredRecords.length} дегустаций</p>
+              <p className="text-xs text-ink-400">{lotCheckins.length} дегустаций</p>
             </div>
           </div>
 
@@ -189,10 +178,10 @@ export function LotGuestAnalytics({ lot, records }: { lot: Lot; records: Tasting
           )}
 
           <div className="pt-4 border-t border-ink-100">
-            <p className="text-xs text-ink-400 mb-3">Отзывы гостей ({filteredRecords.length})</p>
+            <p className="text-xs text-ink-400 mb-3">Отзывы гостей ({lotCheckins.length})</p>
             <div className="flex flex-col gap-4">
-              {filteredRecords.map((record) => (
-                <GuestReviewItem key={record.id} lot={lot} record={record} allRecords={lotRecords} />
+              {lotCheckins.map((checkin) => (
+                <GuestReviewItem key={checkin.id} lot={lot} checkin={checkin} />
               ))}
             </div>
           </div>
@@ -202,64 +191,26 @@ export function LotGuestAnalytics({ lot, records }: { lot: Lot; records: Tasting
   );
 }
 
-function GuestReviewItem({
-  lot,
-  record,
-  allRecords,
-}: {
-  lot: Lot;
-  record: TastingRecord;
-  allRecords: TastingRecord[];
-}) {
-  const shop = getCoffeeShopById(record.coffeeShopId);
+function GuestReviewItem({ lot, checkin }: { lot: Lot; checkin: AnonymizedCheckin }) {
   const roaster = getRoasterById(lot.roasterId);
 
   return (
     <div className="border-t border-ink-100 pt-4 first:border-t-0 first:pt-0">
       <div className="flex items-start justify-between gap-3 mb-1.5">
-        <p className="text-sm text-ink-900 font-medium leading-tight">{shop?.name ?? record.coffeeShopId}</p>
-        <StarRating value={record.rating} label={`Оценка кофе ${record.rating} из 5`} />
+        <p className="text-[11px] uppercase tracking-widest2 text-ink-300">Анонимный гость</p>
+        <StarRating value={checkin.rating} label={`Оценка кофе ${checkin.rating} из 5`} />
       </div>
-      {record.liked && <p className="text-xs text-ink-500 mb-1">👍 {record.liked}</p>}
-      {record.disliked && <p className="text-xs text-ink-500 mb-1">👎 {record.disliked}</p>}
-      {record.note && <p className="text-xs text-ink-500 mb-1">{record.note}</p>}
-      <p className="text-[11px] text-ink-300 mt-1">{formatTastingDate(record.createdAt)}</p>
-
-      <GuestTasteProfileWidget
-        guestUserId={record.userId}
-        allRecords={allRecords}
-        currentLotProfile={lot.roasterFlavorProfile}
-      />
+      {checkin.liked && <p className="text-xs text-ink-500 mb-1">👍 {checkin.liked}</p>}
+      {checkin.disliked && <p className="text-xs text-ink-500 mb-1">👎 {checkin.disliked}</p>}
+      {checkin.note && <p className="text-xs text-ink-500 mb-1">{checkin.note}</p>}
+      <p className="text-[11px] text-ink-300 mt-1">{formatTastingDate(checkin.createdAt)}</p>
 
       <ReviewReplyThread
-        tastingRecordId={record.id}
+        tastingRecordId={checkin.id}
         responderType="roaster"
         responderId={lot.roasterId}
         responderName={roaster?.name ?? 'Обжарщик'}
       />
     </div>
-  );
-}
-
-function FilterPill({
-  active,
-  onClick,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors
-                  ${active
-                    ? 'border-gold-400 bg-gold-400/10 text-ink-900'
-                    : 'border-ink-200 text-ink-500'}`}
-    >
-      {label}
-    </button>
   );
 }

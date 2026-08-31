@@ -5,9 +5,10 @@ import Link from 'next/link';
 import QRCode from 'qrcode';
 import { downloadLotQrPdf } from '@/lib/utils/qrPdf';
 import { useLots } from '@/lib/data/useLots';
-import { useJourney } from '@/lib/journey/useJourney';
+import { useAnonymizedCheckins } from '@/lib/data/useAnonymizedCheckins';
 import { getRoasterById } from '@/lib/data/roasters';
-import { ROAST_TYPE_LABELS, type Lot, type TastingRecord } from '@/lib/types/coffee';
+import { ROAST_TYPE_LABELS, type Lot } from '@/lib/types/coffee';
+import type { AnonymizedCheckin } from '@/lib/data/checkinsRoasterView';
 import { LotGuestAnalytics } from '@/components/roaster/LotGuestAnalytics';
 import { CommunityHighlights } from '@/components/coffee/CommunityHighlights';
 import { useStaffSession } from '@/lib/auth/staffSession';
@@ -15,7 +16,7 @@ import { useStaffSession } from '@/lib/auth/staffSession';
 export default function RoasterDashboardPage() {
   const { roasterId } = useStaffSession();
   const lots = useLots();
-  const records = useJourney();
+  const { checkins, loading: checkinsLoading } = useAnonymizedCheckins();
   const roaster = roasterId ? getRoasterById(roasterId) : undefined;
   const myLots = lots.filter((lot) => lot.roasterId === roasterId);
 
@@ -54,7 +55,7 @@ export default function RoasterDashboardPage() {
         ) : (
           <div className="flex flex-col gap-4">
             {myLots.map((lot) => (
-              <LotRow key={lot.id} lot={lot} records={records} />
+              <LotRow key={lot.id} lot={lot} checkins={checkins} loading={checkinsLoading} />
             ))}
           </div>
         )}
@@ -63,7 +64,15 @@ export default function RoasterDashboardPage() {
   );
 }
 
-function LotRow({ lot, records }: { lot: Lot; records: TastingRecord[] }) {
+function LotRow({
+  lot,
+  checkins,
+  loading,
+}: {
+  lot: Lot;
+  checkins: AnonymizedCheckin[];
+  loading: boolean;
+}) {
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
@@ -171,7 +180,7 @@ function LotRow({ lot, records }: { lot: Lot; records: TastingRecord[] }) {
         </div>
       )}
 
-      <LotGuestAnalytics lot={lot} records={records} />
+      <LotGuestAnalytics lot={lot} checkins={checkins} loading={loading} />
     </div>
   );
 }
