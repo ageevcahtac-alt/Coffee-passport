@@ -26,6 +26,7 @@ export default function RoasterEquipmentPage() {
         <EquipmentGarage
           ownerId={ACTIVE_ROASTER_ID}
           ownerName={roaster?.name ?? 'Обжарщик'}
+          ownerKind="roaster"
           grinderOptions={PRO_GRINDER_MODELS}
           machineOptions={ESPRESSO_MACHINE_MODELS}
         />

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { BrewingMethodId, BrewingRecipe, Lot, RecipeAuthorType } from '@/lib/types/coffee';
 import { ESPRESSO_MACHINE_MODELS } from '@/lib/types/coffee';
 import { useEquipment } from '@/lib/data/useEquipment';
+import { syncEquipmentFromSupabase } from '@/lib/data/equipmentStore';
 import { useCustomDevices } from '@/lib/data/useCustomDevices';
 import { buildFilterDeviceCatalog } from '@/lib/utils/filterDeviceCatalog';
 import { ComboSelect } from '@/components/shared/ComboSelect';
@@ -85,6 +86,12 @@ export function ProRecipeForm({
   onCancel?: () => void;
 }) {
   const [form, setForm] = useState<FormState>(() => toFormState(initialRecipe));
+  // Garage might not be loaded locally yet if this device never visited the
+  // dedicated Garage page — pull it from Supabase so auto-fill (the effect
+  // below) still has something to work with.
+  useEffect(() => {
+    void syncEquipmentFromSupabase(authorId);
+  }, [authorId]);
   const myEquipment = useEquipment().find((setup) => setup.userId === authorId);
   const approvedCustomDevices = useCustomDevices().filter((device) => device.approved);
 

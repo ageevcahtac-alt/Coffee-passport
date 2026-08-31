@@ -329,8 +329,17 @@ export const FILTER_DEVICE_PRESETS = [
 
 export type FilterDevicePresetId = (typeof FILTER_DEVICE_PRESETS)[number]['id'];
 
+// Which of the app's three roles this Garage setup belongs to — needed
+// once equipmentStore.ts started syncing to Supabase's equipment_garage
+// table (owner_kind is part of its unique key and RLS trust tier; see
+// supabase/migrations/0005_recipes_equipment_checkins.sql). Every
+// EquipmentGarage caller now passes this explicitly rather than it being
+// inferred from ownerId's shape.
+export type EquipmentOwnerKind = 'enthusiast' | 'roaster' | 'coffee_shop';
+
 export interface EquipmentSetup {
   userId: string;
+  ownerKind: EquipmentOwnerKind;
   espressoGrinder: string;
   espressoMachine: string;
   espressoWater: string;

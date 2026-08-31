@@ -24,6 +24,7 @@ export default function EquipmentGaragePage() {
         <EquipmentGarage
           ownerId={userId}
           ownerName={CURRENT_USER_NAME}
+          ownerKind="enthusiast"
           grinderOptions={HOME_GRINDER_MODELS}
           machineOptions={ESPRESSO_MACHINE_MODELS}
         />

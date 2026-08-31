@@ -1,11 +1,17 @@
 'use client';
 
 import type { TastingRecord } from '@/lib/types/coffee';
+import type { CheckinRow } from '@/lib/types/database';
+import { getBrowserSupabaseClient } from '@/lib/supabase/browserClient';
+import { generateId } from '@/lib/utils/id';
 
-// Local, no-backend persistence for the first vertical slice. Swap for a
-// Supabase-backed store once this flow is wired to real auth — the shape of
-// TastingRecord and the read/write API here are written to make that swap a
-// drop-in replacement, not a rewrite.
+// localStorage is now a read cache, not the source of truth: syncCheckins-
+// ForUser() below pulls the signed-in user's own rows from Supabase's
+// public.checkins table (see supabase/migrations/0005_recipes_equipment_checkins.sql)
+// on login, and addTastingRecord() writes through on every save,
+// best-effort — a failed write (offline, or browsing without an account)
+// still lands locally so the app keeps working, it just won't show up on
+// another device until the account is signed in and reachable again.
 
 const STORAGE_KEY = 'coffee-passport:journey';
 export const DEMO_USER_ID = 'demo-user';
@@ -72,17 +78,108 @@ export function getServerSnapshot(): TastingRecord[] {
   return EMPTY_RECORDS;
 }
 
+function rowToRecord(row: CheckinRow): TastingRecord {
+  return {
+    id: row.id,
+    userId: row.owner_user_id,
+    lotId: row.lot_id,
+    roasterId: row.roaster_id,
+    coffeeShopId: row.coffee_shop_id,
+    brewingMethod: row.brewing_method as TastingRecord['brewingMethod'],
+    rating: row.rating,
+    sensoryTags: (row.sensory_tags ?? []) as TastingRecord['sensoryTags'],
+    subDescriptors: (row.sub_descriptors ?? {}) as TastingRecord['subDescriptors'],
+    bodyTexture: row.body_texture as TastingRecord['bodyTexture'],
+    defects: (row.defects ?? []) as TastingRecord['defects'],
+    liked: row.liked,
+    disliked: row.disliked,
+    note: row.note,
+    baristaId: row.barista_id,
+    baristaRating: row.barista_rating,
+    baristaNote: row.barista_note,
+    guestFlavorProfile: {
+      acidity: row.acidity,
+      sweetness: row.sweetness,
+      body: row.body,
+      bitterness: row.bitterness,
+    },
+    createdAt: row.created_at,
+  };
+}
+
+function recordToRow(record: TastingRecord): CheckinRow {
+  return {
+    id: record.id,
+    owner_user_id: record.userId,
+    lot_id: record.lotId,
+    roaster_id: record.roasterId,
+    coffee_shop_id: record.coffeeShopId,
+    brewing_method: record.brewingMethod,
+    rating: record.rating,
+    acidity: record.guestFlavorProfile.acidity,
+    sweetness: record.guestFlavorProfile.sweetness,
+    body: record.guestFlavorProfile.body,
+    bitterness: record.guestFlavorProfile.bitterness,
+    body_texture: record.bodyTexture,
+    sensory_tags: record.sensoryTags,
+    sub_descriptors: record.subDescriptors,
+    defects: record.defects,
+    liked: record.liked,
+    disliked: record.disliked,
+    note: record.note,
+    barista_id: record.baristaId,
+    barista_rating: record.baristaRating,
+    barista_note: record.baristaNote,
+    created_at: record.createdAt,
+  };
+}
+
+function mergeById(local: TastingRecord[], incoming: TastingRecord[]): TastingRecord[] {
+  const map = new Map(local.map((record) => [record.id, record]));
+  for (const record of incoming) map.set(record.id, record);
+  return Array.from(map.values()).sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+}
+
+// Pulls this signed-in user's own checkins from Supabase and overlays them
+// onto the local cache. Checkins have no public tier (unlike recipes) —
+// only ever meaningful for a real account, so this is a no-op for
+// anonymous browsing (nothing to pull, and owner_user_id is a uuid column
+// an anonymous device id wouldn't cast into anyway).
+export async function syncCheckinsForUser(userId: string, isAuthenticated: boolean): Promise<void> {
+  if (!isAuthenticated) return;
+  try {
+    const supabase = getBrowserSupabaseClient();
+    const { data, error } = await supabase.from('checkins').select('*').eq('owner_user_id', userId);
+    if (error || !data) return;
+    write(mergeById(read(), (data as CheckinRow[]).map(rowToRecord)));
+  } catch {
+    // Offline / table not migrated yet / RLS reject — local cache stands.
+  }
+}
+
 export function addTastingRecord(
   input: Omit<TastingRecord, 'id' | 'userId' | 'createdAt'>,
   userId: string
 ): TastingRecord {
   const record: TastingRecord = {
     ...input,
-    id: `tasting-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    id: generateId(),
     userId,
     createdAt: new Date().toISOString(),
   };
   write([record, ...read()]);
+
+  void getBrowserSupabaseClient()
+    .from('checkins')
+    .insert(recordToRow(record))
+    .then(({ error }) => {
+      if (error) {
+        console.warn('[checkins] Supabase write failed, kept local-only:', error.message);
+      }
+    });
+
   return record;
 }
 

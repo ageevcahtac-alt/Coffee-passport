@@ -20,6 +20,7 @@ export default function CafeEquipmentPage() {
       <EquipmentGarage
         ownerId={ACTIVE_SHOP_ID}
         ownerName={shop?.name ?? 'Кофейня'}
+        ownerKind="coffee_shop"
         grinderOptions={PRO_GRINDER_MODELS}
         machineOptions={ESPRESSO_MACHINE_MODELS}
       />

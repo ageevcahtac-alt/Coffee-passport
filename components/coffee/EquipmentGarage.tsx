@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
-import { FILTER_DEVICE_PRESETS, type EquipmentSetup } from '@/lib/types/coffee';
+import { useEffect, useState } from 'react';
+import { FILTER_DEVICE_PRESETS, type EquipmentOwnerKind, type EquipmentSetup } from '@/lib/types/coffee';
 import { useEquipment } from '@/lib/data/useEquipment';
-import { getEquipmentForUser, saveEquipment } from '@/lib/data/equipmentStore';
+import { getEquipmentForUser, saveEquipment, syncEquipmentFromSupabase } from '@/lib/data/equipmentStore';
 import { useCustomDevices } from '@/lib/data/useCustomDevices';
 import { ComboSelect } from '@/components/shared/ComboSelect';
 import { FavoriteDevicePicker } from '@/components/coffee/FavoriteDevicePicker';
@@ -33,17 +33,27 @@ function hasFilter(setup: EquipmentSetup | undefined): boolean {
 export function EquipmentGarage({
   ownerId,
   ownerName,
+  ownerKind,
   grinderOptions,
   machineOptions,
 }: {
   ownerId: string;
   ownerName: string;
+  ownerKind: EquipmentOwnerKind;
   grinderOptions: string[];
   machineOptions: string[];
 }) {
   useEquipment(); // subscribes to store changes; `saved` below is read fresh every render
   const saved = getEquipmentForUser(ownerId);
   const customDevices = useCustomDevices();
+
+  // Supabase is the source of truth once reachable — pull this owner's
+  // Garage in on mount (and whenever ownerId changes) so a setup saved on
+  // another device shows up here too. Local cache/render stays correct
+  // even before this resolves or if it fails (offline, no account yet).
+  useEffect(() => {
+    void syncEquipmentFromSupabase(ownerId);
+  }, [ownerId]);
 
   const [editing, setEditing] = useState<EditingSection>(null);
   const [devicePickerOpen, setDevicePickerOpen] = useState(false);
@@ -70,6 +80,7 @@ export function EquipmentGarage({
   function persist(patch: Partial<Omit<EquipmentSetup, 'userId' | 'updatedAt'>>) {
     saveEquipment({
       userId: ownerId,
+      ownerKind,
       espressoGrinder: saved?.espressoGrinder ?? '',
       espressoMachine: saved?.espressoMachine ?? '',
       espressoWater: saved?.espressoWater ?? '',

@@ -1,10 +1,21 @@
 'use client';
 
-import type { EquipmentSetup } from '@/lib/types/coffee';
+import type { EquipmentOwnerKind, EquipmentSetup } from '@/lib/types/coffee';
+import type { EquipmentGarageRow, EquipmentGarageUpsert } from '@/lib/types/database';
+import { getBrowserSupabaseClient } from '@/lib/supabase/browserClient';
 
 // The enthusiast's saved personal setup ("Моё оборудование" — see
-// app/(site)/journey/equipment/page.tsx), one record per user. Same
-// no-backend localStorage pattern as the rest of this app's stores.
+// app/(site)/journey/equipment/page.tsx), one record per owner (also
+// reused for the pilot roaster/coffee-shop Garages — see
+// components/coffee/EquipmentGarage.tsx). localStorage is now a read
+// cache, not the source of truth: syncEquipmentFromSupabase() below pulls
+// the DB's copy in on mount, and saveEquipment() writes through to
+// Supabase's equipment_garage table (see
+// supabase/migrations/0005_recipes_equipment_checkins.sql) on every save,
+// best-effort — a failed write (offline, or an anonymous enthusiast with
+// no real account to sync to) still lands locally so the app keeps
+// working, it just won't show up on another device until the account is
+// actually signed in and reachable again.
 
 const STORAGE_KEY = 'coffee-passport:equipment';
 
@@ -53,6 +64,58 @@ export function getEquipmentForUser(userId: string): EquipmentSetup | undefined 
   return read().find((setup) => setup.userId === userId);
 }
 
+function rowToSetup(row: EquipmentGarageRow): EquipmentSetup {
+  return {
+    userId: row.owner_id,
+    ownerKind: row.owner_kind,
+    espressoGrinder: row.espresso_grinder,
+    espressoMachine: row.espresso_machine,
+    espressoWater: row.espresso_water,
+    filterGrinder: row.filter_grinder,
+    filterWater: row.filter_water,
+    favoriteDeviceIds: row.favorite_device_ids ?? [],
+    updatedAt: row.updated_at,
+  };
+}
+
+function setupToRow(setup: EquipmentSetup): EquipmentGarageUpsert {
+  return {
+    owner_kind: setup.ownerKind,
+    owner_id: setup.userId,
+    owner_user_id: setup.ownerKind === 'enthusiast' ? setup.userId : null,
+    espresso_grinder: setup.espressoGrinder,
+    espresso_machine: setup.espressoMachine,
+    espresso_water: setup.espressoWater,
+    filter_grinder: setup.filterGrinder,
+    filter_water: setup.filterWater,
+    favorite_device_ids: setup.favoriteDeviceIds,
+    updated_at: setup.updatedAt,
+  };
+}
+
+// Pulls this owner's Garage from Supabase and overlays it onto the local
+// cache — called on mount by EquipmentGarage.tsx (covers all three
+// dedicated Garage pages) and by the recipe forms that auto-fill from it
+// (so a recipe form opened without ever visiting the Garage page first
+// still sees the synced setup). `owner_id` is a text column, so this is
+// always safe to call regardless of whether the caller has a real account
+// (an anonymous enthusiast simply won't have a matching row).
+export async function syncEquipmentFromSupabase(ownerId: string): Promise<void> {
+  try {
+    const supabase = getBrowserSupabaseClient();
+    const { data, error } = await supabase
+      .from('equipment_garage')
+      .select('*')
+      .eq('owner_id', ownerId)
+      .maybeSingle();
+    if (error || !data) return;
+    const setup = rowToSetup(data as EquipmentGarageRow);
+    write([...read().filter((existing) => existing.userId !== ownerId), setup]);
+  } catch {
+    // Offline / table not migrated yet / RLS reject — local cache stands.
+  }
+}
+
 export function saveEquipment(setup: Omit<EquipmentSetup, 'updatedAt'>): EquipmentSetup {
   const existing = read();
   const index = existing.findIndex((candidate) => candidate.userId === setup.userId);
@@ -61,6 +124,16 @@ export function saveEquipment(setup: Omit<EquipmentSetup, 'updatedAt'>): Equipme
   if (index >= 0) next[index] = updated;
   else next.push(updated);
   write(next);
+
+  void getBrowserSupabaseClient()
+    .from('equipment_garage')
+    .upsert(setupToRow(updated), { onConflict: 'owner_kind,owner_id' })
+    .then(({ error }) => {
+      if (error) {
+        console.warn('[equipment_garage] Supabase write failed, kept local-only:', error.message);
+      }
+    });
+
   return updated;
 }
 

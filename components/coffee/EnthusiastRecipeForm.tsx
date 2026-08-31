@@ -7,6 +7,7 @@ import { useGrindConfirmations } from '@/lib/data/useGrindConfirmations';
 import { addGrindConfirmation } from '@/lib/data/grindConfirmationsStore';
 import { estimateGrindSetting } from '@/lib/utils/grindConvert';
 import { useEquipment } from '@/lib/data/useEquipment';
+import { syncEquipmentFromSupabase } from '@/lib/data/equipmentStore';
 import { useCustomDevices } from '@/lib/data/useCustomDevices';
 import { buildFilterDeviceCatalog } from '@/lib/utils/filterDeviceCatalog';
 import { ComboSelect } from '@/components/shared/ComboSelect';
@@ -77,6 +78,12 @@ export function EnthusiastRecipeForm({
 }) {
   const [form, setForm] = useState<FormState>(() => toFormState(sourceRecipe));
   const grindConfirmations = useGrindConfirmations();
+  // Garage might not be loaded locally yet if the user never visited
+  // /journey/equipment on this device — pull it from Supabase so auto-fill
+  // (the effect below) still has something to work with.
+  useEffect(() => {
+    void syncEquipmentFromSupabase(currentUserId);
+  }, [currentUserId]);
   const myEquipment = useEquipment().find((setup) => setup.userId === currentUserId);
   const approvedCustomDevices = useCustomDevices().filter((device) => device.approved);
   const isEspressoMethod = form.brewingMethodId === 'espresso';

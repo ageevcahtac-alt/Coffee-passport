@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { reconcileUserScope } from '@/lib/journey/userScope';
+import { syncCheckinsForUser } from '@/lib/journey/store';
+import { syncRecipesFromSupabase } from '@/lib/data/brewingRecipesStore';
 
 const ANON_ID_KEY = 'coffee-passport:anon-id';
 
@@ -65,8 +67,19 @@ export function CurrentUserProvider({
 
   useEffect(() => {
     const resolvedId = authUserId ?? getOrCreateAnonId();
+    const isAuthenticated = Boolean(authUserId);
     reconcileUserScope(resolvedId);
-    setState({ userId: resolvedId, isAuthenticated: Boolean(authUserId), ready: true });
+    // State is set immediately — first paint never waits on the network.
+    // The syncs below run in the background: Supabase is the source of
+    // truth once reachable, but a slow/offline connection just means the
+    // local cache (already restored by reconcileUserScope's purge step)
+    // keeps rendering until they resolve, then each store's own
+    // useSyncExternalStore subscribers re-render with the synced data.
+    setState({ userId: resolvedId, isAuthenticated, ready: true });
+    void Promise.allSettled([
+      syncCheckinsForUser(resolvedId, isAuthenticated),
+      syncRecipesFromSupabase(resolvedId, isAuthenticated),
+    ]);
   }, [authUserId]);
 
   return <CurrentUserContext.Provider value={state}>{children}</CurrentUserContext.Provider>;
