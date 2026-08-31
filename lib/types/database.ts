@@ -29,7 +29,7 @@ export type RecipeRow = {
   id: string;
   lot_id: string;
   brewing_method_id: string;
-  author_type: 'roaster' | 'coffee_shop' | 'enthusiast';
+  author_type: 'roaster' | 'coffee_shop' | 'barista' | 'enthusiast';
   author_id: string;
   author_name: string;
   is_benchmark: boolean;

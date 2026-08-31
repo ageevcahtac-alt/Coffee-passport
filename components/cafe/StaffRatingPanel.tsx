@@ -92,6 +92,7 @@ function ReviewItem({ record }: { record: TastingRecord }) {
         <p className="text-sm text-ink-900 font-medium leading-tight">{lot?.name ?? 'Кофе'}</p>
         <StarRating value={record.baristaRating} label={`Оценка ${record.baristaRating} из 5`} />
       </div>
+      <p className="text-[11px] text-ink-300 mb-1">👤 NoName · Анонимный гость</p>
       <p className="text-xs text-ink-500 mb-1">{record.baristaNote || 'Без комментария.'}</p>
       <p className="text-[11px] text-ink-300 mt-1">{formatDate(record.createdAt)}</p>
     </div>

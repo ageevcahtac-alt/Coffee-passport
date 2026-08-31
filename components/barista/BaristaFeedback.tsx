@@ -2,65 +2,60 @@
 
 import { useJourney } from '@/lib/journey/useJourney';
 import { getMergedLotById } from '@/lib/data/lotsStore';
-import { getBaristaById } from '@/lib/data/baristas';
-import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { formatTastingDate } from '@/lib/utils/date';
 import { StarRating } from '@/components/coffee/StarRating';
-import { GuestTasteProfileWidget } from '@/components/coffee/GuestTasteProfileWidget';
-import { ReviewReplyThread } from '@/components/shared/ReviewReplyThread';
 import { DEFECT_TAGS, type TastingRecord } from '@/lib/types/coffee';
 
 const FEED_LIMIT = 5;
 
-// Guest feedback splits into two audiences from one shared record: coffee
-// impressions (rating, liked/disliked, notes) that the roaster also cares
-// about, and staff impressions (barista rating/note) that stay shop-only.
-// Both read the same TastingRecord — see lib/types/coffee.ts — just slice
-// different fields.
-export function GuestFeedback({ shopId }: { shopId: string }) {
+// The barista's own dashboard read of guest feedback — same two-category
+// split as components/cafe/GuestFeedback.tsx (☕ Кофе и экстракция / 👤
+// Сервис и внешний вид), but scoped to cups THIS barista personally made
+// (record.baristaId), not the whole shop. Every author is shown strictly
+// as "NoName" — the guest's own identity is never collected in this flow
+// to begin with (TastingRecord.userId is an opaque account/device id,
+// never a display name), this label just makes that anonymity explicit
+// rather than leaving the author line blank.
+export function BaristaFeedback({ baristaId }: { baristaId: string }) {
   const records = useJourney();
-  const shopRecords = [...records]
-    .filter((record) => record.coffeeShopId === shopId)
+  const myRecords = [...records]
+    .filter((record) => record.baristaId === baristaId)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-  const coffeeFeed = shopRecords.slice(0, FEED_LIMIT);
-  const staffFeed = shopRecords.filter((record) => record.baristaRating > 0).slice(0, FEED_LIMIT);
+  const coffeeFeed = myRecords.slice(0, FEED_LIMIT);
+  const serviceFeed = myRecords.filter((record) => record.baristaRating > 0).slice(0, FEED_LIMIT);
 
   return (
     <section className="mb-12">
-      <p className="section-label mb-4">Свежие отзывы гостей</p>
+      <p className="section-label mb-4">Отзывы гостей</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="rounded-md border border-ink-200 bg-parchment-100 p-5">
-          <div className="flex items-baseline justify-between mb-1">
-            <h3 className="font-body font-medium text-sm text-ink-900">☕ Кофе и экстракция</h3>
-          </div>
+          <h3 className="font-body font-medium text-sm text-ink-900 mb-1">☕ Кофе и экстракция</h3>
           <p className="text-[11px] uppercase tracking-widest2 text-ink-400 mb-4">
-            Видит кофейня и обжарщик
+            Вкус, баланс, дефекты заваривания
           </p>
           {coffeeFeed.length === 0 ? (
             <p className="text-sm text-ink-400">Пока нет отзывов о кофе.</p>
           ) : (
             <div className="flex flex-col gap-4">
               {coffeeFeed.map((record) => (
-                <CoffeeFeedItem key={record.id} record={record} allRecords={records} shopId={shopId} />
+                <CoffeeFeedItem key={record.id} record={record} />
               ))}
             </div>
           )}
         </div>
 
         <div className="rounded-md border border-ink-200 bg-parchment-100 p-5">
-          <div className="flex items-baseline justify-between mb-1">
-            <h3 className="font-body font-medium text-sm text-ink-900">👤 Сервис и внешний вид</h3>
-          </div>
+          <h3 className="font-body font-medium text-sm text-ink-900 mb-1">👤 Сервис и внешний вид</h3>
           <p className="text-[11px] uppercase tracking-widest2 text-gold-500 mb-4">
-            Видно только бариста и кофейне — обжарщику недоступно
+            Приветливость, опрятность, атмосфера — видно только вам и кофейне
           </p>
-          {staffFeed.length === 0 ? (
+          {serviceFeed.length === 0 ? (
             <p className="text-sm text-ink-400">Пока нет отзывов о сервисе.</p>
           ) : (
             <div className="flex flex-col gap-4">
-              {staffFeed.map((record) => (
-                <StaffFeedItem key={record.id} record={record} />
+              {serviceFeed.map((record) => (
+                <ServiceFeedItem key={record.id} record={record} />
               ))}
             </div>
           )}
@@ -70,17 +65,8 @@ export function GuestFeedback({ shopId }: { shopId: string }) {
   );
 }
 
-function CoffeeFeedItem({
-  record,
-  allRecords,
-  shopId,
-}: {
-  record: TastingRecord;
-  allRecords: TastingRecord[];
-  shopId: string;
-}) {
+function CoffeeFeedItem({ record }: { record: TastingRecord }) {
   const lot = getMergedLotById(record.lotId);
-  const shop = getCoffeeShopById(shopId);
   if (!lot) return null;
 
   return (
@@ -99,36 +85,15 @@ function CoffeeFeedItem({
         </p>
       )}
       <p className="text-[11px] text-ink-300 mt-1">{formatTastingDate(record.createdAt)}</p>
-
-      <GuestTasteProfileWidget
-        guestUserId={record.userId}
-        allRecords={allRecords}
-        currentLotProfile={lot.roasterFlavorProfile}
-      />
-
-      <ReviewReplyThread
-        tastingRecordId={record.id}
-        responderType="coffee_shop"
-        responderId={shopId}
-        responderName={shop?.name ?? 'Кофейня'}
-      />
     </div>
   );
 }
 
-function StaffFeedItem({ record }: { record: TastingRecord }) {
-  const barista = getBaristaById(record.baristaId);
-
+function ServiceFeedItem({ record }: { record: TastingRecord }) {
   return (
     <div className="border-t border-ink-100 pt-4 first:border-t-0 first:pt-0">
       <div className="flex items-start justify-between gap-3 mb-1.5">
-        <p className="text-sm text-ink-900 font-medium leading-tight">
-          {barista?.name ?? 'Не указан'}
-        </p>
-        <StarRating
-          value={record.baristaRating}
-          label={`Оценка бариста ${record.baristaRating} из 5`}
-        />
+        <StarRating value={record.baristaRating} label={`Оценка сервиса ${record.baristaRating} из 5`} />
       </div>
       <p className="text-[11px] text-ink-300 mb-1.5">👤 NoName · Анонимный гость</p>
       {record.baristaNote && <p className="text-xs text-ink-500 mb-1">{record.baristaNote}</p>}

@@ -11,7 +11,7 @@ import {
 import { getMergedLotById } from '@/lib/data/lotsStore';
 import { getRoasterById } from '@/lib/data/roasters';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
-import { getBaristaById } from '@/lib/data/baristas';
+import { getBaristaById, UNSPECIFIED_BARISTA_ID } from '@/lib/data/baristas';
 import { formatTastingDate } from '@/lib/utils/date';
 import { StarRating } from './StarRating';
 import { ProducerRoasterCard } from './ProducerRoasterCard';
@@ -89,6 +89,7 @@ export function TastingDetailModal({
               lot={lot}
               roaster={roaster}
               shopId={record.coffeeShopId}
+              baristaId={record.baristaId !== UNSPECIFIED_BARISTA_ID ? record.baristaId : null}
               brewingMethodId={record.brewingMethod}
               currentUserId={currentUserId}
               currentUserName="Вы"

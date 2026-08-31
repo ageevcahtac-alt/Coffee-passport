@@ -10,6 +10,7 @@ import { markPendingShop } from '@/lib/journey/pendingShopFlag';
 import { markPendingRoaster } from '@/lib/journey/pendingRoasterFlag';
 import { getRoasterById } from '@/lib/data/roasters';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
+import { UNSPECIFIED_BARISTA_ID } from '@/lib/data/baristas';
 import { useCoffeeShops } from '@/lib/data/useCoffeeShops';
 import { useRoasters } from '@/lib/data/useRoasters';
 import { useCurrentUser } from '@/lib/auth/currentUser';
@@ -235,6 +236,7 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
           lot={lot}
           roaster={roaster}
           shopId={selectedShopId}
+          baristaId={latestTasting.baristaId !== UNSPECIFIED_BARISTA_ID ? latestTasting.baristaId : null}
           brewingMethodId={latestTasting.brewingMethod}
           currentUserId={currentUserId}
           currentUserName="Вы"

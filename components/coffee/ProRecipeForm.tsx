@@ -69,6 +69,7 @@ export function ProRecipeForm({
   authorType,
   authorId,
   authorName,
+  equipmentOwnerId,
   isBenchmark,
   grinderOptions,
   initialRecipe,
@@ -79,6 +80,13 @@ export function ProRecipeForm({
   authorType: RecipeAuthorType;
   authorId: string;
   authorName: string;
+  // Whose Garage to auto-fill from, when it's not the author's own — a
+  // barista authors their own recipe (authorId = their personal id, so
+  // the badge reads their name) but brews on the shop's own equipment, so
+  // BaristaRecipeForm passes the coffee shop's id here instead. Defaults
+  // to authorId, which is exactly right for roaster/coffee_shop/
+  // enthusiast recipes (they always author with their own Garage).
+  equipmentOwnerId?: string;
   isBenchmark: boolean;
   grinderOptions: string[];
   initialRecipe?: BrewingRecipe;
@@ -86,13 +94,14 @@ export function ProRecipeForm({
   onCancel?: () => void;
 }) {
   const [form, setForm] = useState<FormState>(() => toFormState(initialRecipe));
+  const garageOwnerId = equipmentOwnerId ?? authorId;
   // Garage might not be loaded locally yet if this device never visited the
   // dedicated Garage page — pull it from Supabase so auto-fill (the effect
   // below) still has something to work with.
   useEffect(() => {
-    void syncEquipmentFromSupabase(authorId);
-  }, [authorId]);
-  const myEquipment = useEquipment().find((setup) => setup.userId === authorId);
+    void syncEquipmentFromSupabase(garageOwnerId);
+  }, [garageOwnerId]);
+  const myEquipment = useEquipment().find((setup) => setup.userId === garageOwnerId);
   const approvedCustomDevices = useCustomDevices().filter((device) => device.approved);
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {

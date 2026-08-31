@@ -12,12 +12,13 @@ import { RecipeCard } from '@/components/coffee/RecipeCard';
 import { RecipeCompare } from '@/components/coffee/RecipeCompare';
 import { EnthusiastRecipeForm } from '@/components/coffee/EnthusiastRecipeForm';
 
-type ScopeTab = 'mine' | 'roaster' | 'shop' | 'all';
+type ScopeTab = 'mine' | 'roaster' | 'shop' | 'barista' | 'all';
 
 const SCOPE_TABS: { id: ScopeTab; label: string }[] = [
   { id: 'mine', label: 'Мои рецепты' },
   { id: 'roaster', label: 'От обжарщиков' },
   { id: 'shop', label: 'От кофеен' },
+  { id: 'barista', label: 'От бариста' },
   { id: 'all', label: 'Все' },
 ];
 
@@ -61,6 +62,7 @@ export function ExtractionTab({
     if (b.authorId === coffeeShopId && a.authorId !== coffeeShopId) return 1;
     return 0;
   });
+  const baristaRecipes = forMethod.filter((recipe) => recipe.authorType === 'barista');
   // "Мои рецепты" — every recipe this user is the author of for this
   // method, published or not (an unpublished personal log is otherwise
   // only visible via MyRecipesShelf on /journey — this tab is the other
@@ -164,6 +166,16 @@ export function ExtractionTab({
               />
             )}
 
+            {scopeTab === 'barista' && (
+              <RecipeGroup
+                title="От бариста"
+                recipes={baristaRecipes}
+                currentUserId={currentUserId}
+                onAdapt={setAdaptingRecipe}
+                emptyText="Ни один бариста ещё не опубликовал рекомендацию для этого метода."
+              />
+            )}
+
             {scopeTab === 'all' && (
               <>
                 <RecipeGroup
@@ -179,6 +191,13 @@ export function ExtractionTab({
                   currentUserId={currentUserId}
                   onAdapt={setAdaptingRecipe}
                   emptyText="Пока ни одна кофейня не поделилась своей адаптацией."
+                />
+                <RecipeGroup
+                  title="От бариста"
+                  recipes={baristaRecipes}
+                  currentUserId={currentUserId}
+                  onAdapt={setAdaptingRecipe}
+                  emptyText="Ни один бариста ещё не опубликовал рекомендацию для этого метода."
                 />
                 <RecipeGroup
                   title="Рецепты сообщества"

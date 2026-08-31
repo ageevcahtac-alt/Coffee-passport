@@ -266,7 +266,7 @@ export interface RoastProfile {
 // See lib/data/brewingRecipesStore.ts for persistence.
 // =========================================================
 
-export type RecipeAuthorType = 'roaster' | 'coffee_shop' | 'enthusiast';
+export type RecipeAuthorType = 'roaster' | 'coffee_shop' | 'barista' | 'enthusiast';
 
 export const PRO_GRINDER_MODELS = ['Mahlkönig EK43', 'Mahlkönig Peak', 'Ditting KR804', 'Mythos One', 'Compak E10'];
 export const HOME_GRINDER_MODELS = ['Comandante C40', 'Timemore C2/C3', '1Zpresso J-Max', 'Baratza Encore/Sette', 'Fellow Ode', 'DF64'];

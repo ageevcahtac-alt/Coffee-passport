@@ -5,13 +5,16 @@ import type { BrewingMethodId, BrewingRecipe, Lot, Roaster } from '@/lib/types/c
 import { useBrewingRecipes } from '@/lib/data/useBrewingRecipes';
 import { addBrewingRecipe } from '@/lib/data/brewingRecipesStore';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
+import { getBaristaById } from '@/lib/data/baristas';
 import { RecipeCard } from '@/components/coffee/RecipeCard';
 import { EnthusiastRecipeForm } from '@/components/coffee/EnthusiastRecipeForm';
 
 // Always-both-visible comparison for the currently selected brewing
-// method: the roaster's own official recipe and this specific coffee
-// shop's own adaptation, each showing the full equipment/setup rundown
-// (grinder, water, dose/yield/time/TDS — all already part of RecipeCard).
+// method: the roaster's own official recipe, this specific coffee shop's
+// own adaptation, and — when the guest's checked-in cup names one — that
+// barista's own recommendation. Each card shows the full equipment/setup
+// rundown (grinder, water, dose/yield/time/TDS — all already part of
+// RecipeCard) and its own Like/Dislike (via RecipeCard's isVotable).
 // Replaces the old single "featured recipe" card (whichever of
 // roaster/shop/community happened to win a fallback chain, sometimes
 // badged "Рецепт сообщества" when neither an official nor shop recipe
@@ -20,6 +23,7 @@ export function RoasterCafeRecommendations({
   lot,
   roaster,
   shopId,
+  baristaId,
   brewingMethodId,
   currentUserId,
   currentUserName,
@@ -27,6 +31,10 @@ export function RoasterCafeRecommendations({
   lot: Lot;
   roaster: Roaster;
   shopId: string | null;
+  // The specific barista from this guest's own check-in, if any — a
+  // barista's recommendation is personal, not shop-wide, so this card is
+  // scoped to exactly the person who made this cup.
+  baristaId?: string | null;
   brewingMethodId: BrewingMethodId;
   currentUserId: string;
   currentUserName: string;
@@ -41,7 +49,11 @@ export function RoasterCafeRecommendations({
   const shopRecipe = shopId
     ? recipesForMethod.find((recipe) => recipe.authorType === 'coffee_shop' && recipe.authorId === shopId) ?? null
     : null;
+  const baristaRecipe = baristaId
+    ? recipesForMethod.find((recipe) => recipe.authorType === 'barista' && recipe.authorId === baristaId) ?? null
+    : null;
   const shop = shopId ? getCoffeeShopById(shopId) : undefined;
+  const barista = baristaId ? getBaristaById(baristaId) : undefined;
 
   // undefined = closed; null = standalone "log my own" (no source); a
   // BrewingRecipe = adapting from that specific recipe.
@@ -52,10 +64,10 @@ export function RoasterCafeRecommendations({
     setFormSource(undefined);
   }
 
-  if (!roasterRecipe && !shopRecipe) {
+  if (!roasterRecipe && !shopRecipe && !baristaRecipe) {
     return (
       <p className="text-sm text-ink-400">
-        Для этого способа пока нет ни рецепта обжарщика, ни рецепта кофейни — станьте первым.
+        Для этого способа пока нет рекомендаций от обжарщика, кофейни или бариста — станьте первым.
       </p>
     );
   }
@@ -91,6 +103,23 @@ export function RoasterCafeRecommendations({
             </p>
           )}
         </div>
+        {baristaId && (
+          <div className="sm:col-span-2">
+            <p className="text-xs uppercase tracking-widest2 text-ink-400 mb-2">Рекомендация бариста</p>
+            {baristaRecipe ? (
+              <RecipeCard
+                recipe={baristaRecipe}
+                currentUserId={currentUserId}
+                onAdapt={(recipe) => setFormSource(recipe)}
+                titleOverride={`Рекомендация бариста · ${barista?.name ?? baristaRecipe.authorName}`}
+              />
+            ) : (
+              <p className="text-sm text-ink-400">
+                {barista?.name ?? 'Этот бариста'} ещё не опубликовал(а) свою рекомендацию для этого способа.
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       <button

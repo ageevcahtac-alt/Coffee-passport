@@ -32,7 +32,10 @@ export function RecipeCard({
   const ratio = recipe.doseG > 0 ? recipe.yieldG / recipe.doseG : null;
   const isEspresso = recipe.brewingMethodId === 'espresso';
   const badge = titleOverride ? { text: titleOverride, className: getAuthorBadge(recipe, isOwn).className } : getAuthorBadge(recipe, isOwn);
-  const isVotable = recipe.authorType === 'enthusiast' && recipe.isPublic;
+  // Every published recipe is votable — roaster/coffee_shop/barista
+  // recipes are always isPublic (see ProRecipeForm), an enthusiast's is
+  // only once they've opted in. Powers /top-recipes' three categories.
+  const isVotable = recipe.isPublic;
 
   const [showExtraction, setShowExtraction] = useState(false);
   const [myTds, setMyTds] = useState('');
@@ -176,6 +179,9 @@ function getAuthorBadge(recipe: BrewingRecipe, isOwn: boolean): { text: string; 
   }
   if (recipe.authorType === 'coffee_shop') {
     return { text: `Рецепт кофейни · ${recipe.authorName}`, className: 'border-moss-500 text-moss-500' };
+  }
+  if (recipe.authorType === 'barista') {
+    return { text: `Рекомендация бариста · ${recipe.authorName}`, className: 'border-ink-500 text-ink-700' };
   }
   if (isOwn) {
     return { text: 'Ваш рецепт', className: 'border-rating text-rating' };
