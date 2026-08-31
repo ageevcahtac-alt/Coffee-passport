@@ -3,9 +3,7 @@ import { jsPDF } from 'jspdf';
 
 // Print-ready, single-page PDF for one lot's QR code — used by both the
 // Roaster and Coffee Shop cabinets ("Скачать QR (PDF)") so a lot/stand code
-// can be printed and put on a shelf or table tent. Client-only: jsPDF's
-// .save() triggers a browser download, same as the existing "Скопировать
-// ссылку / QR" PNG preview in app/dashboard/roaster/page.tsx.
+// can be printed and put on a shelf or table tent.
 export async function downloadLotQrPdf({
   lotId,
   lotName,
@@ -49,5 +47,22 @@ export async function downloadLotQrPdf({
   doc.setTextColor(140);
   doc.text(lotId, pageWidth / 2, 190, { align: 'center' });
 
-  doc.save(`${lotId}-qr.pdf`);
+  // jsPDF's own .save() relies on a FileSaver-style polyfill that, on a lot
+  // of mobile browsers (iOS Safari and in-app webviews especially), falls
+  // back to window.open(blobUrl) instead of a real download — which is
+  // exactly what shows up as a blank about:blank tab. Building the blob and
+  // triggering the download through our own hidden <a download> avoids that
+  // fallback path entirely; this is the standard cross-browser-safe pattern.
+  const blob = doc.output('blob');
+  const blobUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = `${lotId}-qr.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  // Revoke a little later, not immediately — some mobile browsers start the
+  // actual save asynchronously after the click, and revoking too early can
+  // invalidate the URL before that read happens.
+  setTimeout(() => URL.revokeObjectURL(blobUrl), 10000);
 }

@@ -8,10 +8,11 @@ export function Navbar({ userEmail }: { userEmail: string | null }) {
         Coffee Passport
       </Link>
       <nav className="flex items-center gap-4 text-sm text-ink-500">
+        <Link href="/top-recipes" className="hover:text-ink-900">Топовые рецепты</Link>
         {userEmail ? (
           <>
             <Link href="/journey" className="hover:text-ink-900">Journey</Link>
-            <Link href="/taste" className="hover:text-ink-900">My taste</Link>
+            <Link href="/journey" className="hover:text-ink-900">My taste</Link>
             <form action={signOut}>
               <button type="submit" className="hover:text-ink-900">Sign out</button>
             </form>

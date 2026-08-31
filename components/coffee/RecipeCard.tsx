@@ -11,6 +11,7 @@ export function RecipeCard({
   currentUserId,
   onAdapt,
   isCommunityTop = false,
+  titleOverride,
 }: {
   recipe: BrewingRecipe;
   currentUserId: string;
@@ -19,11 +20,18 @@ export function RecipeCard({
   // never a stored flag. There is deliberately no manual "assign this"
   // action anywhere; the algorithm is the only source of this badge.
   isCommunityTop?: boolean;
+  // Used by RoasterCafeRecommendations to relabel the card "Рекомендация
+  // обжарщика" / "Рекомендация кофейни" in that always-both-visible
+  // comparison layout, instead of the granular authorship badge below
+  // (still the right label everywhere this override isn't passed — a
+  // per-tab list in ExtractionTab, say, where several roaster/shop
+  // recipes can appear side by side and need to stay distinguishable).
+  titleOverride?: string;
 }) {
   const isOwn = recipe.authorType === 'enthusiast' && recipe.authorId === currentUserId;
   const ratio = recipe.doseG > 0 ? recipe.yieldG / recipe.doseG : null;
   const isEspresso = recipe.brewingMethodId === 'espresso';
-  const badge = getAuthorBadge(recipe, isOwn);
+  const badge = titleOverride ? { text: titleOverride, className: getAuthorBadge(recipe, isOwn).className } : getAuthorBadge(recipe, isOwn);
   const isVotable = recipe.authorType === 'enthusiast' && recipe.isPublic;
 
   const [showExtraction, setShowExtraction] = useState(false);

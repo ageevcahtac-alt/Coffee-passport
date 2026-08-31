@@ -91,7 +91,7 @@ export default function CafeEditLotPage({ params }: { params: { lotId: string } 
               )}
               <button type="button" onClick={() => setAddingRecipe(true)}
                 className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900">
-                + Добавить фирменный рецепт
+                + Добавить рецепт под другой метод
               </button>
             </>
           )}

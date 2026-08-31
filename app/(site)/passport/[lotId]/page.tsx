@@ -13,9 +13,12 @@ import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { useCoffeeShops } from '@/lib/data/useCoffeeShops';
 import { useRoasters } from '@/lib/data/useRoasters';
 import { useCurrentUser } from '@/lib/auth/currentUser';
+import { useRoastProfiles } from '@/lib/data/useRoastProfiles';
 import { LocationStep } from '@/components/coffee/LocationStep';
 import { LotPassport } from '@/components/coffee/LotPassport';
 import { ProducerRoasterCard } from '@/components/coffee/ProducerRoasterCard';
+import { RoastProfileSummaryCard } from '@/components/coffee/RoastProfileSummaryCard';
+import { RoasterCafeRecommendations } from '@/components/coffee/RoasterCafeRecommendations';
 import { BlindTastingLock } from '@/components/coffee/BlindTastingLock';
 import { FarmerRevealCard } from '@/components/coffee/FarmerRevealCard';
 import { TasteComparison } from '@/components/coffee/TasteComparison';
@@ -50,6 +53,10 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
 
   const lot = lots.find((candidate) => candidate.id === params.lotId);
   const roaster = lot ? getRoasterById(lot.roasterId) : undefined;
+  const latestRoastProfile =
+    useRoastProfiles()
+      .filter((profile) => lot && profile.lotId === lot.id)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0] ?? null;
 
   // Fires once, right after a guest lands here from saving a blind tasting
   // — see markJustRevealed in the taste flow. Consuming (not just reading)
@@ -103,6 +110,10 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
 
         <div className="max-w-md mx-auto w-full mt-8">
           <ProducerRoasterCard lot={lot} />
+        </div>
+
+        <div className="max-w-md mx-auto w-full mt-8">
+          <RoastProfileSummaryCard lot={lot} roaster={roaster} profile={latestRoastProfile} />
         </div>
 
         <div className="max-w-md mx-auto w-full mt-10">
@@ -209,14 +220,35 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
         <ProducerRoasterCard lot={lot} />
       </div>
 
+      <div className="max-w-md mx-auto w-full mt-8">
+        <RoastProfileSummaryCard lot={lot} roaster={roaster} profile={latestRoastProfile} />
+      </div>
+
       <div className="max-w-md mx-auto w-full mt-10">
         <p className="section-label mb-4">Обжарка</p>
         <RoastingTab lot={lot} />
       </div>
 
       <div className="max-w-md mx-auto w-full mt-10">
+        <p className="section-label mb-4">Рекомендации</p>
+        <RoasterCafeRecommendations
+          lot={lot}
+          roaster={roaster}
+          shopId={selectedShopId}
+          brewingMethodId={latestTasting.brewingMethod}
+          currentUserId={currentUserId}
+          currentUserName="Вы"
+        />
+      </div>
+
+      <div className="max-w-md mx-auto w-full mt-10">
         <p className="section-label mb-4">Экстракция</p>
-        <ExtractionTab lot={lot} currentUserId={currentUserId} currentUserName="Вы" />
+        <ExtractionTab
+          lot={lot}
+          currentUserId={currentUserId}
+          currentUserName="Вы"
+          coffeeShopId={selectedShopId}
+        />
       </div>
 
       <div className="max-w-md mx-auto w-full mt-8 text-center">

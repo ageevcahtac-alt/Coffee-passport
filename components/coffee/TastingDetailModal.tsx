@@ -1,12 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import {
   BODY_TEXTURE_OPTIONS,
   BREWING_METHODS,
   DEFECT_TAGS,
   SENSORY_TAGS,
-  type BrewingRecipe,
   type TastingRecord,
 } from '@/lib/types/coffee';
 import { getMergedLotById } from '@/lib/data/lotsStore';
@@ -14,12 +13,9 @@ import { getRoasterById } from '@/lib/data/roasters';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { getBaristaById } from '@/lib/data/baristas';
 import { formatTastingDate } from '@/lib/utils/date';
-import { useBrewingRecipes } from '@/lib/data/useBrewingRecipes';
-import { addBrewingRecipe } from '@/lib/data/brewingRecipesStore';
 import { StarRating } from './StarRating';
 import { ProducerRoasterCard } from './ProducerRoasterCard';
-import { RecipeCard } from './RecipeCard';
-import { EnthusiastRecipeForm } from './EnthusiastRecipeForm';
+import { RoasterCafeRecommendations } from './RoasterCafeRecommendations';
 
 export function TastingDetailModal({
   record,
@@ -33,22 +29,14 @@ export function TastingDetailModal({
   // the signed-in/anonymous-device user — so the record's own userId IS the
   // current user, no separate prop needed.
   const currentUserId = record.userId;
-  // undefined = adapt modal closed; null = standalone "log my own recipe"
-  // (no source); a BrewingRecipe = adapting from that specific recipe.
-  const [adaptingFrom, setAdaptingFrom] = useState<BrewingRecipe | null | undefined>(undefined);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key !== 'Escape') return;
-      if (adaptingFrom !== undefined) {
-        setAdaptingFrom(undefined);
-      } else {
-        onClose();
-      }
+      if (event.key === 'Escape') onClose();
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose, adaptingFrom]);
+  }, [onClose]);
 
   const lot = getMergedLotById(record.lotId);
   const roaster = getRoasterById(record.roasterId);
@@ -56,21 +44,7 @@ export function TastingDetailModal({
   const barista = getBaristaById(record.baristaId);
   const brewingMethod = BREWING_METHODS.find((method) => method.id === record.brewingMethod);
 
-  const recipesForMethod = useBrewingRecipes().filter(
-    (recipe) => recipe.lotId === record.lotId && recipe.brewingMethodId === record.brewingMethod
-  );
-  const featuredRecipe =
-    recipesForMethod.find((recipe) => recipe.authorType === 'roaster' && recipe.isBenchmark) ??
-    recipesForMethod.find((recipe) => recipe.authorType === 'coffee_shop') ??
-    recipesForMethod[0] ??
-    null;
-
   if (!lot || !roaster || !shop) return null;
-
-  function handleSaveAdapted(input: Omit<BrewingRecipe, 'id' | 'createdAt'>) {
-    addBrewingRecipe(input);
-    setAdaptingFrom(undefined);
-  }
 
   return (
     <>
@@ -111,24 +85,14 @@ export function TastingDetailModal({
 
           <div className="mb-6">
             <p className="section-label mb-3">Рецепт для этого способа</p>
-            {featuredRecipe ? (
-              <RecipeCard
-                recipe={featuredRecipe}
-                currentUserId={currentUserId}
-                onAdapt={(recipe) => setAdaptingFrom(recipe)}
-              />
-            ) : (
-              <p className="text-sm text-ink-400 mb-3">
-                Для этого способа пока нет опубликованных рецептов.
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={() => setAdaptingFrom(null)}
-              className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900 mt-3"
-            >
-              + Записать свой рецепт
-            </button>
+            <RoasterCafeRecommendations
+              lot={lot}
+              roaster={roaster}
+              shopId={record.coffeeShopId}
+              brewingMethodId={record.brewingMethod}
+              currentUserId={currentUserId}
+              currentUserName="Вы"
+            />
           </div>
 
           <p className="section-label mb-3">Оценка кофе</p>
@@ -225,40 +189,6 @@ export function TastingDetailModal({
         </div>
       </div>
 
-      {adaptingFrom !== undefined && (
-        <div
-          className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-ink-900/40"
-          onClick={() => setAdaptingFrom(undefined)}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Мой рецепт"
-            onClick={(event) => event.stopPropagation()}
-            className="w-full sm:max-w-md max-h-[90dvh] overflow-y-auto rounded-t-md sm:rounded-md bg-parchment-100 p-6"
-          >
-            <div className="flex items-start justify-between gap-4 mb-6">
-              <h2 className="font-display text-xl text-ink-900">Мой рецепт</h2>
-              <button
-                type="button"
-                onClick={() => setAdaptingFrom(undefined)}
-                aria-label="Закрыть"
-                className="text-ink-400 text-2xl leading-none px-1 shrink-0"
-              >
-                ×
-              </button>
-            </div>
-            <EnthusiastRecipeForm
-              lot={lot}
-              currentUserId={currentUserId}
-              currentUserName="Вы"
-              sourceRecipe={adaptingFrom ?? undefined}
-              onSave={handleSaveAdapted}
-              onCancel={() => setAdaptingFrom(undefined)}
-            />
-          </div>
-        </div>
-      )}
     </>
   );
 }

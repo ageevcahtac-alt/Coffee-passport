@@ -19,6 +19,7 @@ interface FormState {
   firstCrackTimeSec: string;
   totalTimeSec: string;
   dtrPercent: string; // manual fallback, used only when firstCrackTimeSec is empty
+  agtronNumber: string;
   notes: string;
 }
 
@@ -30,6 +31,7 @@ function toFormState(profile?: RoastProfile): FormState {
     firstCrackTimeSec: profile?.firstCrackTimeSec !== null && profile?.firstCrackTimeSec !== undefined ? String(profile.firstCrackTimeSec) : '',
     totalTimeSec: profile ? String(profile.totalTimeSec) : '',
     dtrPercent: profile?.dtrPercent !== null && profile?.dtrPercent !== undefined ? String(profile.dtrPercent) : '',
+    agtronNumber: profile?.agtronNumber !== null && profile?.agtronNumber !== undefined ? String(profile.agtronNumber) : '',
     notes: profile?.notes ?? '',
   };
 }
@@ -123,6 +125,7 @@ export function RoastProfileForm({
       firstCrackTimeSec: form.firstCrackTimeSec ? Number(form.firstCrackTimeSec) : null,
       totalTimeSec: Number(form.totalTimeSec),
       dtrPercent,
+      agtronNumber: form.agtronNumber ? Number(form.agtronNumber) : null,
       curve,
       sourceFormat,
       sourceFileName,
@@ -167,6 +170,17 @@ export function RoastProfileForm({
             <input id="rp-fc" type="number" value={form.firstCrackTimeSec}
               onChange={(e) => update('firstCrackTimeSec', e.target.value)} className={fieldClasses} />
           </div>
+        </div>
+
+        <div className="mt-3">
+          <label htmlFor="rp-agtron" className="block text-xs text-ink-400 mb-1.5">
+            Степень обжарки, Agtron (необязательно)
+          </label>
+          <input id="rp-agtron" type="number" step="1" min="25" max="95" value={form.agtronNumber}
+            onChange={(e) => update('agtronNumber', e.target.value)} placeholder="58" className={fieldClasses} />
+          <p className="text-xs text-ink-300 mt-1.5">
+            Показывается гостям на визуальной шкале «светлая ↔ тёмная» в карточке лота.
+          </p>
         </div>
 
         <div className="mt-3">

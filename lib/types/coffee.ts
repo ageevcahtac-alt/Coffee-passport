@@ -250,11 +250,12 @@ export interface RoastProfile {
   firstCrackTimeSec: number | null; // null when the roaster hasn't logged it — DTR then falls back to manual entry
   totalTimeSec: number;
   dtrPercent: number | null; // Development Time Ratio, % — computed from firstCrackTimeSec when available
+  agtronNumber: number | null; // roast degree on the Agtron gourmet scale — higher = lighter roast, lower = darker
   curve: RoastCurvePoint[];
   sourceFormat: RoastSourceFormat;
   sourceFileName: string | null;
   notes: string;
-  createdAt: string; // ISO timestamp
+  createdAt: string; // ISO timestamp — internal record-keeping only; never shown on the guest-facing roast profile card (no roast dates/batch numbers there, by design)
 }
 
 // =========================================================

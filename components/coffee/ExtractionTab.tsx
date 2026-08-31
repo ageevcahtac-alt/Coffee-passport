@@ -25,10 +25,15 @@ export function ExtractionTab({
   lot,
   currentUserId,
   currentUserName,
+  coffeeShopId,
 }: {
   lot: Lot;
   currentUserId: string;
   currentUserName: string;
+  // The guest's own checked-in shop, if any — surfaces that shop's own
+  // recipe first within "От кофеен" instead of leaving list order
+  // (creation time) to bury it among every other shop's recipes.
+  coffeeShopId?: string | null;
 }) {
   const allRecipes = useBrewingRecipes().filter((recipe) => recipe.lotId === lot.id);
   const votes = useRecipeVotes();
@@ -51,7 +56,11 @@ export function ExtractionTab({
 
   const forMethod = selectedMethod ? allRecipes.filter((recipe) => recipe.brewingMethodId === selectedMethod) : [];
   const benchmarkRecipes = forMethod.filter((recipe) => recipe.authorType === 'roaster');
-  const shopRecipes = forMethod.filter((recipe) => recipe.authorType === 'coffee_shop');
+  const shopRecipes = [...forMethod.filter((recipe) => recipe.authorType === 'coffee_shop')].sort((a, b) => {
+    if (a.authorId === coffeeShopId && b.authorId !== coffeeShopId) return -1;
+    if (b.authorId === coffeeShopId && a.authorId !== coffeeShopId) return 1;
+    return 0;
+  });
   // "Мои рецепты" — every recipe this user is the author of for this
   // method, published or not (an unpublished personal log is otherwise
   // only visible via MyRecipesShelf on /journey — this tab is the other

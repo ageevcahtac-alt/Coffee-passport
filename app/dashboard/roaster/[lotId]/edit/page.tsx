@@ -137,7 +137,7 @@ export default function EditLotPage({ params }: { params: { lotId: string } }) {
               )}
               <button type="button" onClick={() => setAddingRecipe(true)}
                 className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900">
-                + Добавить рецепт-бенчмарк
+                + Добавить рецепт под другой метод
               </button>
             </>
           )}
