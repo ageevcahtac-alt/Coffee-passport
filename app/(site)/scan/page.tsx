@@ -1,68 +1,90 @@
 'use client';
 
+import { useState, type FormEvent } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { LOTS } from '@/lib/data/lots';
+import { useLots } from '@/lib/data/useLots';
 import { getRoasterById } from '@/lib/data/roasters';
+import { extractLotId } from '@/lib/utils/lotId';
+import { QrScanner } from '@/components/coffee/QrScanner';
 
-// Demo scan flow: no camera yet. The QR normally encodes a lot id
-// (LOT-XO-ETH-001) and resolves straight to /passport/[lotId] — this screen
-// stands in for that resolution step so the rest of the flow can be built
-// and tested before the camera scanner exists.
+// Camera-based QR entry point for the blind-tasting flow: a real getUserMedia
+// scanner (see QrScanner) resolving straight to /passport/[lotId] on a
+// successful decode, with a manual code fallback for devices/browsers that
+// can't open the camera (see messageForError in QrScanner.tsx).
 export default function ScanPage() {
-  const [primaryLot, ...otherLots] = LOTS;
-  const primaryRoaster = getRoasterById(primaryLot.roasterId);
+  const router = useRouter();
+  const lots = useLots();
+  const [code, setCode] = useState('');
+  const [error, setError] = useState('');
+  const [scannerFailed, setScannerFailed] = useState(false);
+
+  function resolveAndNavigate(raw: string) {
+    const lotId = extractLotId(raw);
+    if (!lotId) return;
+
+    const lot = lots.find((candidate) => candidate.id.toUpperCase() === lotId);
+    if (!lot) {
+      setError('Лот с таким кодом не найден. Проверьте код на этикетке.');
+      return;
+    }
+
+    router.push(`/passport/${lot.id}`);
+  }
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    resolveAndNavigate(code);
+  }
+
+  const demoLot = lots[0];
+  const demoRoaster = demoLot ? getRoasterById(demoLot.roasterId) : undefined;
 
   return (
     <main className="min-h-dvh flex flex-col px-6 py-16 max-w-md mx-auto w-full">
       <p className="section-label mb-6">Сканировать кофе</p>
 
-      <div
-        className="aspect-square w-full rounded-md border border-dashed border-ink-200
-                   bg-parchment-100 flex flex-col items-center justify-center gap-2 mb-4"
-        aria-hidden="true"
-      >
-        <span className="text-4xl">▢</span>
-        <span className="text-xs text-ink-400">Наведите камеру на QR-код лота</span>
-      </div>
+      <QrScanner onDecode={resolveAndNavigate} onError={() => setScannerFailed(true)} />
 
-      <p className="text-xs text-ink-400 mb-10">
-        Демо-режим: камера появится позже. Пока выберите лот вручную, как если бы его
-        уже отсканировали.
+      <p className="text-xs text-ink-400 mt-3 mb-8">
+        {scannerFailed
+          ? 'Камера недоступна — введите код лота с этикетки вручную.'
+          : 'Наведите камеру на QR-код лота — сработает автоматически.'}
       </p>
 
-      <Link
-        href={`/passport/${primaryLot.id}`}
-        className="inline-flex flex-col items-start gap-1 rounded-md bg-ink-900
-                   text-parchment-100 px-6 py-4 mb-6 hover:bg-ink-800 transition-colors"
-      >
-        <span className="text-xs uppercase tracking-widest2 text-parchment-300">
-          Отсканировать демо-лот
-        </span>
-        <span className="font-body font-medium text-sm">
-          {primaryLot.name} · {primaryRoaster?.name}
-        </span>
-      </Link>
+      <form onSubmit={handleSubmit} className="mb-2">
+        <p className="section-label mb-3">Ввести код вручную</p>
+        <div className="flex gap-2">
+          <input
+            value={code}
+            onChange={(event) => setCode(event.target.value)}
+            placeholder="LOT-XO-ETH-001"
+            className="flex-1 rounded-md border border-ink-200 bg-parchment-100 px-4 py-3
+                       text-sm data-value text-ink-900 placeholder:text-ink-300
+                       focus:border-gold-400"
+          />
+          <button
+            type="submit"
+            disabled={!code.trim()}
+            className="inline-flex items-center justify-center rounded-md bg-ink-900
+                       text-parchment-100 font-body font-medium text-sm px-5
+                       hover:bg-ink-800 transition-colors
+                       disabled:opacity-40 disabled:pointer-events-none"
+          >
+            Открыть
+          </button>
+        </div>
+        {error && <p className="text-xs text-ink-500 mt-2">⚠ {error}</p>}
+      </form>
 
-      {otherLots.length > 0 && (
-        <>
-          <p className="section-label mb-4">Другие лоты для теста</p>
-          <div className="flex flex-col gap-3">
-            {otherLots.map((lot) => {
-              const roaster = getRoasterById(lot.roasterId);
-              return (
-                <Link
-                  key={lot.id}
-                  href={`/passport/${lot.id}`}
-                  className="rounded-md border border-ink-200 bg-parchment-100 px-4 py-3
-                             hover:bg-parchment-300 transition-colors"
-                >
-                  <span className="block text-sm text-ink-900">{lot.name}</span>
-                  <span className="block text-xs text-ink-400">{roaster?.name}</span>
-                </Link>
-              );
-            })}
-          </div>
-        </>
+      {demoLot && (
+        <p className="text-xs text-ink-300 mt-6">
+          Демо: попробуйте код{' '}
+          <Link href={`/passport/${demoLot.id}`} className="underline underline-offset-2">
+            {demoLot.id}
+          </Link>{' '}
+          ({demoLot.name} · {demoRoaster?.name})
+        </p>
       )}
     </main>
   );

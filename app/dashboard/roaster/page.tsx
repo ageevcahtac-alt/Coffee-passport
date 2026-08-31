@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import QRCode from 'qrcode';
+import { downloadLotQrPdf } from '@/lib/utils/qrPdf';
 import { useLots } from '@/lib/data/useLots';
 import { useJourney } from '@/lib/journey/useJourney';
 import { getRoasterById } from '@/lib/data/roasters';
@@ -68,6 +69,22 @@ export default function RoasterDashboardPage() {
 function LotRow({ lot, records }: { lot: Lot; records: TastingRecord[] }) {
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const roaster = getRoasterById(lot.roasterId);
+
+  async function handleDownloadPdf() {
+    setDownloadingPdf(true);
+    try {
+      await downloadLotQrPdf({
+        lotId: lot.id,
+        lotName: lot.name,
+        roasterName: roaster?.name ?? 'Обжарщик',
+        url: `${window.location.origin}/passport/${lot.id}`,
+      });
+    } finally {
+      setDownloadingPdf(false);
+    }
+  }
 
   async function handleCopyLink() {
     const url = `${window.location.origin}/passport/${lot.id}`;
@@ -133,6 +150,15 @@ function LotRow({ lot, records }: { lot: Lot; records: TastingRecord[] }) {
           className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900"
         >
           {copied ? 'Ссылка скопирована!' : 'Скопировать ссылку / QR'}
+        </button>
+        <button
+          type="button"
+          onClick={handleDownloadPdf}
+          disabled={downloadingPdf}
+          className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900
+                     disabled:opacity-40 disabled:pointer-events-none"
+        >
+          {downloadingPdf ? 'Готовим PDF…' : 'Скачать QR (PDF)'}
         </button>
       </div>
 

@@ -1,9 +1,28 @@
+'use client';
+
+import { useState } from 'react';
 import Link from 'next/link';
 import { getRoasterById } from '@/lib/data/roasters';
+import { downloadLotQrPdf } from '@/lib/utils/qrPdf';
 import type { Lot } from '@/lib/types/coffee';
 
 export function LotMenuCard({ lot, onRemove }: { lot: Lot; onRemove: () => void }) {
   const roaster = getRoasterById(lot.roasterId);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  async function handleDownloadPdf() {
+    setDownloadingPdf(true);
+    try {
+      await downloadLotQrPdf({
+        lotId: lot.id,
+        lotName: lot.name,
+        roasterName: roaster?.name ?? 'Обжарщик',
+        url: `${window.location.origin}/passport/${lot.id}`,
+      });
+    } finally {
+      setDownloadingPdf(false);
+    }
+  }
 
   return (
     <div className="rounded-md border border-ink-200 bg-parchment-100 p-5">
@@ -43,6 +62,15 @@ export function LotMenuCard({ lot, onRemove }: { lot: Lot; onRemove: () => void 
         >
           Паспорт лота
         </Link>
+        <button
+          type="button"
+          onClick={handleDownloadPdf}
+          disabled={downloadingPdf}
+          className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900
+                     disabled:opacity-40 disabled:pointer-events-none"
+        >
+          {downloadingPdf ? 'Готовим PDF…' : 'Скачать QR (PDF)'}
+        </button>
         <button
           type="button"
           onClick={onRemove}

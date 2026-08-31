@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useLots } from '@/lib/data/useLots';
 import { getMenuLotIds } from '@/lib/data/cafeMenuStore';
 import { extractLotId } from '@/lib/utils/lotId';
+import { QrScanner } from '@/components/coffee/QrScanner';
 
 // No real "which cafe am I in" check-in flow yet — scoped to the pilot shop,
 // same as the rest of the demo data in lib/data/ (see e.g. /dashboard/cafe).
@@ -20,12 +21,10 @@ export function ScanLotModal({ onClose }: { onClose: () => void }) {
   const lots = useLots();
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
+  const [scannerFailed, setScannerFailed] = useState(false);
 
-  function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    // Accepts a bare code or a pasted passport URL/path alike — see
-    // extractLotId for why (QR codes encode the full URL).
-    const lotId = extractLotId(code);
+  function resolveAndNavigate(raw: string) {
+    const lotId = extractLotId(raw);
     if (!lotId) return;
 
     const lot = lots.find((candidate) => candidate.id.toUpperCase() === lotId);
@@ -41,6 +40,11 @@ export function ScanLotModal({ onClose }: { onClose: () => void }) {
     }
 
     router.push(`/passport/${lot.id}`);
+  }
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    resolveAndNavigate(code);
   }
 
   return (
@@ -68,16 +72,13 @@ export function ScanLotModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <div
-          className="aspect-[3/2] w-full rounded-md border border-dashed border-ink-200
-                     bg-parchment-200 flex flex-col items-center justify-center gap-2 mb-3"
-          aria-hidden="true"
-        >
-          <span className="text-4xl">▢</span>
-          <span className="text-xs text-ink-400">Наведите камеру на QR-код пачки</span>
+        <div className="mb-4">
+          <QrScanner onDecode={resolveAndNavigate} onError={() => setScannerFailed(true)} />
         </div>
         <p className="text-xs text-ink-400 mb-4">
-          Демо-режим: камера появится позже. Введите код лота с этикетки вручную.
+          {scannerFailed
+            ? 'Введите код лота с этикетки вручную.'
+            : 'Наведите камеру на QR-код на пачке — сработает автоматически.'}
         </p>
 
         <form onSubmit={handleSubmit}>
@@ -86,7 +87,6 @@ export function ScanLotModal({ onClose }: { onClose: () => void }) {
               value={code}
               onChange={(event) => setCode(event.target.value)}
               placeholder="LOT-XO-COL-004"
-              autoFocus
               className="flex-1 rounded-md border border-ink-200 bg-parchment-100 px-4 py-3
                          text-sm data-value text-ink-900 placeholder:text-ink-300
                          focus:border-gold-400"

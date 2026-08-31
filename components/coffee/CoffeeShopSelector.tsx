@@ -1,10 +1,15 @@
 import type { CoffeeShop } from '@/lib/types/coffee';
+import { PartnerAutocomplete } from './PartnerAutocomplete';
 
+// Search-driven picker over the accredited coffee-shop partner list (see
+// lib/data/coffeeShops.ts — every entry there already passed the partner
+// contract + admin-activation pipeline, so `shops` is accredited-only by
+// construction). Replaces the old fixed-3-plaque radio UI, which only ever
+// worked because the seed list happened to have exactly three shops.
 export function CoffeeShopSelector({
   shops,
   value,
   onChange,
-  name = 'coffee-shop',
 }: {
   shops: CoffeeShop[];
   value: string | null;
@@ -12,31 +17,12 @@ export function CoffeeShopSelector({
   name?: string;
 }) {
   return (
-    <div role="radiogroup" aria-label="Кофейня" className="flex flex-col gap-3">
-      {shops.map((shop) => {
-        const checked = value === shop.id;
-        return (
-          <label
-            key={shop.id}
-            className={`flex items-center justify-between rounded-md border px-4 py-4
-                        cursor-pointer transition-colors
-                        ${checked ? 'border-gold-400 bg-gold-400/10' : 'border-ink-200 bg-parchment-100'}`}
-          >
-            <span>
-              <span className="block text-sm font-medium text-ink-900">{shop.name}</span>
-              <span className="block text-xs text-ink-400">{shop.city}</span>
-            </span>
-            <input
-              type="radio"
-              name={name}
-              value={shop.id}
-              checked={checked}
-              onChange={() => onChange(shop.id)}
-              className="h-4 w-4 accent-current text-gold-500"
-            />
-          </label>
-        );
-      })}
-    </div>
+    <PartnerAutocomplete
+      label="Кофейня"
+      emptyLabel="Найти аккредитованную кофейню…"
+      options={shops.map((shop) => ({ id: shop.id, name: shop.name, subtitle: shop.city }))}
+      value={value}
+      onChange={onChange}
+    />
   );
 }

@@ -30,7 +30,13 @@ const fieldClasses =
   'w-full rounded-md border border-ink-200 bg-parchment-100 px-4 py-3 text-sm ' +
   'text-ink-900 placeholder:text-ink-300 focus:border-gold-400';
 
-export function TastingForm({ onSave }: { onSave: (values: TastingFormValues) => void }) {
+export function TastingForm({
+  onSave,
+  submitLabel = 'Сохранить дегустацию в дневник',
+}: {
+  onSave: (values: TastingFormValues) => void;
+  submitLabel?: string;
+}) {
   const [rating, setRating] = useState(0);
   const [acidity, setAcidity] = useState(3);
   const [sweetness, setSweetness] = useState(3);
@@ -143,7 +149,7 @@ export function TastingForm({ onSave }: { onSave: (values: TastingFormValues) =>
                    hover:bg-ink-800 transition-colors
                    disabled:opacity-40 disabled:pointer-events-none"
       >
-        Сохранить дегустацию в дневник
+        {submitLabel}
       </button>
       {!canSave && (
         <p className="text-xs text-ink-400 -mt-4 text-center">Поставьте оценку, чтобы сохранить</p>

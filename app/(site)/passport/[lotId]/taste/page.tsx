@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLots } from '@/lib/data/useLots';
 import { useCoffeeShops } from '@/lib/data/useCoffeeShops';
+import { useRoasters } from '@/lib/data/useRoasters';
 import { getBaristasForShop } from '@/lib/data/baristas';
 import type { BrewingMethodId, Lot } from '@/lib/types/coffee';
-import { CoffeeShopSelector } from '@/components/coffee/CoffeeShopSelector';
+import { LocationStep } from '@/components/coffee/LocationStep';
 import { BaristaSelector } from '@/components/coffee/BaristaSelector';
 import { RatingInput } from '@/components/coffee/RatingInput';
 import { BrewingMethodSelector } from '@/components/coffee/BrewingMethodSelector';
@@ -14,11 +15,18 @@ import { addTastingRecord, getSnapshot as getJourneySnapshot } from '@/lib/journ
 import { markJustRevealed } from '@/lib/journey/revealFlag';
 import { markPinJustActivated } from '@/lib/journey/mapFlag';
 import { consumePendingShop } from '@/lib/journey/pendingShopFlag';
+import { consumePendingRoaster } from '@/lib/journey/pendingRoasterFlag';
 import { getMergedLotById } from '@/lib/data/lotsStore';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { FarmerPinningModal } from '@/components/coffee/FarmerPinningModal';
 
-type Step = 'shop' | 'barista' | 'brew' | 'taste';
+// Blind-tasting flow, in the product's mandated order:
+//   1. Scan QR (upstream — see /scan and ScanLotModal)
+//   2. 'location' — coffee shop + roaster (accredited-partner autocompletes)
+//   3. 'taste'    — blind flavor assessment (priority: comes before any
+//                   barista/prep detail so it stays uninfluenced)
+//   4. 'barista'  — final step: how it was brewed + who made it + rating
+type Step = 'location' | 'taste' | 'barista';
 
 const fieldClasses =
   'w-full rounded-md border border-ink-200 bg-parchment-100 px-4 py-3 text-sm ' +
@@ -46,33 +54,44 @@ export default function TasteLotPage({ params }: { params: { lotId: string } }) 
 
 function TasteLotFlow({ lot }: { lot: Lot }) {
   const coffeeShops = useCoffeeShops();
-  const [step, setStep] = useState<Step>('shop');
+  const roasters = useRoasters();
+  const [step, setStep] = useState<Step>('location');
   const [coffeeShopId, setCoffeeShopId] = useState<string | null>(null);
+  const [roasterId, setRoasterId] = useState<string | null>(null);
   const [baristaId, setBaristaId] = useState<string | null>(null);
   const [baristaRating, setBaristaRating] = useState(0);
   const [baristaNote, setBaristaNote] = useState('');
   const [brewingMethod, setBrewingMethod] = useState<BrewingMethodId | null>(null);
+  const [pendingTasteValues, setPendingTasteValues] = useState<TastingFormValues | null>(null);
   const [showPinningRitual, setShowPinningRitual] = useState(false);
 
-  // If the guest already picked a shop on the passport page's check-in gate
-  // (see markPendingShop there), skip asking again here — jump straight to
-  // the barista step. Guard with a ref since consumePendingShop deletes as
-  // it reads, and React Strict Mode double-invokes effects in dev (same
-  // pattern as revealFlag/mapFlag consumption elsewhere in this flow).
-  const pendingShopChecked = useRef(false);
+  // If the guest already picked a shop + roaster on the passport page's
+  // location gate (see markPendingShop/markPendingRoaster there), skip
+  // asking again here — jump straight to the blind taste step. Guard with a
+  // ref since the consume* calls delete as they read, and React Strict Mode
+  // double-invokes effects in dev (same pattern as revealFlag/mapFlag
+  // consumption elsewhere in this flow).
+  const pendingChecked = useRef(false);
   useEffect(() => {
-    if (!pendingShopChecked.current) {
-      pendingShopChecked.current = true;
+    if (!pendingChecked.current) {
+      pendingChecked.current = true;
       const pendingShopId = consumePendingShop(lot.id);
+      const pendingRoasterId = consumePendingRoaster(lot.id);
       if (pendingShopId && coffeeShops.some((shop) => shop.id === pendingShopId)) {
         setCoffeeShopId(pendingShopId);
-        setStep('barista');
+        setRoasterId(pendingRoasterId ?? lot.roasterId);
+        setStep('taste');
       }
     }
   }, [lot.id]);
 
-  function handleSave(values: TastingFormValues) {
-    if (!coffeeShopId || !baristaId || !brewingMethod) return;
+  function handleSaveTaste(values: TastingFormValues) {
+    setPendingTasteValues(values);
+    setStep('barista');
+  }
+
+  function handleFinish() {
+    if (!coffeeShopId || !baristaId || !brewingMethod || !pendingTasteValues) return;
 
     // Checked before the save so the just-added record doesn't count as
     // "already had this pin" — drives the pin-drop animation on the Coffee
@@ -88,13 +107,13 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
 
     addTastingRecord({
       lotId: lot.id,
-      roasterId: lot.roasterId,
+      roasterId: roasterId ?? lot.roasterId,
       coffeeShopId,
       brewingMethod,
       baristaId,
       baristaRating,
       baristaNote,
-      ...values,
+      ...pendingTasteValues,
     });
 
     if (!hadPinBefore) markPinJustActivated(lot.country, coffeeShopId);
@@ -118,20 +137,24 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
           {lot.name}
         </p>
 
-        {step === 'shop' && (
+        {step === 'location' && (
           <>
             <h1 className="font-display text-2xl text-ink-900 mb-8">
               Где вы пробуете этот кофе?
             </h1>
-            <CoffeeShopSelector
-              shops={coffeeShops}
-              value={coffeeShopId}
-              onChange={setCoffeeShopId}
+            <LocationStep
+              lot={lot}
+              coffeeShops={coffeeShops}
+              roasters={roasters}
+              shopId={coffeeShopId}
+              onShopChange={setCoffeeShopId}
+              roasterId={roasterId ?? lot.roasterId}
+              onRoasterChange={setRoasterId}
             />
             <button
               type="button"
               disabled={!coffeeShopId}
-              onClick={() => setStep('barista')}
+              onClick={() => setStep('taste')}
               className="mt-8 inline-flex items-center justify-center w-full rounded-md
                          bg-ink-900 text-parchment-100 font-body font-medium text-sm px-6 py-4
                          hover:bg-ink-800 transition-colors disabled:opacity-40 disabled:pointer-events-none"
@@ -141,9 +164,22 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
           </>
         )}
 
+        {step === 'taste' && (
+          <>
+            <h1 className="font-display text-2xl text-ink-900 mb-8">Расскажите о чашке</h1>
+            <TastingForm onSave={handleSaveTaste} submitLabel="Далее — работа бариста" />
+          </>
+        )}
+
         {step === 'barista' && coffeeShopId && (
           <>
-            <h1 className="font-display text-2xl text-ink-900 mb-8">Кто готовил? (Бариста)</h1>
+            <h1 className="font-display text-2xl text-ink-900 mb-2">Работа бариста</h1>
+            <p className="text-xs text-ink-400 mb-8">Заключительный шаг — как был приготовлен кофе.</p>
+
+            <p className="section-label mb-4">Способ приготовления</p>
+            <BrewingMethodSelector value={brewingMethod} onChange={setBrewingMethod} />
+
+            <p className="section-label mb-4 mt-8">Кто готовил?</p>
             <BaristaSelector
               baristas={getBaristasForShop(coffeeShopId)}
               value={baristaId}
@@ -175,59 +211,24 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
             <div className="flex gap-3 mt-8">
               <button
                 type="button"
-                onClick={() => setStep('shop')}
-                className="inline-flex items-center justify-center rounded-md border
-                           border-ink-200 text-ink-700 font-body font-medium text-sm px-6 py-4
-                           hover:bg-parchment-300 transition-colors"
-              >
-                Назад
-              </button>
-              <button
-                type="button"
-                disabled={!baristaId}
-                onClick={() => setStep('brew')}
-                className="flex-1 inline-flex items-center justify-center rounded-md
-                           bg-ink-900 text-parchment-100 font-body font-medium text-sm px-6 py-4
-                           hover:bg-ink-800 transition-colors disabled:opacity-40 disabled:pointer-events-none"
-              >
-                Далее
-              </button>
-            </div>
-          </>
-        )}
-
-        {step === 'brew' && (
-          <>
-            <h1 className="font-display text-2xl text-ink-900 mb-8">Как приготовлен кофе?</h1>
-            <BrewingMethodSelector value={brewingMethod} onChange={setBrewingMethod} />
-            <div className="flex gap-3 mt-8">
-              <button
-                type="button"
-                onClick={() => setStep('barista')}
-                className="inline-flex items-center justify-center rounded-md border
-                           border-ink-200 text-ink-700 font-body font-medium text-sm px-6 py-4
-                           hover:bg-parchment-300 transition-colors"
-              >
-                Назад
-              </button>
-              <button
-                type="button"
-                disabled={!brewingMethod}
                 onClick={() => setStep('taste')}
+                className="inline-flex items-center justify-center rounded-md border
+                           border-ink-200 text-ink-700 font-body font-medium text-sm px-6 py-4
+                           hover:bg-parchment-300 transition-colors"
+              >
+                Назад
+              </button>
+              <button
+                type="button"
+                disabled={!baristaId || !brewingMethod}
+                onClick={handleFinish}
                 className="flex-1 inline-flex items-center justify-center rounded-md
                            bg-ink-900 text-parchment-100 font-body font-medium text-sm px-6 py-4
                            hover:bg-ink-800 transition-colors disabled:opacity-40 disabled:pointer-events-none"
               >
-                Далее
+                Сохранить дегустацию в дневник
               </button>
             </div>
-          </>
-        )}
-
-        {step === 'taste' && (
-          <>
-            <h1 className="font-display text-2xl text-ink-900 mb-8">Расскажите о чашке</h1>
-            <TastingForm onSave={handleSave} />
           </>
         )}
       </div>

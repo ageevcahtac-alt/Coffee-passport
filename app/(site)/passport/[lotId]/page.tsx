@@ -7,11 +7,13 @@ import { useLots } from '@/lib/data/useLots';
 import { useJourney } from '@/lib/journey/useJourney';
 import { consumeJustRevealed } from '@/lib/journey/revealFlag';
 import { markPendingShop } from '@/lib/journey/pendingShopFlag';
+import { markPendingRoaster } from '@/lib/journey/pendingRoasterFlag';
 import { getRoasterById } from '@/lib/data/roasters';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { useCoffeeShops } from '@/lib/data/useCoffeeShops';
+import { useRoasters } from '@/lib/data/useRoasters';
 import { DEMO_USER_ID } from '@/lib/journey/store';
-import { CoffeeShopSelector } from '@/components/coffee/CoffeeShopSelector';
+import { LocationStep } from '@/components/coffee/LocationStep';
 import { LotPassport } from '@/components/coffee/LotPassport';
 import { ProducerRoasterCard } from '@/components/coffee/ProducerRoasterCard';
 import { BlindTastingLock } from '@/components/coffee/BlindTastingLock';
@@ -24,6 +26,7 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
   const lots = useLots();
   const journey = useJourney();
   const coffeeShops = useCoffeeShops();
+  const roasters = useRoasters();
   // Business preview mode: Roaster/Cafe cabinets link here with ?preview=1
   // (see "Предпросмотр паспорта" in app/dashboard/roaster/page.tsx and
   // "Паспорт лота" in components/cafe/LotMenuCard.tsx) to check how the Lot
@@ -60,10 +63,14 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-check on lot id change
   }, [lot?.id]);
 
-  // The check-in gate: which shop is this visit at? No real geolocation, so
-  // this is an explicit pick, re-asked on every fresh visit to this page
-  // (component state, not persisted) — see CoffeeShopSelector below.
+  // The location gate — Step 2 of the tasting flow ("Выбор
+  // локации/кофейни и обжарщика"): which shop is this visit at, and which
+  // accredited roaster is credited for this lot? No real geolocation, so
+  // shop is an explicit pick, re-asked on every fresh visit to this page
+  // (component state, not persisted) — see LocationStep below. Roaster
+  // defaults to the scanned lot's own roasterId until the guest corrects it.
   const [selectedShopId, setSelectedShopId] = useState<string | null>(null);
+  const [selectedRoasterId, setSelectedRoasterId] = useState<string | null>(null);
 
   if (!lot || !roaster) {
     if (!mounted) return null;
@@ -116,7 +123,15 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
           <h1 className="font-display text-2xl text-ink-900 mb-8">
             Где вы пробуете этот лот сегодня?
           </h1>
-          <CoffeeShopSelector shops={coffeeShops} value={selectedShopId} onChange={setSelectedShopId} />
+          <LocationStep
+            lot={lot}
+            coffeeShops={coffeeShops}
+            roasters={roasters}
+            shopId={selectedShopId}
+            onShopChange={setSelectedShopId}
+            roasterId={selectedRoasterId ?? lot.roasterId}
+            onRoasterChange={setSelectedRoasterId}
+          />
         </div>
       </main>
     );
@@ -140,7 +155,13 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
             {roaster.name} · {shop?.name ?? selectedShopId}
           </p>
           <h1 className="font-display text-3xl leading-[1.1] text-ink-900 mb-8">{lot.name}</h1>
-          <BlindTastingLock lot={lot} onStartTasting={() => markPendingShop(lot.id, selectedShopId)} />
+          <BlindTastingLock
+            lot={lot}
+            onStartTasting={() => {
+              markPendingShop(lot.id, selectedShopId);
+              markPendingRoaster(lot.id, selectedRoasterId ?? lot.roasterId);
+            }}
+          />
         </div>
       </main>
     );
