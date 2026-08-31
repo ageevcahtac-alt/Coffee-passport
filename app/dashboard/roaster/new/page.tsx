@@ -4,13 +4,13 @@ import { useRouter } from 'next/navigation';
 import { getRoasterById } from '@/lib/data/roasters';
 import { saveLot } from '@/lib/data/lotsStore';
 import { LotBuilderForm } from '@/components/roaster/LotBuilderForm';
+import { useStaffSession } from '@/lib/auth/staffSession';
 import type { Lot } from '@/lib/types/coffee';
-
-const ACTIVE_ROASTER_ID = 'roaster-xo';
 
 export default function NewLotPage() {
   const router = useRouter();
-  const roaster = getRoasterById(ACTIVE_ROASTER_ID);
+  const { roasterId } = useStaffSession();
+  const roaster = roasterId ? getRoasterById(roasterId) : undefined;
 
   if (!roaster) return null;
 

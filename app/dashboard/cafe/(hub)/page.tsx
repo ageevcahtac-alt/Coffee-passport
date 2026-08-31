@@ -7,12 +7,13 @@ import { removeLotFromMenu } from '@/lib/data/cafeMenuStore';
 import { LotMenuCard } from '@/components/cafe/LotMenuCard';
 import { GuestFeedback } from '@/components/cafe/GuestFeedback';
 import { CommunityHighlights } from '@/components/coffee/CommunityHighlights';
-
-const ACTIVE_SHOP_ID = 'shop-xo-vsevolozhsk';
+import { useStaffSession } from '@/lib/auth/staffSession';
 
 export default function CafeMenuPage() {
+  const { cafeId } = useStaffSession();
+  const activeShopId = cafeId ?? '';
   const lots = useLots();
-  const menuLotIds = useCafeMenuLotIds(ACTIVE_SHOP_ID);
+  const menuLotIds = useCafeMenuLotIds(activeShopId);
   const menuLots = lots.filter((lot) => menuLotIds.includes(lot.id));
 
   const regions = new Map<string, typeof menuLots>();
@@ -25,7 +26,7 @@ export default function CafeMenuPage() {
 
   return (
     <>
-      <GuestFeedback shopId={ACTIVE_SHOP_ID} />
+      <GuestFeedback shopId={activeShopId} />
 
       <CommunityHighlights scopeLots={menuLots} canApprove={false} />
 
@@ -55,7 +56,7 @@ export default function CafeMenuPage() {
                   <LotMenuCard
                     key={lot.id}
                     lot={lot}
-                    onRemove={() => removeLotFromMenu(ACTIVE_SHOP_ID, lot.id)}
+                    onRemove={() => removeLotFromMenu(activeShopId, lot.id)}
                   />
                 ))}
               </div>

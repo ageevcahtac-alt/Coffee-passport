@@ -4,13 +4,11 @@ import Link from 'next/link';
 import { PRO_GRINDER_MODELS, ESPRESSO_MACHINE_MODELS } from '@/lib/types/coffee';
 import { getRoasterById } from '@/lib/data/roasters';
 import { EquipmentGarage } from '@/components/coffee/EquipmentGarage';
-
-// No real roaster auth wired up yet — same pilot-roaster scoping as the
-// rest of app/dashboard/roaster/*.
-const ACTIVE_ROASTER_ID = 'roaster-xo';
+import { useStaffSession } from '@/lib/auth/staffSession';
 
 export default function RoasterEquipmentPage() {
-  const roaster = getRoasterById(ACTIVE_ROASTER_ID);
+  const { roasterId } = useStaffSession();
+  const roaster = roasterId ? getRoasterById(roasterId) : undefined;
 
   return (
     <main className="min-h-dvh px-6 py-16">
@@ -24,7 +22,7 @@ export default function RoasterEquipmentPage() {
         </p>
 
         <EquipmentGarage
-          ownerId={ACTIVE_ROASTER_ID}
+          ownerId={roasterId ?? ''}
           ownerName={roaster?.name ?? 'Обжарщик'}
           ownerKind="roaster"
           grinderOptions={PRO_GRINDER_MODELS}

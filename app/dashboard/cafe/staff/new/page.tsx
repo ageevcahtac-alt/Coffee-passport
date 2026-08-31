@@ -3,12 +3,12 @@
 import { useRouter } from 'next/navigation';
 import { saveStaffMember } from '@/lib/data/cafeStaffStore';
 import { StaffForm } from '@/components/cafe/StaffForm';
+import { useStaffSession } from '@/lib/auth/staffSession';
 import type { StaffMember } from '@/lib/types/coffee';
-
-const ACTIVE_SHOP_ID = 'shop-xo-vsevolozhsk';
 
 export default function NewStaffPage() {
   const router = useRouter();
+  const { cafeId } = useStaffSession();
 
   function handleSave(member: StaffMember) {
     saveStaffMember(member);
@@ -23,7 +23,7 @@ export default function NewStaffPage() {
         </p>
         <h1 className="font-display text-2xl text-ink-900 mb-8">Новый сотрудник</h1>
         <StaffForm
-          shopId={ACTIVE_SHOP_ID}
+          shopId={cafeId ?? ''}
           onSave={handleSave}
           onCancel={() => router.push('/dashboard/cafe/team')}
         />

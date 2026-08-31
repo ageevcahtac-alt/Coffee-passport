@@ -4,14 +4,14 @@ import Link from 'next/link';
 import { useCafeStaff } from '@/lib/data/useCafeStaff';
 import { useJourney } from '@/lib/journey/useJourney';
 import { StaffCard } from '@/components/cafe/StaffCard';
-
-const ACTIVE_SHOP_ID = 'shop-xo-vsevolozhsk';
+import { useStaffSession } from '@/lib/auth/staffSession';
 
 export default function CafeTeamPage() {
+  const { cafeId } = useStaffSession();
   const allStaff = useCafeStaff();
   const records = useJourney();
   const team = allStaff
-    .filter((member) => member.shopId === ACTIVE_SHOP_ID)
+    .filter((member) => member.shopId === cafeId)
     .sort((a, b) => a.role.localeCompare(b.role) || a.name.localeCompare(b.name));
 
   return (

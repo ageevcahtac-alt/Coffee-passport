@@ -3,11 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
-
-// No real cafe auth wired up yet (see app/dashboard/(members) for the
-// Supabase-gated membership flow) — this cabinet is scoped to the pilot
-// coffee shop for now, same as /dashboard/roaster is scoped to roaster-xo.
-const ACTIVE_SHOP_ID = 'shop-xo-vsevolozhsk';
+import { useStaffSession } from '@/lib/auth/staffSession';
 
 const TABS = [
   { href: '/dashboard/cafe', label: 'Меню зерна' },
@@ -18,7 +14,8 @@ const TABS = [
 
 export default function CafeHubLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const shop = getCoffeeShopById(ACTIVE_SHOP_ID);
+  const { cafeId } = useStaffSession();
+  const shop = cafeId ? getCoffeeShopById(cafeId) : undefined;
 
   return (
     <main className="min-h-dvh px-6 py-16">

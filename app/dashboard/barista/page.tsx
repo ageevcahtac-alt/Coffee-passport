@@ -10,19 +10,15 @@ import { useBrewingRecipes } from '@/lib/data/useBrewingRecipes';
 import { addBrewingRecipe } from '@/lib/data/brewingRecipesStore';
 import { BaristaRecipeForm } from '@/components/barista/BaristaRecipeForm';
 import { BaristaFeedback } from '@/components/barista/BaristaFeedback';
+import { useStaffSession } from '@/lib/auth/staffSession';
 import { BREWING_METHODS, type Barista, type BrewingRecipe, type Lot } from '@/lib/types/coffee';
 
-// No real barista auth wired up yet — same pilot scoping as
-// /dashboard/roaster and /dashboard/cafe (hardcoded ACTIVE_*_ID
-// constants throughout this app's dashboards).
-const ACTIVE_BARISTA_ID = 'barista-xo-alexey';
-const ACTIVE_SHOP_ID = 'shop-xo-vsevolozhsk';
-
 export default function BaristaDashboardPage() {
-  const barista = getBaristaById(ACTIVE_BARISTA_ID);
-  const shop = getCoffeeShopById(ACTIVE_SHOP_ID);
+  const { baristaId, cafeId } = useStaffSession();
+  const barista = baristaId ? getBaristaById(baristaId) : undefined;
+  const shop = cafeId ? getCoffeeShopById(cafeId) : undefined;
   const lots = useLots();
-  const menuLotIds = useCafeMenuLotIds(ACTIVE_SHOP_ID);
+  const menuLotIds = useCafeMenuLotIds(cafeId ?? '');
   const menuLots = lots.filter((lot) => menuLotIds.includes(lot.id));
 
   if (!barista || !shop) return null;
@@ -45,7 +41,7 @@ export default function BaristaDashboardPage() {
         ) : (
           <div className="flex flex-col gap-4">
             {menuLots.map((lot) => (
-              <LotRecipeRow key={lot.id} lot={lot} barista={barista} shopId={ACTIVE_SHOP_ID} />
+              <LotRecipeRow key={lot.id} lot={lot} barista={barista} shopId={cafeId ?? ''} />
             ))}
           </div>
         )}

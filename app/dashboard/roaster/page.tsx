@@ -10,17 +10,14 @@ import { getRoasterById } from '@/lib/data/roasters';
 import { ROAST_TYPE_LABELS, type Lot, type TastingRecord } from '@/lib/types/coffee';
 import { LotGuestAnalytics } from '@/components/roaster/LotGuestAnalytics';
 import { CommunityHighlights } from '@/components/coffee/CommunityHighlights';
-
-// No real roaster auth wired up yet (see /dashboard for the Supabase-gated
-// membership flow) — this cabinet is scoped to the pilot roaster for now,
-// same as the rest of the demo data in lib/data/.
-const ACTIVE_ROASTER_ID = 'roaster-xo';
+import { useStaffSession } from '@/lib/auth/staffSession';
 
 export default function RoasterDashboardPage() {
+  const { roasterId } = useStaffSession();
   const lots = useLots();
   const records = useJourney();
-  const roaster = getRoasterById(ACTIVE_ROASTER_ID);
-  const myLots = lots.filter((lot) => lot.roasterId === ACTIVE_ROASTER_ID);
+  const roaster = roasterId ? getRoasterById(roasterId) : undefined;
+  const myLots = lots.filter((lot) => lot.roasterId === roasterId);
 
   return (
     <main className="min-h-dvh px-6 py-16">

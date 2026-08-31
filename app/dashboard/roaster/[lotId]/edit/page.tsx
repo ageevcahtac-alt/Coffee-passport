@@ -12,12 +12,12 @@ import { addBrewingRecipe } from '@/lib/data/brewingRecipesStore';
 import { LotBuilderForm } from '@/components/roaster/LotBuilderForm';
 import { RoastProfileForm } from '@/components/roaster/RoastProfileForm';
 import { BenchmarkRecipeForm } from '@/components/roaster/BenchmarkRecipeForm';
+import { useStaffSession } from '@/lib/auth/staffSession';
 import { BREWING_METHODS, type Lot, type RoastProfile } from '@/lib/types/coffee';
-
-const ACTIVE_ROASTER_ID = 'roaster-xo';
 
 export default function EditLotPage({ params }: { params: { lotId: string } }) {
   const router = useRouter();
+  const { roasterId } = useStaffSession();
   const lots = useLots();
   // The lots list is seed data merged with localStorage, so the very first
   // client render (matching the server snapshot) may not yet include a
@@ -25,7 +25,7 @@ export default function EditLotPage({ params }: { params: { lotId: string } }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const roaster = getRoasterById(ACTIVE_ROASTER_ID);
+  const roaster = roasterId ? getRoasterById(roasterId) : undefined;
   const lot = lots.find((candidate) => candidate.id === params.lotId);
 
   const roastProfiles = useRoastProfiles().filter((profile) => lot && profile.lotId === lot.id);

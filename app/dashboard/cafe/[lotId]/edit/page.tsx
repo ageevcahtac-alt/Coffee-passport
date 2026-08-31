@@ -10,12 +10,12 @@ import { useBrewingRecipes } from '@/lib/data/useBrewingRecipes';
 import { addBrewingRecipe } from '@/lib/data/brewingRecipesStore';
 import { LotBuilderForm } from '@/components/roaster/LotBuilderForm';
 import { SignatureRecipeForm } from '@/components/cafe/SignatureRecipeForm';
+import { useStaffSession } from '@/lib/auth/staffSession';
 import { BREWING_METHODS, type Lot } from '@/lib/types/coffee';
-
-const ACTIVE_SHOP_ID = 'shop-xo-vsevolozhsk';
 
 export default function CafeEditLotPage({ params }: { params: { lotId: string } }) {
   const router = useRouter();
+  const { cafeId } = useStaffSession();
   const lots = useLots();
   // The lots list is seed data merged with localStorage, so the very first
   // client render (matching the server snapshot) may not yet include a lot
@@ -25,10 +25,10 @@ export default function CafeEditLotPage({ params }: { params: { lotId: string } 
 
   const lot = lots.find((candidate) => candidate.id === params.lotId);
   const roaster = lot ? getRoasterById(lot.roasterId) : undefined;
-  const shop = getCoffeeShopById(ACTIVE_SHOP_ID);
+  const shop = cafeId ? getCoffeeShopById(cafeId) : undefined;
 
   const signatureRecipes = useBrewingRecipes().filter(
-    (recipe) => lot && recipe.lotId === lot.id && recipe.authorType === 'coffee_shop' && recipe.authorId === ACTIVE_SHOP_ID
+    (recipe) => lot && recipe.lotId === lot.id && recipe.authorType === 'coffee_shop' && recipe.authorId === cafeId
   );
   const [addingRecipe, setAddingRecipe] = useState(false);
 

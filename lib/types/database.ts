@@ -101,6 +101,43 @@ export type CheckinRow = {
 };
 export type CheckinInsert = CheckinRow;
 
+// Anonymous grain/extraction read for a roaster_admin — see
+// public.checkins_roaster_view in 0007_staff_profiles_rls.sql. Never
+// carries owner_user_id, coffee_shop_id, barista_id, barista_rating or
+// barista_note — those columns don't exist on this view at all, not just
+// hidden client-side.
+export type CheckinRoasterViewRow = {
+  id: string;
+  lot_id: string;
+  roaster_id: string;
+  brewing_method: string;
+  rating: number;
+  acidity: number;
+  sweetness: number;
+  body: number;
+  bitterness: number;
+  sensory_tags: string[];
+  sub_descriptors: Record<string, string[]>;
+  defects: string[];
+  liked: string;
+  disliked: string;
+  note: string;
+  created_at: string;
+};
+
+export type ProfileRole = 'enthusiast' | 'barista' | 'cafe_admin' | 'roaster_admin';
+
+export type ProfileRow = {
+  id: string;
+  role: ProfileRole;
+  cafe_id: string | null;
+  roaster_id: string | null;
+  barista_id: string | null;
+  display_name: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 // Loosely typed — the one other table the typed server client (see
 // lib/supabase/server.ts) queries (app/dashboard/(members)/layout.tsx's
 // `.from('roaster_members')`, already `as any`-cast at its one call site).
@@ -118,9 +155,12 @@ export type Database = {
         Update: Partial<EquipmentGarageUpsert>;
       } & NoRelationships;
       checkins: { Row: CheckinRow; Insert: CheckinInsert; Update: Partial<CheckinInsert> } & NoRelationships;
+      profiles: { Row: ProfileRow; Insert: Partial<ProfileRow>; Update: Partial<ProfileRow> } & NoRelationships;
       roaster_members: { Row: UntypedRow; Insert: UntypedRow; Update: Partial<UntypedRow> } & NoRelationships;
     };
-    Views: Record<string, never>;
+    Views: {
+      checkins_roaster_view: { Row: CheckinRoasterViewRow } & NoRelationships;
+    };
     Functions: Record<string, never>;
   };
 };

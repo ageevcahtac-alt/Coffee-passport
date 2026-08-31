@@ -7,13 +7,14 @@ import { useCafeMenuLotIds } from '@/lib/data/useCafeMenu';
 import { addLotToMenu } from '@/lib/data/cafeMenuStore';
 import { getRoasterById } from '@/lib/data/roasters';
 import { extractLotId } from '@/lib/utils/lotId';
+import { useStaffSession } from '@/lib/auth/staffSession';
 import type { Lot } from '@/lib/types/coffee';
 
-const ACTIVE_SHOP_ID = 'shop-xo-vsevolozhsk';
-
 export default function AddLotPage() {
+  const { cafeId } = useStaffSession();
+  const activeShopId = cafeId ?? '';
   const lots = useLots();
-  const menuLotIds = useCafeMenuLotIds(ACTIVE_SHOP_ID);
+  const menuLotIds = useCafeMenuLotIds(activeShopId);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [justAdded, setJustAdded] = useState<Lot | null>(null);
@@ -23,7 +24,7 @@ export default function AddLotPage() {
     .sort((a, b) => a.country.localeCompare(b.country) || a.name.localeCompare(b.name));
 
   function addLot(lot: Lot) {
-    addLotToMenu(ACTIVE_SHOP_ID, lot.id);
+    addLotToMenu(activeShopId, lot.id);
     setJustAdded(lot);
     setCode('');
     setError('');
