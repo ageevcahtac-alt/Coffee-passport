@@ -125,7 +125,7 @@ export type CheckinRoasterViewRow = {
   created_at: string;
 };
 
-export type ProfileRole = 'enthusiast' | 'barista' | 'cafe_admin' | 'roaster_admin';
+export type ProfileRole = 'enthusiast' | 'barista' | 'cafe_admin' | 'roaster_admin' | 'admin';
 
 export type ProfileRow = {
   id: string;
@@ -137,6 +137,20 @@ export type ProfileRow = {
   created_at: string;
   updated_at: string;
 };
+
+export type PlatformFeedbackType = 'bug' | 'ui' | 'idea';
+export type PlatformFeedbackStatus = 'new' | 'in_progress' | 'closed';
+
+export type PlatformFeedbackRow = {
+  id: string;
+  user_id: string;
+  user_role: ProfileRole;
+  feedback_type: PlatformFeedbackType;
+  message: string;
+  status: PlatformFeedbackStatus;
+  created_at: string;
+};
+export type PlatformFeedbackInsert = Pick<PlatformFeedbackRow, 'user_id' | 'user_role' | 'feedback_type' | 'message'>;
 
 // Loosely typed — the one other table the typed server client (see
 // lib/supabase/server.ts) queries (app/dashboard/(members)/layout.tsx's
@@ -156,6 +170,11 @@ export type Database = {
       } & NoRelationships;
       checkins: { Row: CheckinRow; Insert: CheckinInsert; Update: Partial<CheckinInsert> } & NoRelationships;
       profiles: { Row: ProfileRow; Insert: Partial<ProfileRow>; Update: Partial<ProfileRow> } & NoRelationships;
+      platform_feedback: {
+        Row: PlatformFeedbackRow;
+        Insert: PlatformFeedbackInsert;
+        Update: Partial<PlatformFeedbackRow>;
+      } & NoRelationships;
       roaster_members: { Row: UntypedRow; Insert: UntypedRow; Update: Partial<UntypedRow> } & NoRelationships;
     };
     Views: {

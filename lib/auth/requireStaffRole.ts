@@ -4,7 +4,8 @@ import type { ProfileRole } from '@/lib/types/database';
 import type { StaffProfile } from './staffSession';
 
 // Server-only route guard for the staff dashboards
-// (/dashboard/roaster, /dashboard/cafe, /dashboard/barista) — call once,
+// (/dashboard/roaster, /dashboard/cafe, /dashboard/barista,
+// /dashboard/admin) — call once,
 // from each dashboard's top-level layout.tsx. No session -> straight to
 // login; a session that doesn't have the required role -> also back to
 // login (with an explanatory ?error=, since the login page already knows
