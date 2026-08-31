@@ -2,15 +2,24 @@
 
 import { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import { signInAsPilotStaff } from '@/app/auth/actions';
+import { PILOT_STAFF_ROLES } from '@/lib/auth/pilotStaff';
 
-// Demo-stage convenience: jump straight into any cabinet without a real
-// login flow. Always visible (this whole deployment IS the demo), not
-// gated behind NODE_ENV, since it's meant for testing the live Render site
-// too, not just local dev.
-const ROLES = [
+// Demo-stage convenience: jump straight into any cabinet without typing a
+// login form by hand. Always visible (this whole deployment IS the demo),
+// not gated behind NODE_ENV, since it's meant for testing the live Render
+// site too, not just local dev.
+//
+// Энтузиаст/Админ are plain navigation — neither route needs a session
+// (/journey works anonymously, /admin is HTTP-Basic-gated by
+// middleware.ts). Кофейня/Обжарщик/Бариста are real staff dashboards now
+// gated by requireStaffRole.ts, so a bare router.push would just bounce
+// to /auth/login with no session behind it — those three submit
+// signInAsPilotStaff instead, which signs in as that role's fixed pilot
+// account (see app/auth/actions.ts for the one-time setup that account
+// needs) before landing on the dashboard.
+const NAV_ROLES = [
   { label: 'Энтузиаст', href: '/journey', icon: '☕' },
-  { label: 'Кофейня', href: '/dashboard/cafe', icon: '🏪' },
-  { label: 'Обжарщик', href: '/dashboard/roaster', icon: '🏭' },
   { label: 'Админ', href: '/admin', icon: '🛠️' },
 ] as const;
 
@@ -29,7 +38,7 @@ export function DevRoleSwitcher() {
           <span className="text-[9px] uppercase tracking-widest2 text-ink-300 px-2 select-none">
             Dev
           </span>
-          {ROLES.map((role) => {
+          {NAV_ROLES.map((role) => {
             const active = pathname === role.href || pathname?.startsWith(`${role.href}/`);
             return (
               <button
@@ -45,6 +54,26 @@ export function DevRoleSwitcher() {
                 <span aria-hidden="true">{role.icon}</span>
                 {role.label}
               </button>
+            );
+          })}
+          {PILOT_STAFF_ROLES.map((role) => {
+            const active =
+              pathname === role.dashboardPath || pathname?.startsWith(`${role.dashboardPath}/`);
+            return (
+              <form key={role.role} action={signInAsPilotStaff} className="contents">
+                <input type="hidden" name="role" value={role.role} />
+                <button
+                  type="submit"
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs
+                              font-body font-medium transition-colors
+                              ${active
+                                ? 'bg-ink-900 text-parchment-100'
+                                : 'text-ink-700 hover:bg-parchment-300'}`}
+                >
+                  <span aria-hidden="true">{role.icon}</span>
+                  {role.label}
+                </button>
+              </form>
             );
           })}
           <button
