@@ -62,6 +62,12 @@ export function LotMenuCard({ lot, onRemove }: { lot: Lot; onRemove: () => void 
         >
           Паспорт лота
         </Link>
+        <Link
+          href={`/dashboard/cafe/analytics?lotId=${lot.id}`}
+          className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900"
+        >
+          Отзывы гостей
+        </Link>
         <button
           type="button"
           onClick={handleDownloadPdf}
