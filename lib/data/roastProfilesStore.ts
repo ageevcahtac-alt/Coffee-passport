@@ -3,7 +3,7 @@
 import type { RoastProfile } from '@/lib/types/coffee';
 
 // Roaster-authored roast curve profiles, attached to a Lot. Same no-backend
-// pattern as reviewRepliesStore/lotsStore: local persistence now, shaped to
+// pattern as recipeVotesStore/lotsStore: local persistence now, shaped to
 // drop straight onto a future public.roast_profiles table once this flow is
 // wired to real auth.
 

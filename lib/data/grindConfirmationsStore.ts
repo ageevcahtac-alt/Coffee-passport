@@ -9,7 +9,7 @@ import type { BrewingMethodId } from '@/lib/types/coffee';
 // components/coffee/EnthusiastRecipeForm.tsx, no separate "confirm" UI
 // needed. lib/utils/grindConvert.ts prefers an average of these over the
 // static lib/data/grindReferenceTable.ts range once at least one exists.
-// Same no-backend localStorage pattern as reviewRepliesStore.ts.
+// Same no-backend localStorage pattern as recipeVotesStore.ts.
 
 export interface GrindConfirmation {
   id: string;

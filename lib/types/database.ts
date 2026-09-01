@@ -162,6 +162,21 @@ export type CheckinsCafeBenchmarkRow = {
   review_count: number;
 };
 
+// public.checkin_replies — see supabase/migrations/0011_checkin_replies.sql.
+// A coffee-shop/roaster reply to a guest's checkin (components/shared/
+// ReviewReplyThread.tsx); checkin_id references public.checkins.id, not
+// the unrelated, unused public.reviews table from 0004_taste_profile.sql.
+export type CheckinReplyRow = {
+  id: string;
+  checkin_id: string;
+  responder_type: 'coffee_shop' | 'roaster';
+  responder_id: string;
+  responder_name: string;
+  message: string;
+  created_at: string;
+};
+export type CheckinReplyInsert = CheckinReplyRow;
+
 // Loosely typed — the one other table the typed server client (see
 // lib/supabase/server.ts) queries (app/dashboard/(members)/layout.tsx's
 // `.from('roaster_members')`, already `as any`-cast at its one call site).
@@ -186,6 +201,11 @@ export type Database = {
         Update: Partial<PlatformFeedbackRow>;
       } & NoRelationships;
       roaster_members: { Row: UntypedRow; Insert: UntypedRow; Update: Partial<UntypedRow> } & NoRelationships;
+      checkin_replies: {
+        Row: CheckinReplyRow;
+        Insert: CheckinReplyInsert;
+        Update: Partial<CheckinReplyInsert>;
+      } & NoRelationships;
     };
     Views: {
       checkins_roaster_view: { Row: CheckinRoasterViewRow } & NoRelationships;

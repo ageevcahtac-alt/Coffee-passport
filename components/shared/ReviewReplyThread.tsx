@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { formatTastingDate } from '@/lib/utils/date';
-import { addReviewReply, type ResponderType } from '@/lib/data/reviewRepliesStore';
+import { addReviewReply, type ResponderType } from '@/lib/data/checkinReplies';
 import { useReviewReplies } from '@/lib/data/useReviewReplies';
 
 // Lets a coffee-shop or roaster account reply to one guest tasting record —
@@ -20,10 +20,7 @@ export function ReviewReplyThread({
   responderId: string;
   responderName: string;
 }) {
-  const allReplies = useReviewReplies();
-  const replies = allReplies
-    .filter((reply) => reply.tastingRecordId === tastingRecordId)
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  const { replies, loading, addReply } = useReviewReplies(tastingRecordId);
 
   const [draft, setDraft] = useState('');
   const [open, setOpen] = useState(false);
@@ -31,14 +28,20 @@ export function ReviewReplyThread({
   function handleSend() {
     const message = draft.trim();
     if (!message) return;
-    addReviewReply({ tastingRecordId, responderType, responderId, responderName, message });
+    // Same write-through pattern as journey/store.ts's addTastingRecord:
+    // returns immediately with a client-generated id, Supabase write
+    // fires in the background — nothing here can fail synchronously.
+    const reply = addReviewReply({ tastingRecordId, responderType, responderId, responderName, message });
+    addReply(reply);
     setDraft('');
     setOpen(false);
   }
 
   return (
     <div className="mt-3 pt-3 border-t border-ink-100">
-      {replies.length > 0 && (
+      {loading ? (
+        <p className="text-xs text-ink-300 mb-2">Загрузка ответов…</p>
+      ) : replies.length > 0 ? (
         <div className="flex flex-col gap-2 mb-2">
           {replies.map((reply) => (
             <div key={reply.id} className="rounded-md bg-parchment-200 px-3 py-2">
@@ -50,7 +53,7 @@ export function ReviewReplyThread({
             </div>
           ))}
         </div>
-      )}
+      ) : null}
 
       {open ? (
         <div className="flex flex-col gap-2">
