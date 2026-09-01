@@ -8,19 +8,24 @@ const fieldClasses =
   'text-ink-900 focus:border-gold-400';
 
 // Two-tier picker: the guest/author first chooses one of the two real-world
-// brewing directions — Espresso or Filter — then, only for Filter, a plain
-// dropdown narrows to the specific method (V60, Chemex, AeroPress, ... or
-// "Свой способ" for anything not in the list). Espresso needs no second
-// step: picking the card fixes brewingMethodId = 'espresso' immediately, so
-// callers reading it (e.g. the Equipment Garage auto-fill in
-// ProRecipeForm/EnthusiastRecipeForm) can react the moment it's chosen.
+// brewing directions — Espresso or Filter — then, for Filter, a dropdown
+// lets them narrow to a specific method (V60, Chemex, AeroPress, ... or
+// "Свой способ" for anything not in the list). Both macro cards are
+// symmetric one-click actions: picking either one immediately sets a
+// concrete, complete brewingMethodId (Espresso → 'espresso', Filter →
+// FILTER_BREWING_METHODS[0] as a starting default the dropdown can then
+// refine) — Filter must NOT require a second click just to leave the
+// "selected but still null" state, or it stops being a real toggle
+// counterpart to Espresso. Callers reading the value (e.g. the Equipment
+// Garage auto-fill in ProRecipeForm/EnthusiastRecipeForm) can react the
+// moment either card is chosen.
 //
 // Strictly mutually exclusive, and each card toggles off on a second click
 // (back to value = null / nothing selected): picking "Фильтр" while
 // "Эспрессо" was selected must clear the old espresso value immediately —
 // not just visually swap which card is open — otherwise the parent's
-// brewingMethodId stays 'espresso' underneath an open-but-unpicked filter
-// dropdown and both cards render as checked at once.
+// brewingMethodId stays 'espresso' underneath an open filter dropdown and
+// both cards render as checked at once.
 export function BrewingMethodSelector({
   value,
   onChange,
@@ -58,8 +63,12 @@ export function BrewingMethodSelector({
       onChange(null);
       return;
     }
+    // One click, same as Espresso: land on a concrete default method
+    // (the dropdown below is for refining it, not for completing the
+    // selection) rather than leaving brewingMethodId at null until a
+    // second, separate interaction with the dropdown.
     setFilterOpen(true);
-    if (isEspresso) onChange(null);
+    onChange(FILTER_BREWING_METHODS[0].id);
   }
 
   return (
