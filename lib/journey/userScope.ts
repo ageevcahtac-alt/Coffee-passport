@@ -14,16 +14,31 @@ const ACTIVE_USER_KEY = 'coffee-passport:active-user';
 // flat array shared by whoever is currently "logged in" locally — there's
 // no per-account partition on disk, only a userId field per record. Run
 // once, on every resolved-identity change (see lib/auth/CurrentUserProvider.tsx):
-// if the active user changed, drop every record that belonged to the
-// PREVIOUS user before the new account's session starts reading these
-// stores, so their data can't bleed into someone else's view.
+// if the active REAL account changed, drop every record that belonged to
+// the PREVIOUS real account before the new one's session starts reading
+// these stores, so their data can't bleed into someone else's view.
 //
 // Deliberately narrow: only ever removes entries the outgoing user
 // authored/owns. Roaster and coffee-shop authored data (benchmark recipes,
 // signature recipes, their own Garage setups) is shared catalog content,
 // never touched here.
-export function reconcileUserScope(newUserId: string): void {
-  if (typeof window === 'undefined') return;
+//
+// isAuthenticated gates the WHOLE function, not just which id gets tracked:
+// signing out (going anonymous) is treated as no signal at all here, not a
+// change to react to. Every reader already filters its store by userId, so
+// an anonymous visitor can't see a signed-out account's records regardless
+// of whether this ran — the purge was pure defense in depth. Running it on
+// logout, though, wiped the account's local cache immediately, and if the
+// next login's Supabase resync (see syncCheckinsForUser) was ever slow,
+// offline, or failed, the guest's own journal looked reset to whatever
+// they'd added fresh in the new session — reported as "past check-ins
+// disappear when I sign back into my own account". Skipping anonymous
+// transitions entirely means ACTIVE_USER_KEY always tracks the last real
+// account: signing back into the SAME one is a no-op here (nothing to
+// purge, local cache never touched), and only signing into a genuinely
+// DIFFERENT real account still triggers the purge.
+export function reconcileUserScope(newUserId: string, isAuthenticated: boolean): void {
+  if (typeof window === 'undefined' || !isAuthenticated) return;
 
   let previousUserId: string | null = null;
   try {

@@ -68,7 +68,7 @@ export function CurrentUserProvider({
   useEffect(() => {
     const resolvedId = authUserId ?? getOrCreateAnonId();
     const isAuthenticated = Boolean(authUserId);
-    reconcileUserScope(resolvedId);
+    reconcileUserScope(resolvedId, isAuthenticated);
     // State is set immediately — first paint never waits on the network.
     // The syncs below run in the background: Supabase is the source of
     // truth once reachable, but a slow/offline connection just means the

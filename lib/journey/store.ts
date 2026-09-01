@@ -155,10 +155,18 @@ export async function syncCheckinsForUser(userId: string, isAuthenticated: boole
   try {
     const supabase = getBrowserSupabaseClient();
     const { data, error } = await supabase.from('checkins').select('*').eq('owner_user_id', userId);
-    if (error || !data) return;
+    if (error) {
+      // Previously swallowed silently — same failure classes addTastingRecord
+      // already logs on write (offline, table not migrated, RLS reject), but
+      // going unlogged here made "why isn't my history loading" undiagnosable
+      // from the browser console.
+      console.warn('[checkins] Supabase fetch failed, local cache stands:', error.message);
+      return;
+    }
+    if (!data) return;
     write(mergeById(read(), (data as CheckinRow[]).map(rowToRecord)));
-  } catch {
-    // Offline / table not migrated yet / RLS reject — local cache stands.
+  } catch (err) {
+    console.warn('[checkins] Supabase fetch threw, local cache stands:', err);
   }
 }
 

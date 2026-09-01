@@ -6,8 +6,8 @@ import { useSearchParams } from 'next/navigation';
 import { useLots } from '@/lib/data/useLots';
 import { useJourney } from '@/lib/journey/useJourney';
 import { consumeJustRevealed } from '@/lib/journey/revealFlag';
-import { markPendingShop } from '@/lib/journey/pendingShopFlag';
-import { markPendingRoaster } from '@/lib/journey/pendingRoasterFlag';
+import { consumePendingShop, markPendingShop } from '@/lib/journey/pendingShopFlag';
+import { consumePendingRoaster, markPendingRoaster } from '@/lib/journey/pendingRoasterFlag';
 import { getRoasterById } from '@/lib/data/roasters';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { UNSPECIFIED_BARISTA_ID } from '@/lib/data/baristas';
@@ -84,6 +84,28 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
   // defaults to the scanned lot's own roasterId until the guest corrects it.
   const [selectedShopId, setSelectedShopId] = useState<string | null>(null);
   const [selectedRoasterId, setSelectedRoasterId] = useState<string | null>(null);
+
+  // Landing here right after saving a tasting (FarmerPinningModal's × or
+  // the taste flow's own navigation) already knows which shop/roaster the
+  // guest just checked in at — see markPendingShop/markPendingRoaster in
+  // taste/page.tsx's handleFinish. Consuming it here skips re-asking the
+  // gate below, so the comparison reveal shows up immediately instead of
+  // only after a redundant manual reselect. Guard with a ref, same
+  // reasoning as revealChecked above (Strict Mode double-invoke +
+  // consume-once semantics).
+  const pendingShopChecked = useRef(false);
+  useEffect(() => {
+    if (lot && !pendingShopChecked.current) {
+      pendingShopChecked.current = true;
+      const pendingShopId = consumePendingShop(lot.id);
+      const pendingRoasterId = consumePendingRoaster(lot.id);
+      if (pendingShopId) {
+        setSelectedShopId(pendingShopId);
+        setSelectedRoasterId(pendingRoasterId ?? lot.roasterId);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-check on lot id change
+  }, [lot?.id]);
 
   if (!lot || !roaster) {
     if (!mounted) return null;

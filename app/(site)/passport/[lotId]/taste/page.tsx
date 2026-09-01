@@ -14,8 +14,8 @@ import { TastingForm, type TastingFormValues } from '@/components/coffee/Tasting
 import { addTastingRecord, getSnapshot as getJourneySnapshot } from '@/lib/journey/store';
 import { markJustRevealed } from '@/lib/journey/revealFlag';
 import { markPinJustActivated } from '@/lib/journey/mapFlag';
-import { consumePendingShop } from '@/lib/journey/pendingShopFlag';
-import { consumePendingRoaster } from '@/lib/journey/pendingRoasterFlag';
+import { consumePendingShop, markPendingShop } from '@/lib/journey/pendingShopFlag';
+import { consumePendingRoaster, markPendingRoaster } from '@/lib/journey/pendingRoasterFlag';
 import { getMergedLotById } from '@/lib/data/lotsStore';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { useCurrentUser } from '@/lib/auth/currentUser';
@@ -127,7 +127,14 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
 
     // The passport page still plays its own unlock/comparison reveal
     // whenever the guest lands there (via the ritual's × or a later visit).
+    // Re-mark the same one-shot flags that got the guest INTO this flow
+    // (consumed already, at mount) so the return trip to /passport/[lotId]
+    // can skip its own check-in gate too — otherwise landing there via the
+    // FarmerPinningModal's × always asked "Где вы пробуете этот лот
+    // сегодня?" again before ever showing the just-saved TasteComparison.
     markJustRevealed(lot.id);
+    markPendingShop(lot.id, coffeeShopId);
+    markPendingRoaster(lot.id, roasterId ?? lot.roasterId);
 
     // Intercept the flow here instead of navigating away immediately — the
     // Farmer Pinning ritual (fullscreen modal) is now the reward moment;
