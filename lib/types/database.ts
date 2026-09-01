@@ -152,6 +152,16 @@ export type PlatformFeedbackRow = {
 };
 export type PlatformFeedbackInsert = Pick<PlatformFeedbackRow, 'user_id' | 'user_role' | 'feedback_type' | 'message'>;
 
+// public.checkins_cafe_benchmark_view — see
+// supabase/migrations/0010_cafe_lot_benchmark_view.sql. Anonymized
+// cross-shop leaderboard: rank 1/2 per lot_id, never coffee_shop_id.
+export type CheckinsCafeBenchmarkRow = {
+  lot_id: string;
+  rank: number;
+  avg_rating: number;
+  review_count: number;
+};
+
 // Loosely typed — the one other table the typed server client (see
 // lib/supabase/server.ts) queries (app/dashboard/(members)/layout.tsx's
 // `.from('roaster_members')`, already `as any`-cast at its one call site).
@@ -179,6 +189,7 @@ export type Database = {
     };
     Views: {
       checkins_roaster_view: { Row: CheckinRoasterViewRow } & NoRelationships;
+      checkins_cafe_benchmark_view: { Row: CheckinsCafeBenchmarkRow } & NoRelationships;
     };
     Functions: {
       // See supabase/migrations/0008_dev_seed_staff_profile.sql — dev-only,

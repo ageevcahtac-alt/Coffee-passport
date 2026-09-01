@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useLots } from '@/lib/data/useLots';
 import { useCafeMenuLotIds } from '@/lib/data/useCafeMenu';
 import { removeLotFromMenu } from '@/lib/data/cafeMenuStore';
+import { useCafeLotBenchmarks } from '@/lib/data/useCafeLotBenchmarks';
 import { LotMenuCard } from '@/components/cafe/LotMenuCard';
 import { GuestFeedback } from '@/components/cafe/GuestFeedback';
 import { CommunityHighlights } from '@/components/coffee/CommunityHighlights';
@@ -15,6 +16,7 @@ export default function CafeMenuPage() {
   const lots = useLots();
   const menuLotIds = useCafeMenuLotIds(activeShopId);
   const menuLots = lots.filter((lot) => menuLotIds.includes(lot.id));
+  const { benchmarks, loading: benchmarksLoading } = useCafeLotBenchmarks(activeShopId);
 
   const regions = new Map<string, typeof menuLots>();
   for (const lot of menuLots) {
@@ -57,6 +59,8 @@ export default function CafeMenuPage() {
                     key={lot.id}
                     lot={lot}
                     onRemove={() => removeLotFromMenu(activeShopId, lot.id)}
+                    benchmark={benchmarks.get(lot.id)}
+                    benchmarkLoading={benchmarksLoading}
                   />
                 ))}
               </div>

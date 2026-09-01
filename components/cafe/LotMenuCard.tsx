@@ -4,9 +4,21 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { getRoasterById } from '@/lib/data/roasters';
 import { downloadLotQrPdf } from '@/lib/utils/qrPdf';
+import type { LotBenchmark } from '@/lib/data/cafeLotBenchmarks';
+import { LotRatingBenchmarks } from './LotRatingBenchmarks';
 import type { Lot } from '@/lib/types/coffee';
 
-export function LotMenuCard({ lot, onRemove }: { lot: Lot; onRemove: () => void }) {
+export function LotMenuCard({
+  lot,
+  onRemove,
+  benchmark,
+  benchmarkLoading,
+}: {
+  lot: Lot;
+  onRemove: () => void;
+  benchmark?: LotBenchmark;
+  benchmarkLoading: boolean;
+}) {
   const roaster = getRoasterById(lot.roasterId);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
@@ -48,6 +60,8 @@ export function LotMenuCard({ lot, onRemove }: { lot: Lot; onRemove: () => void 
         {lot.process && <span className="data-value text-[11px] text-ink-400">{lot.process}</span>}
         <span className="data-value text-[11px] text-ink-300">{lot.id}</span>
       </div>
+
+      <LotRatingBenchmarks benchmark={benchmark} loading={benchmarkLoading} />
 
       <div className="flex flex-wrap gap-x-4 gap-y-2">
         <Link

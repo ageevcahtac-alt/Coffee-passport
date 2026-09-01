@@ -25,10 +25,16 @@ export function FeedbackWidget({
   userId,
   role,
   isAuthenticated,
+  variant = 'floating',
 }: {
   userId: string | null;
   role: ProfileRole;
   isAuthenticated: boolean;
+  // 'floating' — the original bottom-right pill, used by the three staff
+  // dashboards. 'inline' — a plain text-style trigger meant to sit inside
+  // an existing header/nav block (see components/shared/Navbar.tsx, under
+  // the Log in/Sign out control) instead of overlaying the page.
+  variant?: 'floating' | 'inline';
 }) {
   const [open, setOpen] = useState(false);
   const [type, setType] = useState<PlatformFeedbackType>('idea');
@@ -67,16 +73,20 @@ export function FeedbackWidget({
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Обратная связь"
-        // Bottom-right, clear of DevRoleSwitcher's bottom-center panel and
-        // any bottom-left placement a scroll-to-top control might use.
-        className="fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-40
-                   inline-flex items-center gap-2 rounded-full border border-ink-200
-                   bg-parchment-100/95 backdrop-blur-sm px-4 py-3 text-xs font-body font-medium
-                   text-ink-700 shadow-[0_8px_20px_-8px_rgba(26,20,16,0.35)]
-                   hover:bg-parchment-300 transition-colors"
+        className={
+          variant === 'floating'
+            ? // Bottom-right, clear of DevRoleSwitcher's bottom-center panel and
+              // any bottom-left placement a scroll-to-top control might use.
+              'fixed bottom-[max(1rem,env(safe-area-inset-bottom))] right-4 z-40 ' +
+              'inline-flex items-center gap-2 rounded-full border border-ink-200 ' +
+              'bg-parchment-100/95 backdrop-blur-sm px-4 py-3 text-xs font-body font-medium ' +
+              'text-ink-700 shadow-[0_8px_20px_-8px_rgba(26,20,16,0.35)] ' +
+              'hover:bg-parchment-300 transition-colors'
+            : 'inline-flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-900 transition-colors'
+        }
       >
         <span aria-hidden="true">💬</span>
-        <span className="hidden sm:inline">Обратная связь</span>
+        <span className={variant === 'floating' ? 'hidden sm:inline' : undefined}>Обратная связь</span>
       </button>
 
       {open && (
