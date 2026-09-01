@@ -118,8 +118,16 @@ export function ProRecipeForm({
   // Auto-fill from the Roaster's/Coffee Shop's own Equipment Garage setup
   // (see components/coffee/EquipmentGarage.tsx, keyed by this recipe's
   // authorId — the roasterId or coffee-shop id) whenever the brewing
-  // method changes. Same "only fill empty fields" rule as
-  // EnthusiastRecipeForm, so it never overwrites an edit-in-progress.
+  // method changes, AND once more when the Garage itself finishes loading.
+  // The sync in the effect above is async — a barista who picks a brewing
+  // method before syncEquipmentFromSupabase's fetch has landed would
+  // otherwise never see the grinder auto-fill at all, since the original
+  // version only re-ran on brewingMethodId changes. myEquipment's object
+  // identity only changes once (when the store's write() lands after the
+  // fetch resolves), so adding it here re-fires exactly once for that
+  // case without re-running on every keystroke — same "only fill empty
+  // fields" rule as EnthusiastRecipeForm, so it never overwrites an
+  // edit-in-progress.
   useEffect(() => {
     if (!form.brewingMethodId || !myEquipment) return;
     const grinder = isEspresso ? myEquipment.espressoGrinder : myEquipment.filterGrinder;
@@ -131,8 +139,8 @@ export function ProRecipeForm({
       equipmentModel: isEspresso ? prev.equipmentModel || myEquipment.espressoMachine : prev.equipmentModel,
       waterCustomMineralization: prev.waterCustomMineralization || water,
     }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when the method changes, not on every equipment/form update
-  }, [form.brewingMethodId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately excludes isEspresso/form fields so this doesn't re-run on every keystroke, just brewingMethodId changes and the one-time Garage load
+  }, [form.brewingMethodId, myEquipment]);
 
   const canSave = Boolean(form.brewingMethodId && form.doseG && form.yieldG);
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useJourney } from '@/lib/journey/useJourney';
+import { useShopCheckins } from '@/lib/data/useShopCheckins';
 import { useLots } from '@/lib/data/useLots';
 import { useCafeMenuLotIds } from '@/lib/data/useCafeMenu';
 import { getBaristasForShop } from '@/lib/data/baristas';
@@ -33,7 +33,7 @@ export default function CafeAnalyticsPage() {
   const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(1);
 
-  const records = useJourney();
+  const { records: shopRecords, loading: recordsLoading } = useShopCheckins(cafeId ?? '');
   const lots = useLots();
   const menuLotIds = useCafeMenuLotIds(cafeId ?? '');
   const menuLots = useMemo(
@@ -41,11 +41,6 @@ export default function CafeAnalyticsPage() {
     [lots, menuLotIds]
   );
   const shopBaristas = useMemo(() => getBaristasForShop(cafeId ?? ''), [cafeId]);
-
-  const shopRecords = useMemo(
-    () => records.filter((record) => record.coffeeShopId === cafeId),
-    [records, cafeId]
-  );
 
   const scoped = tab === 'coffee' ? shopRecords : shopRecords.filter((record) => record.baristaRating > 0);
 
@@ -164,13 +159,15 @@ export default function CafeAnalyticsPage() {
         Найдено {filtered.length} {pluralizeReviews(filtered.length)}
       </p>
 
-      {pageItems.length === 0 ? (
+      {recordsLoading ? (
+        <p className="text-sm text-ink-400">Загрузка отзывов…</p>
+      ) : pageItems.length === 0 ? (
         <p className="text-sm text-ink-400">Ничего не найдено по этим фильтрам.</p>
       ) : (
         <div className="flex flex-col gap-4 rounded-md border border-ink-200 bg-parchment-100 p-5">
           {pageItems.map((record) =>
             tab === 'coffee' ? (
-              <CoffeeReviewCard key={record.id} record={record} allRecords={records} shopId={cafeId ?? ''} />
+              <CoffeeReviewCard key={record.id} record={record} allRecords={shopRecords} shopId={cafeId ?? ''} />
             ) : (
               <ServiceReviewCard key={record.id} record={record} />
             )

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useJourney } from '@/lib/journey/useJourney';
+import { useShopCheckins } from '@/lib/data/useShopCheckins';
 import { CoffeeReviewCard } from '@/components/cafe/CoffeeReviewCard';
 import { ServiceReviewCard } from '@/components/cafe/ServiceReviewCard';
 
@@ -18,10 +18,10 @@ const PREVIEW_LIMIT = 2;
 // Both read the same TastingRecord — see lib/types/coffee.ts — just slice
 // different fields.
 export function GuestFeedback({ shopId }: { shopId: string }) {
-  const records = useJourney();
-  const shopRecords = [...records]
-    .filter((record) => record.coffeeShopId === shopId)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const { records, loading } = useShopCheckins(shopId);
+  const shopRecords = [...records].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
 
   const coffeeFeed = shopRecords.slice(0, PREVIEW_LIMIT);
   const staffFeed = shopRecords.filter((record) => record.baristaRating > 0).slice(0, PREVIEW_LIMIT);
@@ -37,7 +37,9 @@ export function GuestFeedback({ shopId }: { shopId: string }) {
           <p className="text-[11px] uppercase tracking-widest2 text-ink-400 mb-4">
             Видит кофейня и обжарщик
           </p>
-          {coffeeFeed.length === 0 ? (
+          {loading ? (
+            <p className="text-sm text-ink-400 mb-4">Загрузка отзывов…</p>
+          ) : coffeeFeed.length === 0 ? (
             <p className="text-sm text-ink-400 mb-4">Пока нет отзывов о кофе.</p>
           ) : (
             <div className="flex flex-col gap-4 mb-4">
@@ -61,7 +63,9 @@ export function GuestFeedback({ shopId }: { shopId: string }) {
           <p className="text-[11px] uppercase tracking-widest2 text-gold-500 mb-4">
             Видно только бариста и кофейне — обжарщику недоступно
           </p>
-          {staffFeed.length === 0 ? (
+          {loading ? (
+            <p className="text-sm text-ink-400 mb-4">Загрузка отзывов…</p>
+          ) : staffFeed.length === 0 ? (
             <p className="text-sm text-ink-400 mb-4">Пока нет отзывов о сервисе.</p>
           ) : (
             <div className="flex flex-col gap-4 mb-4">

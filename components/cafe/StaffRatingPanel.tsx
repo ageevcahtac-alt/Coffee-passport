@@ -1,9 +1,10 @@
 'use client';
 
-import { useJourney } from '@/lib/journey/useJourney';
+import { useShopCheckins } from '@/lib/data/useShopCheckins';
 import { getMergedLotById } from '@/lib/data/lotsStore';
 import { formatDate } from '@/lib/utils/date';
 import { StarRating } from '@/components/coffee/StarRating';
+import { useStaffSession } from '@/lib/auth/staffSession';
 import type { TastingRecord } from '@/lib/types/coffee';
 
 function pluralizeVotes(count: number): string {
@@ -18,8 +19,13 @@ function pluralizeVotes(count: number): string {
 // TastingRecord data the "coffee vs staff" split on the dashboard home uses
 // (see components/cafe/GuestFeedback.tsx) — just filtered down to one
 // baristaId instead of one shop, since a card here is scoped to one person.
+// Reads via useShopCheckins (this cabinet's own cafeId, from
+// useStaffSession) rather than useJourney() — see
+// lib/data/cafeShopCheckins.ts for why: useJourney() only ever holds the
+// signed-in account's own checkins, not the whole shop's.
 export function StaffRatingPanel({ staffId }: { staffId: string }) {
-  const records = useJourney();
+  const { cafeId } = useStaffSession();
+  const { records, loading } = useShopCheckins(cafeId ?? '');
   const rated = [...records]
     .filter((record) => record.baristaId === staffId && record.baristaRating > 0)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -34,7 +40,9 @@ export function StaffRatingPanel({ staffId }: { staffId: string }) {
   return (
     <>
       <p className="section-label mb-4">Оценки гостей</p>
-      {total === 0 ? (
+      {loading ? (
+        <p className="text-ink-500 text-sm mb-10">Загрузка оценок…</p>
+      ) : total === 0 ? (
         <p className="text-ink-500 text-sm mb-10">Пока нет оценок от гостей.</p>
       ) : (
         <div className="mb-10">
@@ -70,7 +78,9 @@ export function StaffRatingPanel({ staffId }: { staffId: string }) {
       )}
 
       <p className="section-label mb-4">Отзывы гостей о сотруднике</p>
-      {rated.length === 0 ? (
+      {loading ? (
+        <p className="text-ink-500 text-sm">Загрузка отзывов…</p>
+      ) : rated.length === 0 ? (
         <p className="text-ink-500 text-sm">Пока нет отзывов.</p>
       ) : (
         <div className="flex flex-col gap-4">

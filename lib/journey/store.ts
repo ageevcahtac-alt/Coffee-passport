@@ -78,7 +78,10 @@ export function getServerSnapshot(): TastingRecord[] {
   return EMPTY_RECORDS;
 }
 
-function rowToRecord(row: CheckinRow): TastingRecord {
+// Exported for lib/data/cafeShopCheckins.ts, which maps the same CheckinRow
+// shape for staff dashboards reading a whole shop's checkins (not just the
+// signed-in user's own, which is all this store itself ever holds).
+export function rowToRecord(row: CheckinRow): TastingRecord {
   return {
     id: row.id,
     userId: row.owner_user_id,

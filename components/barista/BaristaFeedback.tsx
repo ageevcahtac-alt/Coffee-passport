@@ -1,9 +1,10 @@
 'use client';
 
-import { useJourney } from '@/lib/journey/useJourney';
+import { useShopCheckins } from '@/lib/data/useShopCheckins';
 import { getMergedLotById } from '@/lib/data/lotsStore';
 import { formatTastingDate } from '@/lib/utils/date';
 import { StarRating } from '@/components/coffee/StarRating';
+import { useStaffSession } from '@/lib/auth/staffSession';
 import { DEFECT_TAGS, type TastingRecord } from '@/lib/types/coffee';
 
 const FEED_LIMIT = 5;
@@ -17,7 +18,8 @@ const FEED_LIMIT = 5;
 // never a display name), this label just makes that anonymity explicit
 // rather than leaving the author line blank.
 export function BaristaFeedback({ baristaId }: { baristaId: string }) {
-  const records = useJourney();
+  const { cafeId } = useStaffSession();
+  const { records, loading } = useShopCheckins(cafeId ?? '');
   const myRecords = [...records]
     .filter((record) => record.baristaId === baristaId)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -34,7 +36,9 @@ export function BaristaFeedback({ baristaId }: { baristaId: string }) {
           <p className="text-[11px] uppercase tracking-widest2 text-ink-400 mb-4">
             Вкус, баланс, дефекты заваривания
           </p>
-          {coffeeFeed.length === 0 ? (
+          {loading ? (
+            <p className="text-sm text-ink-400">Загрузка отзывов…</p>
+          ) : coffeeFeed.length === 0 ? (
             <p className="text-sm text-ink-400">Пока нет отзывов о кофе.</p>
           ) : (
             <div className="flex flex-col gap-4">
@@ -50,7 +54,9 @@ export function BaristaFeedback({ baristaId }: { baristaId: string }) {
           <p className="text-[11px] uppercase tracking-widest2 text-gold-500 mb-4">
             Приветливость, опрятность, атмосфера — видно только вам и кофейне
           </p>
-          {serviceFeed.length === 0 ? (
+          {loading ? (
+            <p className="text-sm text-ink-400">Загрузка отзывов…</p>
+          ) : serviceFeed.length === 0 ? (
             <p className="text-sm text-ink-400">Пока нет отзывов о сервисе.</p>
           ) : (
             <div className="flex flex-col gap-4">

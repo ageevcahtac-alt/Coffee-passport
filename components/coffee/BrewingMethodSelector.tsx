@@ -14,13 +14,20 @@ const fieldClasses =
 // step: picking the card fixes brewingMethodId = 'espresso' immediately, so
 // callers reading it (e.g. the Equipment Garage auto-fill in
 // ProRecipeForm/EnthusiastRecipeForm) can react the moment it's chosen.
+//
+// Strictly mutually exclusive, and each card toggles off on a second click
+// (back to value = null / nothing selected): picking "Фильтр" while
+// "Эспрессо" was selected must clear the old espresso value immediately —
+// not just visually swap which card is open — otherwise the parent's
+// brewingMethodId stays 'espresso' underneath an open-but-unpicked filter
+// dropdown and both cards render as checked at once.
 export function BrewingMethodSelector({
   value,
   onChange,
   name = 'brewing-method',
 }: {
   value: BrewingMethodId | null;
-  onChange: (methodId: BrewingMethodId) => void;
+  onChange: (methodId: BrewingMethodId | null) => void;
   name?: string;
 }) {
   const isEspresso = value === 'espresso';
@@ -31,29 +38,38 @@ export function BrewingMethodSelector({
   const [filterOpen, setFilterOpen] = useState(isFilterValue);
   useEffect(() => {
     if (isFilterValue) setFilterOpen(true);
-  }, [isFilterValue]);
+    if (value === null) setFilterOpen(false);
+  }, [isFilterValue, value]);
+
+  const filterActive = filterOpen || isFilterValue;
+
+  function selectEspresso() {
+    if (isEspresso) {
+      onChange(null);
+      return;
+    }
+    setFilterOpen(false);
+    onChange('espresso');
+  }
+
+  function selectFilterCategory() {
+    if (filterActive) {
+      setFilterOpen(false);
+      onChange(null);
+      return;
+    }
+    setFilterOpen(true);
+    if (isEspresso) onChange(null);
+  }
 
   return (
     <div>
       <div role="radiogroup" aria-label="Способ приготовления" className="grid grid-cols-2 gap-3">
-        <MacroCard
-          label="☕ Эспрессо"
-          checked={isEspresso}
-          name={name}
-          onClick={() => {
-            setFilterOpen(false);
-            onChange('espresso');
-          }}
-        />
-        <MacroCard
-          label="🧪 Фильтр"
-          checked={filterOpen || isFilterValue}
-          name={name}
-          onClick={() => setFilterOpen(true)}
-        />
+        <MacroCard label="☕ Эспрессо" checked={isEspresso} name={name} onClick={selectEspresso} />
+        <MacroCard label="🧪 Фильтр" checked={filterActive} name={name} onClick={selectFilterCategory} />
       </div>
 
-      {(filterOpen || isFilterValue) && (
+      {filterActive && (
         <div className="mt-3">
           <label htmlFor={`${name}-filter-method`} className="block text-xs text-ink-400 mb-1.5">
             Способ фильтра
