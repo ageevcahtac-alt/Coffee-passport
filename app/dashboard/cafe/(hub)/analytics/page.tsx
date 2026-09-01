@@ -6,9 +6,12 @@ import { useShopCheckins } from '@/lib/data/useShopCheckins';
 import { useLots } from '@/lib/data/useLots';
 import { useCafeMenuLotIds } from '@/lib/data/useCafeMenu';
 import { getBaristasForShop } from '@/lib/data/baristas';
+import { getMergedLotById } from '@/lib/data/lotsStore';
 import { useStaffSession } from '@/lib/auth/staffSession';
+import { downloadCsv } from '@/lib/utils/csvExport';
 import { CoffeeReviewCard } from '@/components/cafe/CoffeeReviewCard';
 import { ServiceReviewCard } from '@/components/cafe/ServiceReviewCard';
+import { DEFECT_TAGS, type TastingRecord } from '@/lib/types/coffee';
 
 type Tab = 'coffee' | 'service';
 
@@ -69,6 +72,55 @@ export default function CafeAnalyticsPage() {
     setLotFilter('all');
     setDateFrom('');
     setDateTo('');
+  }
+
+  function baristaName(baristaId: string): string {
+    return shopBaristas.find((barista) => barista.id === baristaId)?.name ?? baristaId;
+  }
+
+  function csvDate(iso: string): string {
+    return new Date(iso).toISOString().slice(0, 16).replace('T', ' ');
+  }
+
+  // Exports every currently-filtered row (respecting barista/lot/date
+  // filters and which tab is active), not just the current pagination
+  // page — a report is only useful if it's the whole filtered set.
+  function handleExportCsv() {
+    if (tab === 'coffee') {
+      const rows = filtered.map((record: TastingRecord) => [
+        csvDate(record.createdAt),
+        getMergedLotById(record.lotId)?.name ?? record.lotId,
+        String(record.rating),
+        record.baristaId ? baristaName(record.baristaId) : '',
+        record.liked,
+        record.disliked,
+        record.note,
+        record.defects.map((id) => DEFECT_TAGS.find((tag) => tag.id === id)?.label ?? id).join('; '),
+      ]);
+      downloadCsv(`otzyvy-kofe-${new Date().toISOString().slice(0, 10)}.csv`, [
+        'Дата',
+        'Лот',
+        'Оценка',
+        'Бариста',
+        'Понравилось',
+        'Не понравилось',
+        'Заметка',
+        'Дефекты',
+      ], rows);
+    } else {
+      const rows = filtered.map((record: TastingRecord) => [
+        csvDate(record.createdAt),
+        baristaName(record.baristaId),
+        String(record.baristaRating),
+        record.baristaNote,
+      ]);
+      downloadCsv(`otzyvy-servis-${new Date().toISOString().slice(0, 10)}.csv`, [
+        'Дата',
+        'Бариста',
+        'Оценка сервиса',
+        'Комментарий',
+      ], rows);
+    }
   }
 
   return (
@@ -155,9 +207,20 @@ export default function CafeAnalyticsPage() {
         )}
       </div>
 
-      <p className="text-xs text-ink-400 mb-4">
-        Найдено {filtered.length} {pluralizeReviews(filtered.length)}
-      </p>
+      <div className="flex items-center justify-between gap-4 mb-4">
+        <p className="text-xs text-ink-400">
+          Найдено {filtered.length} {pluralizeReviews(filtered.length)}
+        </p>
+        <button
+          type="button"
+          onClick={handleExportCsv}
+          disabled={filtered.length === 0}
+          className="text-xs text-ink-700 underline underline-offset-2 hover:text-ink-900
+                     disabled:opacity-40 disabled:pointer-events-none shrink-0"
+        >
+          ⬇ Экспорт CSV
+        </button>
+      </div>
 
       {recordsLoading ? (
         <p className="text-sm text-ink-400">Загрузка отзывов…</p>

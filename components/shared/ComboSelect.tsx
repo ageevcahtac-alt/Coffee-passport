@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const OTHER_VALUE = '__other__';
 
@@ -35,6 +35,25 @@ export function ComboSelect({
 }) {
   const isKnownOption = value === '' || options.includes(value) || priorityOptions.includes(value);
   const [customMode, setCustomMode] = useState(!isKnownOption);
+
+  // customMode is normally sticky — only the "Другое…" option and "К
+  // списку" button change it, so it never fights the user mid-edit. But an
+  // externally-driven value (e.g. ProRecipeForm's Equipment Garage
+  // auto-fill landing the shop's saved grinder/machine model, which is
+  // very likely NOT one of the ~5 curated options in PRO_GRINDER_MODELS/
+  // ESPRESSO_MACHINE_MODELS) can set `value` to a real, non-empty, unlisted
+  // string while still mounted in customMode=false — that combination is
+  // only reachable from outside this component, never from its own
+  // <select>'s onChange. Left uncorrected, the <select> silently renders
+  // "Не выбрано" (no <option> matches the value) even though the field
+  // already holds the correct auto-filled model underneath, so the guest/
+  // barista/roaster has to notice nothing looks selected and re-pick it by
+  // hand. This only ever switches INTO custom mode for that case — it
+  // never switches back out on its own, so clearing/typing in an
+  // already-open custom input stays entirely user-driven.
+  useEffect(() => {
+    if (!customMode && !isKnownOption) setCustomMode(true);
+  }, [customMode, isKnownOption]);
 
   if (customMode) {
     return (
