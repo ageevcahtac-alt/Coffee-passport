@@ -81,6 +81,20 @@ export interface CoffeeShop {
   name: string;
   city: string;
   brandColor: string; // pin color on the Coffee Belt map, e.g. "#00A896"
+  // "Профиль на карте" — set by the coffee shop's own dashboard (see
+  // app/dashboard/cafe/(hub)/map-profile), read by the public /map module
+  // (components/map/*). lat/lng null means the shop hasn't placed its pin
+  // yet, so it's simply skipped by the map instead of guessing a location.
+  lat: number | null;
+  lng: number | null;
+  address: string;
+  phone: string;
+  website: string;
+  instagramUrl: string;
+  telegramUrl: string;
+  description: string;
+  workingHours: string; // free text, e.g. "Пн–Вс 8:00–20:00"
+  photos: string[]; // up to 3 photo URLs
 }
 
 export interface Barista {

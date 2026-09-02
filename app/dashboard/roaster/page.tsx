@@ -12,6 +12,7 @@ import { ROAST_TYPE_LABELS, type Lot } from '@/lib/types/coffee';
 import type { AnonymizedCheckin } from '@/lib/data/checkinsRoasterView';
 import { LotGuestAnalytics } from '@/components/roaster/LotGuestAnalytics';
 import { CommunityHighlights } from '@/components/coffee/CommunityHighlights';
+import { RoasterSupplyMapWidget } from '@/components/roaster/RoasterSupplyMapWidget';
 import { useStaffSession } from '@/lib/auth/staffSession';
 
 type CatalogTab = 'active' | 'archived';
@@ -55,12 +56,20 @@ export default function RoasterDashboardPage() {
               {roaster?.name ?? 'Обжарщик'}
             </p>
             <h1 className="font-display text-3xl text-ink-900">Лоты</h1>
-            <Link
-              href="/dashboard/roaster/equipment"
-              className="text-xs text-ink-500 underline underline-offset-2 hover:text-ink-900 mt-2 inline-block"
-            >
-              ⚙️ Оборудование ростерии
-            </Link>
+            <div className="flex items-center gap-4 mt-2">
+              <Link
+                href="/dashboard/roaster/equipment"
+                className="text-xs text-ink-500 underline underline-offset-2 hover:text-ink-900"
+              >
+                ⚙️ Оборудование ростерии
+              </Link>
+              <Link
+                href="/map"
+                className="text-xs text-ink-500 underline underline-offset-2 hover:text-ink-900"
+              >
+                🗺️ Карта кофеен
+              </Link>
+            </div>
           </div>
           <Link
             href="/dashboard/roaster/new"
@@ -73,6 +82,8 @@ export default function RoasterDashboardPage() {
         </div>
 
         <CommunityHighlights scopeLots={myLots} canApprove />
+
+        <RoasterSupplyMapWidget myLots={myLots} />
 
         <div role="tablist" aria-label="Каталог лотов" className="flex gap-1.5 mb-6">
           <TabButton

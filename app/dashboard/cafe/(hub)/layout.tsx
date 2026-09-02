@@ -9,6 +9,7 @@ const TABS = [
   { href: '/dashboard/cafe', label: 'Меню зерна' },
   { href: '/dashboard/cafe/analytics', label: 'Отзывы гостей' },
   { href: '/dashboard/cafe/team', label: 'Команда / Персонал' },
+  { href: '/dashboard/cafe/map-profile', label: 'Профиль на карте' },
   { href: '/dashboard/cafe/equipment', label: 'Оборудование' },
 ] as const;
 
@@ -20,11 +21,19 @@ export default function CafeHubLayout({ children }: { children: React.ReactNode 
   return (
     <main className="min-h-dvh px-6 py-16">
       <div className="max-w-2xl mx-auto w-full">
-        <div className="mb-8">
-          <p className="text-xs uppercase tracking-widest2 text-ink-400 font-body mb-2">
-            {shop ? `${shop.name} · ${shop.city}` : 'Кофейня'}
-          </p>
-          <h1 className="font-display text-3xl text-ink-900">Кабинет кофейни</h1>
+        <div className="flex items-start justify-between gap-4 mb-8">
+          <div>
+            <p className="text-xs uppercase tracking-widest2 text-ink-400 font-body mb-2">
+              {shop ? `${shop.name} · ${shop.city}` : 'Кофейня'}
+            </p>
+            <h1 className="font-display text-3xl text-ink-900">Кабинет кофейни</h1>
+          </div>
+          <Link
+            href="/map"
+            className="text-xs text-ink-500 underline underline-offset-2 hover:text-ink-900 shrink-0 mt-1"
+          >
+            🗺️ Карта кофеен
+          </Link>
         </div>
 
         <nav className="flex gap-1 border-b border-ink-200 mb-10 overflow-x-auto">

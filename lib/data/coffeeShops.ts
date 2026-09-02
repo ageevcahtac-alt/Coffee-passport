@@ -3,15 +3,82 @@
 import type { CoffeeShop } from '@/lib/types/coffee';
 
 export const SEED_COFFEE_SHOPS: CoffeeShop[] = [
-  { id: 'shop-xo-vsevolozhsk', name: 'XO Coffee', city: 'Всеволожск', brandColor: '#D4AF37' },
-  { id: 'shop-a-spb', name: 'Coffee Shop A', city: 'Санкт-Петербург', brandColor: '#00A896' },
-  { id: 'shop-b-peterhof', name: 'Coffee Shop B', city: 'Петергоф', brandColor: '#E63946' },
+  {
+    id: 'shop-xo-vsevolozhsk',
+    name: 'XO Coffee',
+    city: 'Всеволожск',
+    brandColor: '#D4AF37',
+    lat: 60.0167,
+    lng: 30.6394,
+    address: 'г. Всеволожск, Колтушское шоссе, 1',
+    phone: '+7 800 555-01-01',
+    website: 'https://xo-coffee.example',
+    instagramUrl: '',
+    telegramUrl: '',
+    description: 'Пилотная кофейня программы Coffee Passport — зерно от нескольких обжарщиков, фильтр и эспрессо.',
+    workingHours: 'Пн–Вс 8:00–20:00',
+    photos: [],
+  },
+  {
+    id: 'shop-a-spb',
+    name: 'Coffee Shop A',
+    city: 'Санкт-Петербург',
+    brandColor: '#00A896',
+    lat: 59.9311,
+    lng: 30.3609,
+    address: '',
+    phone: '',
+    website: '',
+    instagramUrl: '',
+    telegramUrl: '',
+    description: '',
+    workingHours: '',
+    photos: [],
+  },
+  {
+    id: 'shop-b-peterhof',
+    name: 'Coffee Shop B',
+    city: 'Петергоф',
+    brandColor: '#E63946',
+    lat: 59.8848,
+    lng: 29.9099,
+    address: '',
+    phone: '',
+    website: '',
+    instagramUrl: '',
+    telegramUrl: '',
+    description: '',
+    workingHours: '',
+    photos: [],
+  },
 ];
 
 // Seed shops merged with anything the admin panel (Реестр партнёров /
-// Активировать партнёра) saved to localStorage — same override-on-seed
-// idiom as lib/data/lotsStore.ts / lib/data/roasters.ts.
+// Активировать партнёра) or a shop's own "Профиль на карте" screen
+// (app/dashboard/cafe/(hub)/map-profile) saved to localStorage — same
+// override-on-seed idiom as lib/data/lotsStore.ts / lib/data/roasters.ts.
 const STORAGE_KEY = 'coffee-passport:coffee-shops';
+
+// CoffeeShop has grown fields since this store's earliest deploys (map
+// profile: lat/lng/address/etc.) — a browser with an old-shaped override in
+// localStorage would otherwise hand out a shop missing them. Backfilling
+// here, once, means every consumer trusts the CoffeeShop type instead of
+// re-guessing a fallback (same idiom as lotsStore.ts's normalizeLot).
+function normalizeShop(shop: CoffeeShop): CoffeeShop {
+  return {
+    ...shop,
+    lat: shop.lat ?? null,
+    lng: shop.lng ?? null,
+    address: shop.address ?? '',
+    phone: shop.phone ?? '',
+    website: shop.website ?? '',
+    instagramUrl: shop.instagramUrl ?? '',
+    telegramUrl: shop.telegramUrl ?? '',
+    description: shop.description ?? '',
+    workingHours: shop.workingHours ?? '',
+    photos: shop.photos ?? [],
+  };
+}
 
 let cache: CoffeeShop[] | null = null;
 const listeners = new Set<() => void>();
@@ -20,7 +87,8 @@ function readOverrides(): CoffeeShop[] {
   if (typeof window === 'undefined') return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as CoffeeShop[]) : [];
+    const parsed = raw ? (JSON.parse(raw) as CoffeeShop[]) : [];
+    return parsed.map(normalizeShop);
   } catch {
     return [];
   }

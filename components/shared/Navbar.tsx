@@ -10,6 +10,7 @@ export function Navbar({ userEmail }: { userEmail: string | null }) {
       </Link>
       <div className="flex flex-col items-end gap-1.5">
         <nav className="flex items-center gap-4 text-sm text-ink-500">
+          <Link href="/map" className="hover:text-ink-900">🗺️ Карта кофеен</Link>
           <Link href="/top-recipes" className="hover:text-ink-900">Топовые рецепты</Link>
           {userEmail ? (
             <>

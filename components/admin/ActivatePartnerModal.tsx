@@ -60,6 +60,16 @@ export function ActivatePartnerModal({
         name: name.trim(),
         city: city.trim(),
         brandColor,
+        lat: null,
+        lng: null,
+        address: '',
+        phone: '',
+        website: '',
+        instagramUrl: '',
+        telegramUrl: '',
+        description: '',
+        workingHours: '',
+        photos: [],
       });
       setInvitePassword(password);
       onActivated?.({ kind, id, invitePassword: password });
