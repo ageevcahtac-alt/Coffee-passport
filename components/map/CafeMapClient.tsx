@@ -17,6 +17,11 @@ const DEFAULT_CENTER: [number, number] = [55.7558, 37.6173]; // Moscow — a
 const DEFAULT_ZOOM = 4;
 const FALLBACK_PIN_COLOR = '#8a7a63';
 
+// CartoDB Voyager — a clean, neutral basemap (no OSM's default watermark
+// styling) served free with no API key, same "no map key configured in
+// this project" constraint as the rest of this module.
+const CARTO_VOYAGER_URL = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+
 export interface FlyTarget {
   center: [number, number];
   zoom: number;
@@ -103,10 +108,17 @@ export function CafeMapClient({
       zoom={DEFAULT_ZOOM}
       className="w-full h-full"
       scrollWheelZoom
+      // Leaflet's own default attribution control renders a "Leaflet" flag
+      // link nobody asked for on top of the tile credit — off entirely
+      // rather than fighting its prefix API, per this screen's clean-chrome
+      // requirement.
+      attributionControl={false}
     >
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution="&copy; Map data &copy; OpenStreetMap contributors"
+        url={CARTO_VOYAGER_URL}
+        subdomains="abcd"
+        detectRetina
       />
       <FitAllBounds shops={shops} />
       <FlyTo target={flyTarget} />
