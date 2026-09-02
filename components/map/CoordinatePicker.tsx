@@ -11,10 +11,11 @@ import 'leaflet/dist/leaflet.css';
 
 const DEFAULT_CENTER: [number, number] = [55.7558, 37.6173]; // Moscow
 
-// CartoDB Voyager — same clean, neutral, no-API-key basemap as
-// CafeMapClient (the public /map screen), so the coordinate a cafe picks
-// here previews on the same-looking tiles.
-const CARTO_VOYAGER_URL = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+// Same stock OpenStreetMap raster tiles as CafeMapClient (the public /map
+// screen) — CartoDB's free basemaps now watermark "API KEY REQUIRED"
+// without one, and this project has no map API key configured for
+// anything.
+const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 function pickerIcon(): L.DivIcon {
   return L.divIcon({
@@ -112,9 +113,7 @@ export function CoordinatePicker({
     >
       <TileLayer
         attribution="&copy; Map data &copy; OpenStreetMap contributors"
-        url={CARTO_VOYAGER_URL}
-        subdomains="abcd"
-        detectRetina
+        url={TILE_URL}
       />
       <ClickToPlace onPick={onChange} />
       <RecenterOnSignal lat={lat} lng={lng} signal={recenterSignal} />

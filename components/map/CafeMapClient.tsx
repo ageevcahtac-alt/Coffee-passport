@@ -17,10 +17,11 @@ const DEFAULT_CENTER: [number, number] = [55.7558, 37.6173]; // Moscow — a
 const DEFAULT_ZOOM = 4;
 const FALLBACK_PIN_COLOR = '#8a7a63';
 
-// CartoDB Voyager — a clean, neutral basemap (no OSM's default watermark
-// styling) served free with no API key, same "no map key configured in
-// this project" constraint as the rest of this module.
-const CARTO_VOYAGER_URL = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+// CartoDB's basemaps.cartocdn.com now stamps an "API KEY REQUIRED"
+// watermark across every tile without one, and this project has no map API
+// key configured for anything (Google/Yandex/CARTO alike) — back to stock
+// OpenStreetMap raster tiles, still free with no key.
+const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 export interface FlyTarget {
   center: [number, number];
@@ -116,9 +117,7 @@ export function CafeMapClient({
     >
       <TileLayer
         attribution="&copy; Map data &copy; OpenStreetMap contributors"
-        url={CARTO_VOYAGER_URL}
-        subdomains="abcd"
-        detectRetina
+        url={TILE_URL}
       />
       <FitAllBounds shops={shops} />
       <FlyTo target={flyTarget} />
