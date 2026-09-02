@@ -67,6 +67,7 @@ export function ActivatePartnerModal({
         website: '',
         instagramUrl: '',
         telegramUrl: '',
+        vkUrl: '',
         description: '',
         workingHours: '',
         photos: [],

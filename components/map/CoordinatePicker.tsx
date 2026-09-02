@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import { useEffect, useMemo, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -25,12 +25,43 @@ function pickerIcon(): L.DivIcon {
   });
 }
 
+// `onPick` comes from the parent form as a fresh inline closure every
+// render — reading it through a ref keeps the handler this component
+// registers with Leaflet referentially stable, so react-leaflet doesn't
+// unbind/rebind the map's click listener on every keystroke elsewhere in
+// the form (same reasoning as CafeMapClient's memoized eventHandlers).
 function ClickToPlace({ onPick }: { onPick: (lat: number, lng: number) => void }) {
+  const onPickRef = useRef(onPick);
+  onPickRef.current = onPick;
   useMapEvents({
     click(event) {
-      onPick(event.latlng.lat, event.latlng.lng);
+      onPickRef.current(event.latlng.lat, event.latlng.lng);
     },
   });
+  return null;
+}
+
+// Recenters the map whenever `signal` changes (any new value, regardless of
+// direction) — driven by the "Найти на карте по адресу" geocode action, not
+// by every lat/lng change, since a click-to-place update already moves the
+// visible marker under the cursor and doesn't need an extra camera move.
+function RecenterOnSignal({
+  lat,
+  lng,
+  signal,
+}: {
+  lat: number | null;
+  lng: number | null;
+  signal: number;
+}) {
+  const map = useMap();
+  const lastSignal = useRef(signal);
+  useEffect(() => {
+    if (signal !== lastSignal.current && lat !== null && lng !== null) {
+      lastSignal.current = signal;
+      map.flyTo([lat, lng], 15, { duration: 0.75 });
+    }
+  }, [signal, lat, lng, map]);
   return null;
 }
 
@@ -43,13 +74,28 @@ export function CoordinatePicker({
   lat,
   lng,
   onChange,
+  recenterSignal = 0,
 }: {
   lat: number | null;
   lng: number | null;
   onChange: (lat: number, lng: number) => void;
+  recenterSignal?: number;
 }) {
   const icon = useMemo(() => pickerIcon(), []);
   const center: [number, number] = lat !== null && lng !== null ? [lat, lng] : DEFAULT_CENTER;
+
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const dragHandlers = useMemo(
+    () => ({
+      dragend: (event: L.DragEndEvent) => {
+        const marker = event.target as L.Marker;
+        const position = marker.getLatLng();
+        onChangeRef.current(position.lat, position.lng);
+      },
+    }),
+    []
+  );
 
   return (
     <MapContainer center={center} zoom={lat !== null ? 14 : 4} className="w-full h-full" scrollWheelZoom>
@@ -58,19 +104,9 @@ export function CoordinatePicker({
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
       <ClickToPlace onPick={onChange} />
+      <RecenterOnSignal lat={lat} lng={lng} signal={recenterSignal} />
       {lat !== null && lng !== null && (
-        <Marker
-          position={[lat, lng]}
-          icon={icon}
-          draggable
-          eventHandlers={{
-            dragend: (event) => {
-              const marker = event.target as L.Marker;
-              const position = marker.getLatLng();
-              onChange(position.lat, position.lng);
-            },
-          }}
-        />
+        <Marker position={[lat, lng]} icon={icon} draggable eventHandlers={dragHandlers} />
       )}
     </MapContainer>
   );

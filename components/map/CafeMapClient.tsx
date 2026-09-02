@@ -3,30 +3,31 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
-import L from 'leaflet';
+import L, { type LeafletEventHandlerFnMap } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { CoffeeShop } from '@/lib/types/coffee';
 
-// Loaded only via next/dynamic(..., { ssr: false }) from app/(site)/map —
-// Leaflet touches `window`/`document` at import time, so it can never be
-// part of a server-rendered bundle.
+// Loaded only via next/dynamic(..., { ssr: false }) from app/map — Leaflet
+// touches `window`/`document` at import time, so it can never be part of a
+// server-rendered bundle.
 
 const DEFAULT_CENTER: [number, number] = [55.7558, 37.6173]; // Moscow — a
 // reasonable fallback only shown for the instant before FitAllBounds below
 // re-centers on the shops that actually have coordinates.
 const DEFAULT_ZOOM = 4;
+const FALLBACK_PIN_COLOR = '#8a7a63';
 
 export interface FlyTarget {
   center: [number, number];
   zoom: number;
 }
 
-function pinIconFor(color: string): L.DivIcon {
+function pinIconFor(color: string | undefined): L.DivIcon {
   return L.divIcon({
     className: '',
     html: `<div style="
       width:26px;height:26px;border-radius:50% 50% 50% 0;
-      background:${color};transform:rotate(-45deg);
+      background:${color || FALLBACK_PIN_COLOR};transform:rotate(-45deg);
       border:2px solid var(--color-parchment-100, #faf8f5);
       box-shadow:0 1px 4px rgba(0,0,0,.35);
     "></div>`,
@@ -70,7 +71,7 @@ export function CafeMapClient({
   flyTarget,
   onSelectShop,
 }: {
-  shops: CoffeeShop[]; // pre-filtered to shops with lat/lng both set
+  shops: CoffeeShop[]; // pre-filtered to shops with lat/lng both set and numeric
   flyTarget: FlyTarget | null;
   onSelectShop: (shop: CoffeeShop) => void;
 }) {
@@ -78,6 +79,23 @@ export function CafeMapClient({
     () => new Map(shops.map((shop) => [shop.id, pinIconFor(shop.brandColor)])),
     [shops]
   );
+
+  // One stable handlers object per shop, keyed by id and recomputed only
+  // when the shop list itself changes — not a fresh `{ click: ... }`
+  // literal on every render. react-leaflet's eventHandlers prop is compared
+  // by reference: a new literal every render makes it unbind and rebind the
+  // marker's click listener on every re-render (including the one the click
+  // itself triggers), which is wasted churn at best and, combined with
+  // leaflet.markercluster's own DOM housekeeping on click, a real crash
+  // vector at worst.
+  const handlersById = useMemo(() => {
+    const map = new Map<string, LeafletEventHandlerFnMap>();
+    for (const shop of shops) {
+      map.set(shop.id, { click: () => onSelectShop(shop) });
+    }
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onSelectShop is the page's setState, stable across renders
+  }, [shops]);
 
   return (
     <MapContainer
@@ -92,13 +110,17 @@ export function CafeMapClient({
       />
       <FitAllBounds shops={shops} />
       <FlyTo target={flyTarget} />
-      <MarkerClusterGroup chunkedLoading showCoverageOnHover={false}>
+      {/* animate:false sidesteps a known leaflet.markercluster + React
+          instability where the library's own spiderfy/zoom DOM animation
+          can race a React re-render and try to touch a node React has
+          already reconciled away. */}
+      <MarkerClusterGroup chunkedLoading showCoverageOnHover={false} animate={false}>
         {shops.map((shop) => (
           <Marker
             key={shop.id}
             position={[shop.lat as number, shop.lng as number]}
             icon={icons.get(shop.id)}
-            eventHandlers={{ click: () => onSelectShop(shop) }}
+            eventHandlers={handlersById.get(shop.id)}
           />
         ))}
       </MarkerClusterGroup>

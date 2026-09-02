@@ -92,6 +92,7 @@ export interface CoffeeShop {
   website: string;
   instagramUrl: string;
   telegramUrl: string;
+  vkUrl: string;
   description: string;
   workingHours: string; // free text, e.g. "Пн–Вс 8:00–20:00"
   photos: string[]; // up to 3 photo URLs

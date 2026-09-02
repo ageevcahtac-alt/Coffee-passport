@@ -15,6 +15,7 @@ export const SEED_COFFEE_SHOPS: CoffeeShop[] = [
     website: 'https://xo-coffee.example',
     instagramUrl: '',
     telegramUrl: '',
+    vkUrl: '',
     description: 'Пилотная кофейня программы Coffee Passport — зерно от нескольких обжарщиков, фильтр и эспрессо.',
     workingHours: 'Пн–Вс 8:00–20:00',
     photos: [],
@@ -31,6 +32,7 @@ export const SEED_COFFEE_SHOPS: CoffeeShop[] = [
     website: '',
     instagramUrl: '',
     telegramUrl: '',
+    vkUrl: '',
     description: '',
     workingHours: '',
     photos: [],
@@ -47,6 +49,7 @@ export const SEED_COFFEE_SHOPS: CoffeeShop[] = [
     website: '',
     instagramUrl: '',
     telegramUrl: '',
+    vkUrl: '',
     description: '',
     workingHours: '',
     photos: [],
@@ -65,18 +68,24 @@ const STORAGE_KEY = 'coffee-passport:coffee-shops';
 // here, once, means every consumer trusts the CoffeeShop type instead of
 // re-guessing a fallback (same idiom as lotsStore.ts's normalizeLot).
 function normalizeShop(shop: CoffeeShop): CoffeeShop {
+  const lat = typeof shop.lat === 'number' && Number.isFinite(shop.lat) ? shop.lat : null;
+  const lng = typeof shop.lng === 'number' && Number.isFinite(shop.lng) ? shop.lng : null;
   return {
     ...shop,
-    lat: shop.lat ?? null,
-    lng: shop.lng ?? null,
+    // A pin needs BOTH coordinates or neither — a half-set pair (e.g. from
+    // hand-edited localStorage, or a save that raced a partial form state)
+    // would otherwise crash Leaflet's `[lat, lng]` tuple downstream.
+    lat: lat !== null && lng !== null ? lat : null,
+    lng: lat !== null && lng !== null ? lng : null,
     address: shop.address ?? '',
     phone: shop.phone ?? '',
     website: shop.website ?? '',
     instagramUrl: shop.instagramUrl ?? '',
     telegramUrl: shop.telegramUrl ?? '',
+    vkUrl: shop.vkUrl ?? '',
     description: shop.description ?? '',
     workingHours: shop.workingHours ?? '',
-    photos: shop.photos ?? [],
+    photos: Array.isArray(shop.photos) ? shop.photos.filter((url) => typeof url === 'string' && url) : [],
   };
 }
 
@@ -92,6 +101,22 @@ function readOverrides(): CoffeeShop[] {
   } catch {
     return [];
   }
+}
+
+// Another tab saving this shop's map profile (e.g. the cafe cabinet in one
+// tab, /map open in another) only reaches this module's in-memory `cache`
+// via the browser's cross-tab `storage` event — same-tab writes already go
+// through saveCoffeeShop()'s own listener notification below. Registered
+// once at module scope; harmless if this module is evaluated more than
+// once (Next.js Fast Refresh) since duplicate listeners just re-notify the
+// same (idempotent) invalidation.
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key === STORAGE_KEY) {
+      cache = null;
+      listeners.forEach((listener) => listener());
+    }
+  });
 }
 
 function computeAll(): CoffeeShop[] {

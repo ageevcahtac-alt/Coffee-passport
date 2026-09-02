@@ -5,13 +5,13 @@ import type { CoffeeShop, RoastType } from '@/lib/types/coffee';
 import { useLots } from '@/lib/data/useLots';
 import { useCafeMenuEntries } from '@/lib/data/useCafeMenu';
 
-// "Что в наличии" buckets a shop's active menu into three roast-purpose
-// tags plus a 4th "Архив" count for lots the shop toggled OFF its menu
-// (see lib/data/cafeMenuStore.ts's is_active_in_cafe) — a coarser read than
-// the full RoastType axis, matched to what a guest picking a coffee shop on
-// the map actually wants to know. 'omni' lots serve both espresso and
-// filter brewing, so they count toward "Фильтр" here rather than getting a
-// 5th bucket nobody asked for.
+// "Активное зерно в наличии" buckets a shop's active menu into three
+// roast-purpose tags plus a 4th "Архив" count for lots the shop toggled OFF
+// its menu (see lib/data/cafeMenuStore.ts's is_active_in_cafe) — a coarser
+// read than the full RoastType axis, matched to what a guest picking a
+// coffee shop on the map actually wants to know. 'omni' lots serve both
+// espresso and filter brewing, so they count toward "Фильтр" here rather
+// than getting a 5th bucket nobody asked for.
 const SUPPLY_LABELS = ['Эспрессо', 'Фильтр', 'Дрипы', 'Архив'] as const;
 type SupplyLabel = (typeof SUPPLY_LABELS)[number];
 
@@ -21,25 +21,51 @@ function bucketFor(roastType: RoastType): Exclude<SupplyLabel, 'Архив'> {
   return 'Фильтр'; // 'filter' and 'omni'
 }
 
-function useSupplyCounts(shopId: string): Record<SupplyLabel, number> {
-  const lots = useLots();
-  const entries = useCafeMenuEntries(shopId);
+// Every field this reads is defended with `?.`/fallbacks even though
+// CoffeeShop's own fields are typed non-optional — this panel renders
+// whatever a coffee shop actually saved (or whatever an older, differently-
+// shaped localStorage record still holds), and per the task, a shop that
+// hasn't filled in photos/phone/socials/description must never crash the
+// map, only show less.
+function useSupplyData(shop: CoffeeShop) {
+  const lots = useLots() ?? [];
+  const entries = useCafeMenuEntries(shop.id) ?? {};
   const counts: Record<SupplyLabel, number> = { Эспрессо: 0, Фильтр: 0, Дрипы: 0, Архив: 0 };
+  const activeLotNames: string[] = [];
+
   for (const lot of lots) {
-    const isOnRoster = lot.id in entries;
-    if (!isOnRoster) continue;
+    if (!lot || !(lot.id in entries)) continue;
     if (entries[lot.id]) {
       counts[bucketFor(lot.roastType)] += 1;
+      activeLotNames.push(lot.name ?? lot.id);
     } else {
       counts['Архив'] += 1;
     }
   }
-  return counts;
+
+  return { counts, activeLotNames };
 }
 
 export function CafeDetailPanel({ shop, onClose }: { shop: CoffeeShop; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
-  const supplyCounts = useSupplyCounts(shop.id);
+  const { counts, activeLotNames } = useSupplyData(shop);
+
+  const name = shop?.name?.trim() || 'Кофейня';
+  const city = shop?.city?.trim() ?? '';
+  const address = shop?.address?.trim() ?? '';
+  const phone = shop?.phone?.trim() ?? '';
+  const website = shop?.website?.trim() ?? '';
+  const instagramUrl = shop?.instagramUrl?.trim() ?? '';
+  const telegramUrl = shop?.telegramUrl?.trim() ?? '';
+  const vkUrl = shop?.vkUrl?.trim() ?? '';
+  const description = shop?.description?.trim() ?? '';
+  const workingHours = shop?.workingHours?.trim() ?? '';
+  const photos = (Array.isArray(shop?.photos) ? shop.photos : []).filter(
+    (url): url is string => typeof url === 'string' && url.trim().length > 0
+  );
+  const brandColor = shop?.brandColor || '#8a7a63';
+  const lat = typeof shop?.lat === 'number' && Number.isFinite(shop.lat) ? shop.lat : null;
+  const lng = typeof shop?.lng === 'number' && Number.isFinite(shop.lng) ? shop.lng : null;
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -50,9 +76,9 @@ export function CafeDetailPanel({ shop, onClose }: { shop: CoffeeShop; onClose: 
   }, [onClose]);
 
   async function handleCopyAddress() {
-    if (!shop.address) return;
+    if (!address) return;
     try {
-      await navigator.clipboard.writeText(shop.address);
+      await navigator.clipboard.writeText(address);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -60,10 +86,14 @@ export function CafeDetailPanel({ shop, onClose }: { shop: CoffeeShop; onClose: 
     }
   }
 
-  const directionsUrl =
-    shop.lat !== null && shop.lng !== null
-      ? `https://www.google.com/maps/dir/?api=1&destination=${shop.lat},${shop.lng}`
-      : null;
+  const directionsUrl = lat !== null && lng !== null ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}` : null;
+
+  const socialLinks = [
+    { label: 'Telegram', href: telegramUrl },
+    { label: 'Instagram', href: instagramUrl },
+    { label: 'VK', href: vkUrl },
+    { label: 'Сайт', href: website },
+  ].filter((link) => link.href);
 
   return (
     <div
@@ -73,24 +103,24 @@ export function CafeDetailPanel({ shop, onClose }: { shop: CoffeeShop; onClose: 
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={`${shop.name} — карточка кофейни`}
+        aria-label={`${name} — карточка кофейни`}
         onClick={(event) => event.stopPropagation()}
         className="w-full sm:max-w-md max-h-[90dvh] overflow-y-auto rounded-t-md sm:rounded-md
                    bg-parchment-100 p-6"
       >
         <div className="flex items-start justify-between gap-4 mb-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0">
             <span
               className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center
                          text-parchment-100 font-display text-lg"
-              style={{ backgroundColor: shop.brandColor }}
+              style={{ backgroundColor: brandColor }}
               aria-hidden="true"
             >
-              {shop.name.charAt(0).toUpperCase()}
+              {name.charAt(0).toUpperCase() || '?'}
             </span>
-            <div>
-              <h2 className="font-display text-xl text-ink-900 leading-tight">{shop.name}</h2>
-              <p className="text-xs text-ink-400 mt-0.5">{shop.city}</p>
+            <div className="min-w-0">
+              <h2 className="font-display text-xl text-ink-900 leading-tight truncate">{name}</h2>
+              {city && <p className="text-xs text-ink-400 mt-0.5">{city}</p>}
             </div>
           </div>
           <button
@@ -103,9 +133,9 @@ export function CafeDetailPanel({ shop, onClose }: { shop: CoffeeShop; onClose: 
           </button>
         </div>
 
-        {shop.address && (
+        {address ? (
           <div className="flex items-center justify-between gap-3 mb-2 text-sm">
-            <p className="text-ink-700">{shop.address}</p>
+            <p className="text-ink-700">{address}</p>
             <button
               type="button"
               onClick={handleCopyAddress}
@@ -114,66 +144,66 @@ export function CafeDetailPanel({ shop, onClose }: { shop: CoffeeShop; onClose: 
               {copied ? 'Скопировано!' : 'Скопировать'}
             </button>
           </div>
+        ) : (
+          <p className="text-xs text-ink-400 mb-2">Адрес пока не указан</p>
         )}
 
-        {shop.workingHours && <p className="text-xs text-ink-400 mb-4">🕐 {shop.workingHours}</p>}
+        {workingHours && <p className="text-xs text-ink-400 mb-4">🕐 {workingHours}</p>}
 
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-6 text-sm">
-          {shop.phone && (
-            <a href={`tel:${shop.phone.replace(/[^+\d]/g, '')}`} className="text-ink-700 hover:text-ink-900">
-              📞 {shop.phone}
+        {phone ? (
+          <p className="text-sm mb-4">
+            <a href={`tel:${phone.replace(/[^+\d]/g, '')}`} className="text-ink-700 hover:text-ink-900">
+              📞 {phone}
             </a>
-          )}
-          {shop.website && (
-            <a
-              href={shop.website}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-ink-700 underline underline-offset-2 hover:text-ink-900"
-            >
-              Сайт
-            </a>
-          )}
-          {shop.instagramUrl && (
-            <a
-              href={shop.instagramUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-ink-700 underline underline-offset-2 hover:text-ink-900"
-            >
-              Instagram
-            </a>
-          )}
-          {shop.telegramUrl && (
-            <a
-              href={shop.telegramUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-ink-700 underline underline-offset-2 hover:text-ink-900"
-            >
-              Telegram
-            </a>
-          )}
-        </div>
+          </p>
+        ) : (
+          <p className="text-xs text-ink-400 mb-4">Телефон пока не указан</p>
+        )}
 
-        {shop.photos.length > 0 && (
-          <div className="flex gap-2 mb-6 overflow-x-auto">
-            {shop.photos.slice(0, 3).map((url, i) => (
-              // eslint-disable-next-line @next/next/no-img-element -- partner-supplied external URLs, not a Next-optimizable local asset
-              <img
-                key={url + i}
-                src={url}
-                alt={`${shop.name} — фото ${i + 1}`}
-                className="w-28 h-28 object-cover rounded-md border border-ink-200 shrink-0"
-              />
+        {socialLinks.length > 0 && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-6 text-sm">
+            {socialLinks.map((link) => (
+              <a
+                key={link.label}
+                href={link.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-ink-700 underline underline-offset-2 hover:text-ink-900"
+              >
+                {link.label}
+              </a>
             ))}
           </div>
         )}
 
-        {shop.description && <p className="text-sm text-ink-700 leading-relaxed mb-6">{shop.description}</p>}
+        {photos.length > 0 ? (
+          <div className="flex gap-2 mb-6 overflow-x-auto">
+            {photos.slice(0, 3).map((url, i) => (
+              // eslint-disable-next-line @next/next/no-img-element -- partner-supplied external URLs, not a Next-optimizable local asset
+              <img
+                key={`${url}-${i}`}
+                src={url}
+                alt={`${name} — фото ${i + 1}`}
+                className="w-28 h-28 object-cover rounded-md border border-ink-200 shrink-0"
+                onError={(event) => {
+                  // A broken/unreachable photo URL degrades to "just hide
+                  // it" rather than a visible broken-image icon or, worse,
+                  // an uncaught error further up the tree.
+                  event.currentTarget.style.display = 'none';
+                }}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-ink-400 mb-6">Фото пока не добавлены</p>
+        )}
 
-        <p className="section-label mb-3">Что в наличии</p>
-        <ul className="flex flex-wrap gap-1.5 mb-6">
+        <p className="text-sm text-ink-700 leading-relaxed mb-6">
+          {description || 'Описание кофейни пока не заполнено.'}
+        </p>
+
+        <p className="section-label mb-3">Активное зерно в наличии</p>
+        <ul className="flex flex-wrap gap-1.5 mb-3">
           {SUPPLY_LABELS.map((label) => (
             <li
               key={label}
@@ -183,12 +213,15 @@ export function CafeDetailPanel({ shop, onClose }: { shop: CoffeeShop; onClose: 
                   : 'border-ink-200 bg-parchment-200 text-ink-700'
               }`}
             >
-              {label} · {supplyCounts[label]}
+              {label} · {counts[label]}
             </li>
           ))}
         </ul>
+        <p className="text-xs text-ink-500 mb-6">
+          {activeLotNames.length > 0 ? activeLotNames.join(' · ') : 'Меню кофейни пока не заполнено.'}
+        </p>
 
-        {directionsUrl && (
+        {directionsUrl ? (
           <a
             href={directionsUrl}
             target="_blank"
@@ -199,6 +232,8 @@ export function CafeDetailPanel({ shop, onClose }: { shop: CoffeeShop; onClose: 
           >
             Маршрут →
           </a>
+        ) : (
+          <p className="text-xs text-ink-400 text-center">Координаты пока не установлены</p>
         )}
       </div>
     </div>
