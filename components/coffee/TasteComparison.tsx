@@ -55,19 +55,36 @@ export function TasteComparison({
         </span>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        {FLAVOR_AXES.map(({ key, label }, i) => {
-          const diff = guestValues[i] - roasterValues[i];
-          return (
-            <div key={key} className="flex items-center justify-between text-xs">
-              <span className="text-ink-700">{label}</span>
-              <span className="data-value text-ink-400">
-                {guestValues[i]}/5 · {roasterValues[i]}/5 ·{' '}
-                {diff === 0 ? 'совпадение' : diff > 0 ? `+${diff}` : diff}
-              </span>
-            </div>
-          );
-        })}
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs border-collapse">
+          <thead>
+            <tr className="text-ink-400">
+              <th className="text-left font-normal pb-2">Дескриптор</th>
+              <th className="text-right font-normal pb-2">Эталон обжарщика</th>
+              <th className="text-right font-normal pb-2">Ваша оценка</th>
+              <th className="text-right font-normal pb-2">Разница</th>
+            </tr>
+          </thead>
+          <tbody>
+            {FLAVOR_AXES.map(({ key, label }, i) => {
+              const diff = guestValues[i] - roasterValues[i];
+              return (
+                <tr key={key} className="border-t border-ink-200">
+                  <td className="py-2 text-ink-700">{label}</td>
+                  <td className="py-2 text-right data-value text-ink-900">{roasterValues[i]}/5</td>
+                  <td className="py-2 text-right data-value text-ink-900">{guestValues[i]}/5</td>
+                  <td
+                    className={`py-2 text-right data-value ${
+                      diff === 0 ? 'text-ink-400' : diff > 0 ? 'text-ink-900 font-medium' : 'text-ink-500'
+                    }`}
+                  >
+                    {diff === 0 ? 'совпадение' : diff > 0 ? `+${diff}` : diff}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );

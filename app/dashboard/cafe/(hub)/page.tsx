@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { useLots } from '@/lib/data/useLots';
-import { useCafeMenuLotIds } from '@/lib/data/useCafeMenu';
-import { removeLotFromMenu } from '@/lib/data/cafeMenuStore';
+import { useCafeMenuEntries } from '@/lib/data/useCafeMenu';
+import { setMenuLotActive } from '@/lib/data/cafeMenuStore';
 import { useCafeLotBenchmarks } from '@/lib/data/useCafeLotBenchmarks';
 import { LotMenuCard } from '@/components/cafe/LotMenuCard';
 import { GuestFeedback } from '@/components/cafe/GuestFeedback';
@@ -14,8 +14,8 @@ export default function CafeMenuPage() {
   const { cafeId } = useStaffSession();
   const activeShopId = cafeId ?? '';
   const lots = useLots();
-  const menuLotIds = useCafeMenuLotIds(activeShopId);
-  const menuLots = lots.filter((lot) => menuLotIds.includes(lot.id));
+  const menuEntries = useCafeMenuEntries(activeShopId);
+  const menuLots = lots.filter((lot) => lot.id in menuEntries);
   const { benchmarks, loading: benchmarksLoading } = useCafeLotBenchmarks(activeShopId);
 
   const regions = new Map<string, typeof menuLots>();
@@ -58,7 +58,9 @@ export default function CafeMenuPage() {
                   <LotMenuCard
                     key={lot.id}
                     lot={lot}
-                    onRemove={() => removeLotFromMenu(activeShopId, lot.id)}
+                    isActive={menuEntries[lot.id] ?? false}
+                    onToggleActive={(next) => setMenuLotActive(activeShopId, lot.id, next)}
+                    discontinuedByRoaster={!lot.inRoasterCatalog}
                     benchmark={benchmarks.get(lot.id)}
                     benchmarkLoading={benchmarksLoading}
                   />

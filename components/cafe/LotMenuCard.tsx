@@ -10,12 +10,16 @@ import type { Lot } from '@/lib/types/coffee';
 
 export function LotMenuCard({
   lot,
-  onRemove,
+  isActive,
+  onToggleActive,
+  discontinuedByRoaster = false,
   benchmark,
   benchmarkLoading,
 }: {
   lot: Lot;
-  onRemove: () => void;
+  isActive: boolean;
+  onToggleActive: (next: boolean) => void;
+  discontinuedByRoaster?: boolean;
   benchmark?: LotBenchmark;
   benchmarkLoading: boolean;
 }) {
@@ -61,6 +65,33 @@ export function LotMenuCard({
         <span className="data-value text-[11px] text-ink-300">{lot.id}</span>
       </div>
 
+      {discontinuedByRoaster && (
+        <p
+          className="inline-flex items-center rounded-full border border-dashed border-ink-300
+                     bg-parchment-200 text-ink-500 text-[11px] px-2.5 py-1 mb-4"
+        >
+          Снято с производства обжарщиком — новые партии заказать нельзя
+        </p>
+      )}
+
+      <div className="flex items-center justify-between gap-4 rounded-md border border-ink-200 bg-parchment-200 px-4 py-3 mb-4">
+        <span className="text-sm text-ink-900">В меню кофейни</span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={isActive}
+          aria-label="В меню кофейни"
+          onClick={() => onToggleActive(!isActive)}
+          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full
+                      transition-colors ${isActive ? 'bg-ink-900' : 'bg-ink-200'}`}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full bg-parchment-100
+                        transition-transform ${isActive ? 'translate-x-6' : 'translate-x-1'}`}
+          />
+        </button>
+      </div>
+
       <LotRatingBenchmarks benchmark={benchmark} loading={benchmarkLoading} />
 
       <div className="flex flex-wrap gap-x-4 gap-y-2">
@@ -90,13 +121,6 @@ export function LotMenuCard({
                      disabled:opacity-40 disabled:pointer-events-none"
         >
           {downloadingPdf ? 'Готовим PDF…' : 'Скачать QR (PDF)'}
-        </button>
-        <button
-          type="button"
-          onClick={onRemove}
-          className="text-sm text-ink-400 underline underline-offset-2 hover:text-ink-700"
-        >
-          Убрать из меню
         </button>
       </div>
     </div>

@@ -30,6 +30,7 @@ interface LotFormState {
   farmName: string;
   altitude: string;
   story: string;
+  inRoasterCatalog: boolean;
 }
 
 function toFormState(lot?: Lot): LotFormState {
@@ -52,6 +53,7 @@ function toFormState(lot?: Lot): LotFormState {
       farmName: '',
       altitude: '',
       story: '',
+      inRoasterCatalog: true,
     };
   }
   return {
@@ -72,6 +74,7 @@ function toFormState(lot?: Lot): LotFormState {
     farmName: lot.producer.farmName,
     altitude: lot.producer.altitude,
     story: lot.producer.story,
+    inRoasterCatalog: lot.inRoasterCatalog,
   };
 }
 
@@ -80,11 +83,18 @@ export function LotBuilderForm({
   initialLot,
   onSave,
   onCancel,
+  // The "доступен для заказа кофейнями" flag is the roaster's own catalog
+  // switch (see Lot.inRoasterCatalog) — this form is also reused by the
+  // coffee shop's own "Редактировать карточку лота" screen
+  // (app/dashboard/cafe/[lotId]/edit), which must not be able to touch it,
+  // per the task's roaster/cafe separation-of-responsibility rule.
+  canEditCatalogFlag = true,
 }: {
   roaster: Roaster;
   initialLot?: Lot;
   onSave: (lot: Lot) => void;
   onCancel?: () => void;
+  canEditCatalogFlag?: boolean;
 }) {
   const [form, setForm] = useState<LotFormState>(() => toFormState(initialLot));
 
@@ -133,6 +143,7 @@ export function LotBuilderForm({
         altitude: form.altitude.trim(),
         story: form.story.trim(),
       },
+      inRoasterCatalog: form.inRoasterCatalog,
     };
 
     onSave(lot);
@@ -357,6 +368,35 @@ export function LotBuilderForm({
           className={fieldClasses}
         />
       </div>
+
+      {canEditCatalogFlag && (
+      <div>
+        <p className="section-label mb-4">Каталог обжарщика</p>
+        <div className="flex items-start justify-between gap-4 rounded-md border border-ink-200 bg-parchment-100 p-4">
+          <div>
+            <p className="text-sm text-ink-900 mb-1">Доступен для заказа кофейнями</p>
+            <p className="text-xs text-ink-400">
+              Отключите, если лот снят с производства. Кофейни, уже добавившие его в своё меню,
+              продолжат его показывать — тумблер только закрывает заказ новых партий.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={form.inRoasterCatalog}
+            aria-label="Доступен для заказа кофейнями"
+            onClick={() => update('inRoasterCatalog', !form.inRoasterCatalog)}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full
+                        transition-colors ${form.inRoasterCatalog ? 'bg-ink-900' : 'bg-ink-200'}`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-parchment-100
+                          transition-transform ${form.inRoasterCatalog ? 'translate-x-6' : 'translate-x-1'}`}
+            />
+          </button>
+        </div>
+      </div>
+      )}
 
       <div className="flex gap-3">
         {onCancel && (

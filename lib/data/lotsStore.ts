@@ -24,6 +24,7 @@ function normalizeLot(lot: Lot): Lot {
   return {
     ...lot,
     variety: lot.variety ?? '',
+    inRoasterCatalog: lot.inRoasterCatalog ?? true,
   };
 }
 

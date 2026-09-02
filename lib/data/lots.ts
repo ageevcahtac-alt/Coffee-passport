@@ -23,6 +23,7 @@ export const LOTS: Lot[] = [
       body: 3,
       bitterness: 1,
     },
+    inRoasterCatalog: true,
     producer: {
       farmerName: 'Kochere Cooperative',
       farmName: 'Guji Hambela Washing Station',
@@ -53,6 +54,7 @@ export const LOTS: Lot[] = [
       body: 4,
       bitterness: 2,
     },
+    inRoasterCatalog: true,
     producer: {
       farmerName: 'Diego Samboní',
       farmName: 'Finca El Mirador',
@@ -83,6 +85,7 @@ export const LOTS: Lot[] = [
       body: 3,
       bitterness: 1,
     },
+    inRoasterCatalog: true,
     producer: {
       farmerName: 'Tekangu Farmers Cooperative',
       farmName: 'Tekangu Factory',
@@ -112,6 +115,7 @@ export const LOTS: Lot[] = [
       body: 2,
       bitterness: 1,
     },
+    inRoasterCatalog: true,
     producer: {
       farmerName: 'Konga Cooperative',
       farmName: 'Yirgacheffe Konga Washing Station',

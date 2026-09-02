@@ -66,6 +66,14 @@ export interface Lot {
   descriptors: string[];
   roasterFlavorProfile: RoasterFlavorProfile;
   producer: ProducerProfile;
+  // The roaster's own "still in production" flag — turning it off only
+  // means a coffee shop can no longer ADD this lot to its menu (fresh
+  // batches aren't orderable any more). It must NOT cascade into hiding the
+  // lot from a coffee shop that already stocked it: shelf inventory can
+  // outlive the roaster's own catalog entry, and the shop's own
+  // is_active_in_cafe toggle (see lib/data/cafeMenuStore.ts) is the only
+  // thing that controls guest-facing visibility.
+  inRoasterCatalog: boolean;
 }
 
 export interface CoffeeShop {

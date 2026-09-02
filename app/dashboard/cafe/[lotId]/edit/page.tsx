@@ -59,6 +59,7 @@ export default function CafeEditLotPage({ params }: { params: { lotId: string } 
           initialLot={lot}
           onSave={handleSave}
           onCancel={() => router.push('/dashboard/cafe')}
+          canEditCatalogFlag={false}
         />
 
         <div className="mt-14">

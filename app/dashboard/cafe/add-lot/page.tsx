@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useLots } from '@/lib/data/useLots';
-import { useCafeMenuLotIds } from '@/lib/data/useCafeMenu';
+import { useCafeMenuEntries } from '@/lib/data/useCafeMenu';
 import { addLotToMenu } from '@/lib/data/cafeMenuStore';
 import { getRoasterById } from '@/lib/data/roasters';
 import { extractLotId } from '@/lib/utils/lotId';
@@ -14,13 +14,19 @@ export default function AddLotPage() {
   const { cafeId } = useStaffSession();
   const activeShopId = cafeId ?? '';
   const lots = useLots();
-  const menuLotIds = useCafeMenuLotIds(activeShopId);
+  const menuEntries = useCafeMenuEntries(activeShopId);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [justAdded, setJustAdded] = useState<Lot | null>(null);
 
+  // A lot already on the shop's roster (active or toggled off) never shows
+  // here again — re-adding it belongs on the menu screen's own toggle, not
+  // this "bring in something new" flow. A lot the roaster pulled from their
+  // catalog (inRoasterCatalog false) can't be freshly ordered either, per
+  // the "снят с производства" rule — but that never affects lots already on
+  // a menu, only new additions.
   const available = lots
-    .filter((lot) => !menuLotIds.includes(lot.id))
+    .filter((lot) => !(lot.id in menuEntries) && lot.inRoasterCatalog)
     .sort((a, b) => a.country.localeCompare(b.country) || a.name.localeCompare(b.name));
 
   function addLot(lot: Lot) {
@@ -43,9 +49,14 @@ export default function AddLotPage() {
       setError(`Лот с кодом «${code.trim()}» не найден в базе обжарщиков.`);
       return;
     }
-    if (menuLotIds.includes(found.id)) {
+    if (found.id in menuEntries) {
       setJustAdded(null);
       setError(`${found.name} уже в меню этой кофейни.`);
+      return;
+    }
+    if (!found.inRoasterCatalog) {
+      setJustAdded(null);
+      setError(`${found.name} снят с производства обжарщиком — новые партии заказать нельзя.`);
       return;
     }
     addLot(found);
