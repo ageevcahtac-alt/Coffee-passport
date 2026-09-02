@@ -9,6 +9,7 @@ import { getBaristasForShop } from '@/lib/data/baristas';
 import { getMergedLotById } from '@/lib/data/lotsStore';
 import { useStaffSession } from '@/lib/auth/staffSession';
 import { downloadCsv } from '@/lib/utils/csvExport';
+import { GuestFeedback } from '@/components/cafe/GuestFeedback';
 import { CoffeeReviewCard } from '@/components/cafe/CoffeeReviewCard';
 import { ServiceReviewCard } from '@/components/cafe/ServiceReviewCard';
 import { DEFECT_TAGS, type TastingRecord } from '@/lib/types/coffee';
@@ -125,8 +126,12 @@ export default function CafeAnalyticsPage() {
 
   return (
     <div>
-      <p className="section-label mb-2">Аналитика и отзывы</p>
-      <h1 className="font-display text-2xl text-ink-900 mb-8">Архив отзывов гостей</h1>
+      <p className="section-label mb-2">Отзывы гостей</p>
+      <h1 className="font-display text-2xl text-ink-900 mb-8">Лента и архив отзывов</h1>
+
+      <GuestFeedback shopId={cafeId ?? ''} />
+
+      <p className="section-label mb-4">Весь архив</p>
 
       <div role="tablist" aria-label="Категория отзывов" className="flex gap-1.5 mb-6">
         <TabButton active={tab === 'coffee'} onClick={() => setTab('coffee')} label="☕ Кофе и экстракция" />

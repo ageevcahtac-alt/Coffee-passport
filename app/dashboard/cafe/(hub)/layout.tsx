@@ -7,8 +7,8 @@ import { useStaffSession } from '@/lib/auth/staffSession';
 
 const TABS = [
   { href: '/dashboard/cafe', label: 'Меню зерна' },
+  { href: '/dashboard/cafe/analytics', label: 'Отзывы гостей' },
   { href: '/dashboard/cafe/team', label: 'Команда / Персонал' },
-  { href: '/dashboard/cafe/analytics', label: 'Аналитика и Отзывы' },
   { href: '/dashboard/cafe/equipment', label: 'Оборудование' },
 ] as const;
 
