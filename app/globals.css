@@ -205,6 +205,15 @@ input:focus-visible,
   transform-origin: center;
 }
 
+/* Belt-and-suspenders for the /map module (components/map/*): both
+   MapContainer instances already pass attributionControl={false}, so
+   Leaflet never mounts this control — this rule just guarantees it stays
+   hidden even if that prop is ever dropped or a future Leaflet
+   version renders it before React hydrates. */
+.leaflet-control-attribution {
+  display: none !important;
+}
+
 /* Адаптация под системный режим уменьшения движения */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
