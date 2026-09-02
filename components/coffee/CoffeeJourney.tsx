@@ -8,6 +8,7 @@ import { getRoasterById } from '@/lib/data/roasters';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { formatTastingDate } from '@/lib/utils/date';
 import { TastingDetailModal } from './TastingDetailModal';
+import { LotPassportModal } from './LotPassportModal';
 
 // Groups the guest's own history by roaster first, then by lot within that
 // roaster — per the enthusiast-profile redesign, replacing the old flat
@@ -18,6 +19,7 @@ export function CoffeeJourney({ records }: { records: TastingRecord[] }) {
   const [openRecord, setOpenRecord] = useState<TastingRecord | null>(null);
   const [openRoasterId, setOpenRoasterId] = useState<string | null>(null);
   const [openLotId, setOpenLotId] = useState<string | null>(null);
+  const [passportLotId, setPassportLotId] = useState<string | null>(null);
 
   if (records.length === 0) {
     return (
@@ -145,12 +147,13 @@ export function CoffeeJourney({ records }: { records: TastingRecord[] }) {
                                 );
                               })}
                             </ul>
-                            <Link
-                              href={`/passport/${lot.id}`}
+                            <button
+                              type="button"
+                              onClick={() => setPassportLotId(lot.id)}
                               className="text-xs text-ink-700 underline underline-offset-2 hover:text-ink-900"
                             >
                               Открыть паспорт лота →
-                            </Link>
+                            </button>
                           </div>
                         )}
                       </div>
@@ -165,6 +168,21 @@ export function CoffeeJourney({ records }: { records: TastingRecord[] }) {
       {openRecord && (
         <TastingDetailModal record={openRecord} onClose={() => setOpenRecord(null)} />
       )}
+      {passportLotId && (() => {
+        const passportLot = getMergedLotById(passportLotId);
+        if (!passportLot) return null;
+        return (
+          <LotPassportModal
+            lot={passportLot}
+            records={records.filter((record) => record.lotId === passportLotId)}
+            onClose={() => setPassportLotId(null)}
+            onOpenRecord={(record) => {
+              setPassportLotId(null);
+              setOpenRecord(record);
+            }}
+          />
+        );
+      })()}
     </>
   );
 }
