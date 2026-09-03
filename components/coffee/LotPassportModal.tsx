@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect } from 'react';
-import Link from 'next/link';
 import type { Lot, TastingRecord } from '@/lib/types/coffee';
 import { SENSORY_TAGS } from '@/lib/types/coffee';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
@@ -14,39 +13,18 @@ import { ProfileCompareCarousel, type ComparePanel } from './ProfileCompareCarou
 
 // "Моя оценка" panel content — the latest tasting's headline read plus every
 // coffee shop/date this lot was checked in at (click one to open its full
-// TastingDetailModal). When the guest hasn't tasted this lot yet, a single
-// CTA replaces all of that: /passport/[lotId] already owns the full
-// check-in → blind-tasting → reveal flow, so this just hands off to it
-// rather than re-implementing any part of that gate here.
+// TastingDetailModal). This modal is only ever opened for a lot the guest
+// has already tasted (see LotPassportModal below), so there is no "not
+// tasted yet" state to design for here — no call-to-action, no navigation
+// to start a new tasting, purely read-only.
 function MyRatingPanel({
-  lot,
   records,
   onOpenRecord,
 }: {
-  lot: Lot;
-  records: TastingRecord[]; // sorted newest-first
+  records: TastingRecord[]; // sorted newest-first, guaranteed non-empty by LotPassportModal
   onOpenRecord: (record: TastingRecord) => void;
 }) {
-  const latest = records[0] ?? null;
-
-  if (!latest) {
-    return (
-      <div className="rounded-md border border-ink-200 bg-parchment-100 p-5 text-center">
-        <p className="text-sm text-ink-700 mb-1">Вы ещё не дегустировали этот лот.</p>
-        <p className="text-xs text-ink-400 mb-5">
-          Отсканируйте его на кассе кофейни, чтобы записать личные впечатления.
-        </p>
-        <Link
-          href={`/passport/${lot.id}`}
-          className="inline-flex items-center justify-center w-full rounded-md bg-ink-900
-                     text-parchment-100 font-body font-medium text-sm px-6 py-4
-                     hover:bg-ink-800 transition-colors"
-        >
-          Добавить мою дегустацию →
-        </Link>
-      </div>
-    );
-  }
+  const latest = records[0];
 
   return (
     <div className="rounded-md border border-ink-200 bg-parchment-100 p-5">
@@ -102,13 +80,13 @@ function MyRatingPanel({
 }
 
 // Read-only lot passport reached from "Открыть паспорт лота →" in
-// CoffeeJourney (Моё кофейное путешествие). Deliberately NOT a navigation to
+// CoffeeJourney (Моё кофейное путешествие) — always for a lot the guest has
+// already checked in and tasted at least once (CoffeeJourney only ever
+// offers this action from an already-expanded, already-tasted lot; see its
+// own lotRecords derivation). Deliberately NOT a navigation to
 // /passport/[lotId]: that route's whole job is the check-in flow (shop
-// picker → BlindTastingLock → reveal), so reusing it here would re-trigger
-// a "start a new tasting" gate instead of just showing what the guest
-// already saved — except for the one deliberate exception in
-// MyRatingPanel's empty state above, which hands off to that same route on
-// purpose because there's nothing local to show yet.
+// picker → BlindTastingLock → reveal) for STARTING a new tasting, which has
+// no place in a read-only "here's what you already saved" view.
 //
 // "Профиль обжарщика" / "Моя оценка" / "Сравнить" are laid out as one
 // swipeable filmstrip (see ProfileCompareCarousel) instead of a long
@@ -121,7 +99,7 @@ export function LotPassportModal({
   onOpenRecord,
 }: {
   lot: Lot;
-  records: TastingRecord[]; // this guest's own records for this lot, any coffee shop
+  records: TastingRecord[]; // this guest's own records for this lot, any coffee shop — must be non-empty
   onClose: () => void;
   onOpenRecord: (record: TastingRecord) => void;
 }) {
@@ -129,7 +107,6 @@ export function LotPassportModal({
   const sortedRecords = [...records].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
-  const latestRecord = sortedRecords[0] ?? null;
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -139,21 +116,25 @@ export function LotPassportModal({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
+  // Guards a caller that (incorrectly) opens this for an untasted lot —
+  // there is nothing read-only to show without at least one record, and no
+  // call-to-action here to fill that gap by design (see module comment).
+  if (sortedRecords.length === 0) return null;
+  const latestRecord = sortedRecords[0];
+
   const panels: ComparePanel[] = [
     { id: 'roaster', label: 'Профиль обжарщика', content: <ProducerRoasterCard lot={lot} /> },
     {
       id: 'mine',
       label: 'Моя оценка',
-      content: <MyRatingPanel lot={lot} records={sortedRecords} onOpenRecord={onOpenRecord} />,
+      content: <MyRatingPanel records={sortedRecords} onOpenRecord={onOpenRecord} />,
     },
-  ];
-  if (latestRecord) {
-    panels.push({
+    {
       id: 'compare',
       label: 'Сравнить',
       content: <TasteComparison lot={lot} tasting={latestRecord} />,
-    });
-  }
+    },
+  ];
 
   return (
     <div
