@@ -7,20 +7,30 @@ function formatEventDates(event: CoffeeEvent): string {
   return `${formatDate(event.startDate)} — ${formatDate(event.endDate)}`;
 }
 
-export function EventsBoard() {
+// fullHeight (default true) fits the isolated /map tab, which needs its own
+// scroll region inside a fixed-height flex parent. Embedding this inline in
+// a normal document-flow page (e.g. /journey) passes fullHeight={false} so
+// it renders as plain block content instead of fighting for height.
+export function EventsBoard({ fullHeight = true }: { fullHeight?: boolean }) {
   const events = getUpcomingCoffeeEvents();
 
   if (events.length === 0) {
     return (
-      <div className="w-full h-full flex items-center justify-center text-sm text-ink-400 px-6 text-center">
+      <div
+        className={
+          fullHeight
+            ? 'w-full h-full flex items-center justify-center text-sm text-ink-400 px-6 text-center'
+            : 'text-sm text-ink-400'
+        }
+      >
         Ближайших мероприятий пока не анонсировано.
       </div>
     );
   }
 
   return (
-    <div className="w-full h-full overflow-y-auto px-6 py-6">
-      <div className="max-w-2xl mx-auto grid gap-4 sm:grid-cols-2">
+    <div className={fullHeight ? 'w-full h-full overflow-y-auto px-6 py-6' : ''}>
+      <div className={fullHeight ? 'max-w-2xl mx-auto grid gap-4 sm:grid-cols-2' : 'grid gap-4 sm:grid-cols-2'}>
         {events.map((event) => (
           <div key={event.id} className="rounded-md border border-ink-200 bg-parchment-100 p-5">
             <p className="text-xs uppercase tracking-widest2 text-gold-500 mb-2">{formatEventDates(event)}</p>

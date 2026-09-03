@@ -7,7 +7,7 @@ import { getMergedLotById } from '@/lib/data/lotsStore';
 import { consumePinJustActivated } from '@/lib/journey/mapFlag';
 import { useCurrentUser } from '@/lib/auth/currentUser';
 import { CoffeeJourney } from '@/components/coffee/CoffeeJourney';
-import { MyRecipesShelf } from '@/components/coffee/MyRecipesShelf';
+import { EventsBoard } from '@/components/coffee/EventsBoard';
 import {
   CoffeeBeltMap,
   type ActivatedPin,
@@ -109,14 +109,6 @@ export default function JourneyPage() {
           📷 Отсканировать новый лот
         </button>
         <Link
-          href="/journey/equipment"
-          className="inline-flex items-center justify-center w-full rounded-md border border-ink-200
-                     text-ink-700 font-body font-medium text-sm px-6 py-3.5 mt-2
-                     hover:bg-parchment-300 transition-colors"
-        >
-          ⚙ Моё оборудование
-        </Link>
-        <Link
           href="/journey/cuppings"
           className="inline-flex items-center justify-center w-full rounded-md border border-ink-200
                      text-ink-700 font-body font-medium text-sm px-6 py-3.5 mt-2
@@ -169,13 +161,16 @@ export default function JourneyPage() {
         </div>
       )}
 
-      <MyRecipesShelf userId={userId} />
-
       {records.length > 0 && (
-        <div className="mt-2">
+        <div className="mt-2 mb-10">
           <CoffeeJourney records={records} />
         </div>
       )}
+
+      <div className="max-w-2xl mx-auto w-full">
+        <p className="section-label mb-4 max-w-md mx-auto">Ближайшие мероприятия</p>
+        <EventsBoard fullHeight={false} />
+      </div>
 
       {scanOpen && <ScanLotModal onClose={() => setScanOpen(false)} />}
       {openRecord && (

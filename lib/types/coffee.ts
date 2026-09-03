@@ -109,6 +109,8 @@ export const BREWING_METHODS = [
   { id: 'v60', label: 'V60 / Воронка' },
   { id: 'chemex', label: 'Chemex / Кемекс' },
   { id: 'aeropress', label: 'AeroPress / Аэропресс' },
+  { id: 'turka', label: 'Турка / Джезва' },
+  { id: 'immersion', label: 'Иммерсия (Фрэнч-пресс и др.)' },
   { id: 'siphon', label: 'Сифон' },
   { id: 'batch_brew', label: 'Batch Brew / Батч-брю' },
   { id: 'cupping', label: 'Каппинг' },
@@ -438,4 +440,36 @@ export interface CoffeeEvent {
   location: string; // venue name/address
   description: string;
   url: string; // official event page — '' if none
+}
+
+// =========================================================
+// Home Brew Lab ("My Taste" / /my-taste) — the enthusiast's own, fully
+// standalone brewing recipes: never tied to a Lot, coffee shop, or venue
+// check-in (unlike BrewingRecipe above, which always belongs to a specific
+// Lot's passport and syncs to Supabase). This is deliberately separate and
+// local-only — a home experiment logged here doesn't need a check-in to
+// exist, and never appears in /journey's venue-scoped history. See
+// lib/data/homeRecipesStore.ts for persistence and
+// COMMUNITY_TOP_MIN_NET_VOTES/COMMUNITY_TOP_SLOTS above for the same
+// algorithmic-only "top" rule reused on the /recipes community board.
+// =========================================================
+
+export interface HomeRecipe {
+  id: string;
+  userId: string;
+  title: string; // free label, e.g. "Утренний V60"
+  brewingMethod: BrewingMethodId;
+  grinderModel: string;
+  doseG: number; // закладка кофе
+  waterG: number; // объём/вес воды, мл или г
+  waterTempC: number;
+  waterMineralization: string; // профиль/минерализация воды — PPM или описание состава, free text
+  grindSetting: string; // настройка помола — щелчки или микроны, free text
+  brewTimeSec: number | null; // время экстракции
+  preInfusionSec: number | null; // время предсмачивания
+  notes: string; // что меняется во вкусе при подстройке параметров
+  isTop: boolean; // флаг «Мой Топ» — быстрый фильтр среди своих заготовок
+  isPublic: boolean; // опубликован на /recipes (кнопка «Поделиться с сообществом»)
+  createdAt: string; // ISO timestamp
+  updatedAt: string; // ISO timestamp — bumped on every edit
 }

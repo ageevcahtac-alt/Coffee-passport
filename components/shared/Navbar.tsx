@@ -25,11 +25,11 @@ export function Navbar({ userEmail }: { userEmail: string | null }) {
         <div className="hidden md:flex md:flex-col md:items-end md:gap-1.5">
           <nav className="flex items-center gap-4 text-sm text-ink-500">
             <Link href="/map" className={NAV_LINK_CLASSES}>🗺️ Карта кофеен</Link>
-            <Link href="/top-recipes" className={NAV_LINK_CLASSES}>Топовые рецепты</Link>
+            <Link href="/recipes" className={NAV_LINK_CLASSES}>🏆 Топовые рецепты</Link>
             {userEmail ? (
               <>
-                <Link href="/journey" className={NAV_LINK_CLASSES}>Journey</Link>
-                <Link href="/journey" className={NAV_LINK_CLASSES}>My taste</Link>
+                <Link href="/journey" className={NAV_LINK_CLASSES}>🧳 Journey</Link>
+                <Link href="/my-taste" className={NAV_LINK_CLASSES}>🧪 My Taste</Link>
                 <form action={signOut}>
                   <button type="submit" className={NAV_LINK_CLASSES}>Sign out</button>
                 </form>
@@ -90,11 +90,11 @@ export function Navbar({ userEmail }: { userEmail: string | null }) {
                 🗺️ Карта кофеен
               </Link>
               <Link
-                href="/top-recipes"
+                href="/recipes"
                 onClick={() => setMenuOpen(false)}
                 className="py-3 border-b border-ink-100 hover:text-ink-900"
               >
-                Топовые рецепты
+                🏆 Топовые рецепты
               </Link>
               {userEmail ? (
                 <>
@@ -103,14 +103,14 @@ export function Navbar({ userEmail }: { userEmail: string | null }) {
                     onClick={() => setMenuOpen(false)}
                     className="py-3 border-b border-ink-100 hover:text-ink-900"
                   >
-                    Journey
+                    🧳 Journey
                   </Link>
                   <Link
-                    href="/journey"
+                    href="/my-taste"
                     onClick={() => setMenuOpen(false)}
                     className="py-3 border-b border-ink-100 hover:text-ink-900"
                   >
-                    My taste
+                    🧪 My Taste
                   </Link>
                   <form action={signOut}>
                     <button type="submit" className="w-full text-left py-3 border-b border-ink-100 hover:text-ink-900">

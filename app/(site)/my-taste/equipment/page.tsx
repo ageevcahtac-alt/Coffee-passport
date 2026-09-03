@@ -29,8 +29,8 @@ export default function EquipmentGaragePage() {
           machineOptions={ESPRESSO_MACHINE_MODELS}
         />
 
-        <Link href="/journey" className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900 mt-8 inline-block">
-          ← Моё кофейное путешествие
+        <Link href="/my-taste" className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900 mt-8 inline-block">
+          ← My Taste — домашняя лаборатория
         </Link>
       </div>
     </main>

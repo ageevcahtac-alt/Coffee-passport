@@ -4,6 +4,7 @@ import { purgeRecordsForUser } from '@/lib/journey/store';
 import { purgeEnthusiastRecipesForUser } from '@/lib/data/brewingRecipesStore';
 import { purgeEquipmentForUser } from '@/lib/data/equipmentStore';
 import { purgeVotesForUser } from '@/lib/data/recipeVotesStore';
+import { purgeHomeRecipesForUser } from '@/lib/data/homeRecipesStore';
 
 const ACTIVE_USER_KEY = 'coffee-passport:active-user';
 
@@ -52,6 +53,7 @@ export function reconcileUserScope(newUserId: string, isAuthenticated: boolean):
     purgeEnthusiastRecipesForUser(previousUserId);
     purgeEquipmentForUser(previousUserId);
     purgeVotesForUser(previousUserId);
+    purgeHomeRecipesForUser(previousUserId);
   }
 
   try {
