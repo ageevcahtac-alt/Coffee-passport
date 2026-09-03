@@ -2,21 +2,23 @@
 
 import { useEffect } from 'react';
 import type { Lot, TastingRecord } from '@/lib/types/coffee';
-import { SENSORY_TAGS } from '@/lib/types/coffee';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { getRoasterById } from '@/lib/data/roasters';
 import { formatTastingDate } from '@/lib/utils/date';
-import { StarRating } from './StarRating';
 import { ProducerRoasterCard } from './ProducerRoasterCard';
 import { TasteComparison } from './TasteComparison';
+import { TastingRecordDetails } from './TastingRecordDetails';
 import { ProfileCompareCarousel, type ComparePanel } from './ProfileCompareCarousel';
 
-// "Моя оценка" panel content — the latest tasting's headline read plus every
-// coffee shop/date this lot was checked in at (click one to open its full
-// TastingDetailModal). This modal is only ever opened for a lot the guest
-// has already tasted (see LotPassportModal below), so there is no "not
-// tasted yet" state to design for here — no call-to-action, no navigation
-// to start a new tasting, purely read-only.
+// "Моя оценка" panel content — the FULL tasting record exactly as the guest
+// filled it out during the blind-cupping flow (same TastingRecordDetails
+// used by TastingDetailModal, not a re-summarized cut-down version), plus —
+// when this lot was checked in more than once — every other coffee
+// shop/date to switch the inline detail to, or open that record's own full
+// modal. This modal is only ever opened for a lot the guest has already
+// tasted (see LotPassportModal below), so there is no "not tasted yet"
+// state to design for here — no call-to-action, no navigation to start a
+// new tasting, purely read-only.
 function MyRatingPanel({
   records,
   onOpenRecord,
@@ -28,53 +30,36 @@ function MyRatingPanel({
 
   return (
     <div className="rounded-md border border-ink-200 bg-parchment-100 p-5">
-      <p className="text-xs text-ink-400 mb-1.5">Последняя оценка чашки</p>
-      <div className="mb-4">
-        <StarRating value={latest.rating} label={`Оценка ${latest.rating} из 5`} />
-      </div>
+      <TastingRecordDetails record={latest} />
 
-      {latest.sensoryTags.length > 0 && (
-        <div className="mb-4">
-          <p className="section-label mb-2">Дескрипторы</p>
-          <p className="text-sm text-ink-700">
-            {latest.sensoryTags
-              .map((tagId) => SENSORY_TAGS.find((tag) => tag.id === tagId)?.label ?? tagId)
-              .join(' · ')}
-          </p>
+      {records.length > 1 && (
+        <div className="mt-6 pt-5 border-t border-ink-200">
+          <p className="section-label mb-2">Другие кофейни и даты ({records.length})</p>
+          <ul className="flex flex-col gap-1.5">
+            {records.map((record) => {
+              const shop = getCoffeeShopById(record.coffeeShopId);
+              return (
+                <li key={record.id}>
+                  <button
+                    type="button"
+                    onClick={() => onOpenRecord(record)}
+                    className="w-full flex items-center justify-between gap-3 text-left
+                               text-sm text-ink-700 hover:text-ink-900"
+                  >
+                    <span>
+                      {shop?.name ?? record.coffeeShopId}
+                      {shop?.city ? ` · ${shop.city}` : ''}
+                    </span>
+                    <span className="data-value text-xs text-ink-400 shrink-0">
+                      {formatTastingDate(record.createdAt)}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
-
-      {(latest.liked || latest.disliked) && (
-        <div className="mb-5">
-          {latest.liked && <p className="text-sm text-ink-700 mb-1">👍 {latest.liked}</p>}
-          {latest.disliked && <p className="text-sm text-ink-500">👎 {latest.disliked}</p>}
-        </div>
-      )}
-
-      <p className="section-label mb-2">Кофейни и даты ({records.length})</p>
-      <ul className="flex flex-col gap-1.5">
-        {records.map((record) => {
-          const shop = getCoffeeShopById(record.coffeeShopId);
-          return (
-            <li key={record.id}>
-              <button
-                type="button"
-                onClick={() => onOpenRecord(record)}
-                className="w-full flex items-center justify-between gap-3 text-left
-                           text-sm text-ink-700 hover:text-ink-900"
-              >
-                <span>
-                  {shop?.name ?? record.coffeeShopId}
-                  {shop?.city ? ` · ${shop.city}` : ''}
-                </span>
-                <span className="data-value text-xs text-ink-400 shrink-0">
-                  {formatTastingDate(record.createdAt)}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
     </div>
   );
 }

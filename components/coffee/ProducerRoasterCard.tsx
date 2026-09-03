@@ -2,8 +2,11 @@ import { ROAST_TYPE_LABELS, type Lot } from '@/lib/types/coffee';
 
 // A single ratio against a fixed max (1-5) is a meter, not a chart: the fill
 // carries the value, the track is a lighter step of the same hue, and — since
-// each metric is its own labeled meter — no legend is needed.
-function FlavorMeter({ label, value }: { label: string; value: number }) {
+// each metric is its own labeled meter — no legend is needed. Exported for
+// TastingRecordDetails, which renders the guest's own flavor profile with
+// the same meter so "Профиль обжарщика" and "Моя оценка" read as the same
+// visual language.
+export function FlavorMeter({ label, value }: { label: string; value: number }) {
   const clamped = Math.max(0, Math.min(5, value));
   return (
     <div>
