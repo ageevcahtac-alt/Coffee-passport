@@ -1,5 +1,6 @@
-import { BREWING_METHODS, type HomeRecipe } from '@/lib/types/coffee';
-import { VoteButtons } from './VoteButtons';
+import { BREWING_METHODS } from '@/lib/types/coffee';
+import type { KitchenRecipe } from '@/lib/types/kitchen';
+import { VoteButtons } from '@/components/coffee/VoteButtons';
 
 function Row({ label, value, full = false }: { label: string; value: string; full?: boolean }) {
   if (!value) return null;
@@ -19,13 +20,13 @@ function Row({ label, value, full = false }: { label: string; value: string; ful
   );
 }
 
-// Renders one HomeRecipe (see lib/types/coffee.ts) either as the owner's own
-// editable card (Home Brew Lab, /my-taste — edit/delete/top/share actions)
-// or as a read-only community entry (/recipes — votes only). The 'own'
-// action props are simply omitted by the community board rather than this
-// component branching on a variant flag, so each caller only ever wires up
-// what it actually needs.
-export function HomeRecipeCard({
+// Renders one KitchenRecipe (see lib/types/kitchen.ts, was HomeRecipe)
+// either as the owner's own editable card (Coffee Kitchen, /coffee-kitchen/
+// recipes — edit/delete/top/share actions) or as a read-only community
+// entry (/recipes — votes only). The 'own' action props are simply omitted
+// by the community board rather than this component branching on a
+// variant flag, so each caller only ever wires up what it actually needs.
+export function KitchenRecipeCard({
   recipe,
   currentUserId,
   onEdit,
@@ -33,7 +34,7 @@ export function HomeRecipeCard({
   onToggleTop,
   onTogglePublic,
 }: {
-  recipe: HomeRecipe;
+  recipe: KitchenRecipe;
   currentUserId: string;
   onEdit?: () => void;
   onDelete?: () => void;

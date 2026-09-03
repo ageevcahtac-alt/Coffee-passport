@@ -7,6 +7,9 @@ import { EquipmentGarage } from '@/components/coffee/EquipmentGarage';
 
 const CURRENT_USER_NAME = 'Вы';
 
+// Sits outside the (hub) tab group on purpose — "Оборудование" is a linked
+// utility from Coffee Kitchen's header, not one of its two named
+// subsections (Мой кофе / Мои рецепты), so it doesn't inherit that tab bar.
 export default function EquipmentGaragePage() {
   const { userId, ready } = useCurrentUser();
   if (!ready || !userId) return null;
@@ -29,8 +32,8 @@ export default function EquipmentGaragePage() {
           machineOptions={ESPRESSO_MACHINE_MODELS}
         />
 
-        <Link href="/my-taste" className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900 mt-8 inline-block">
-          ← My Taste — домашняя лаборатория
+        <Link href="/coffee-kitchen" className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900 mt-8 inline-block">
+          ← Кофейная кухня
         </Link>
       </div>
     </main>

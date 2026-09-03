@@ -29,7 +29,7 @@ export function Navbar({ userEmail }: { userEmail: string | null }) {
             {userEmail ? (
               <>
                 <Link href="/journey" className={NAV_LINK_CLASSES}>🧳 Journey</Link>
-                <Link href="/my-taste" className={NAV_LINK_CLASSES}>🧪 My Taste</Link>
+                <Link href="/coffee-kitchen" className={NAV_LINK_CLASSES}>🍳 Coffee Kitchen</Link>
                 <Link href="/loyalty" className={NAV_LINK_CLASSES}>💳 Мои карты</Link>
                 <form action={signOut}>
                   <button type="submit" className={NAV_LINK_CLASSES}>Sign out</button>
@@ -107,11 +107,11 @@ export function Navbar({ userEmail }: { userEmail: string | null }) {
                     🧳 Journey
                   </Link>
                   <Link
-                    href="/my-taste"
+                    href="/coffee-kitchen"
                     onClick={() => setMenuOpen(false)}
                     className="py-3 border-b border-ink-100 hover:text-ink-900"
                   >
-                    🧪 My Taste
+                    🍳 Coffee Kitchen
                   </Link>
                   <Link
                     href="/loyalty"

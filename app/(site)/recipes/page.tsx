@@ -3,20 +3,21 @@
 import Link from 'next/link';
 import { COMMUNITY_TOP_MIN_NET_VOTES, COMMUNITY_TOP_SLOTS } from '@/lib/types/coffee';
 import { useCurrentUser } from '@/lib/auth/currentUser';
-import { useHomeRecipes } from '@/lib/data/useHomeRecipes';
+import { useKitchenRecipes } from '@/lib/data/useKitchenRecipes';
 import { useRecipeVotes } from '@/lib/data/useRecipeVotes';
 import { getNetVotes } from '@/lib/data/recipeVotesStore';
-import { HomeRecipeCard } from '@/components/coffee/HomeRecipeCard';
+import { KitchenRecipeCard } from '@/components/kitchen/KitchenRecipeCard';
 
-// Community Recipes Board — every Home Brew Lab recipe (see /my-taste) an
-// enthusiast opted to share ("Поделиться с сообществом"), ranked by live
-// 👍/👎 votes. Same algorithmic-only "top" rule as the per-lot "🔥 Топ
-// сообщества" badge (see ExtractionTab.tsx) and the professional /top-recipes
-// leaderboard — no manual curation, top spots are earned purely by net votes.
+// Community Recipes Board — every Coffee Kitchen recipe (see
+// /coffee-kitchen/recipes) an enthusiast opted to share ("Поделиться с
+// сообществом"), ranked by live 👍/👎 votes. Same algorithmic-only "top"
+// rule as the per-lot "🔥 Топ сообщества" badge (see ExtractionTab.tsx) and
+// the professional /top-recipes leaderboard — no manual curation, top spots
+// are earned purely by net votes.
 export default function CommunityRecipesPage() {
   const { userId } = useCurrentUser();
   const currentUserId = userId ?? '';
-  const recipes = useHomeRecipes().filter((recipe) => recipe.isPublic);
+  const recipes = useKitchenRecipes().filter((recipe) => recipe.isPublic);
   const votes = useRecipeVotes();
 
   const ranked = [...recipes].sort((a, b) => {
@@ -35,14 +36,15 @@ export default function CommunityRecipesPage() {
         <p className="section-label mb-2">Топовые рецепты</p>
         <h1 className="font-display text-3xl leading-[1.1] text-ink-900 mb-3">Рецепты сообщества</h1>
         <p className="text-ink-500 text-sm mb-10">
-          Домашние рецепты, которыми поделились энтузиасты из своей «My Taste» — рейтинг живой, считается по 👍/👎.
+          Домашние рецепты, которыми поделились энтузиасты из своей «Кофейной кухни» — рейтинг живой, считается по
+          👍/👎.
         </p>
 
         {ranked.length === 0 ? (
           <p className="text-sm text-ink-400 mb-8">
             Пока никто не поделился рецептом. Загляните в{' '}
-            <Link href="/my-taste" className="underline underline-offset-2 hover:text-ink-900">
-              My Taste
+            <Link href="/coffee-kitchen/recipes" className="underline underline-offset-2 hover:text-ink-900">
+              Кофейную кухню
             </Link>
             , чтобы опубликовать свой первый.
           </p>
@@ -53,7 +55,7 @@ export default function CommunityRecipesPage() {
                 <p className="section-label mb-4">🔥 Топ-3 сообщества</p>
                 <div className="flex flex-col gap-3">
                   {top3.map((recipe) => (
-                    <HomeRecipeCard key={recipe.id} recipe={recipe} currentUserId={currentUserId} />
+                    <KitchenRecipeCard key={recipe.id} recipe={recipe} currentUserId={currentUserId} />
                   ))}
                 </div>
               </div>
@@ -64,7 +66,7 @@ export default function CommunityRecipesPage() {
                 <p className="section-label mb-4">Все рецепты</p>
                 <div className="flex flex-col gap-3">
                   {rest.map((recipe) => (
-                    <HomeRecipeCard key={recipe.id} recipe={recipe} currentUserId={currentUserId} />
+                    <KitchenRecipeCard key={recipe.id} recipe={recipe} currentUserId={currentUserId} />
                   ))}
                 </div>
               </div>
