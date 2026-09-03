@@ -54,6 +54,9 @@ export function GuestQrModal({ guestId, onClose }: { guestId: string; onClose: (
             <p className="text-xs text-ink-400">Готовим код…</p>
           )}
         </div>
+        <p className="text-[11px] text-ink-400 mb-5">
+          Камеры нет под рукой? Продиктуйте код: <span className="data-value text-ink-700 select-all">{guestId}</span>
+        </p>
         <button
           type="button"
           onClick={onClose}
