@@ -386,3 +386,56 @@ export interface CustomDevice {
   approved: boolean;
   createdAt: string; // ISO timestamp
 }
+
+// =========================================================
+// Cupping journal — the enthusiast's own digital cupping-table notebook
+// (replaces loose paper cupping sheets), independent of the app's own
+// Lot/Roaster catalog: a cupping can just as easily happen at a festival
+// booth or a roaster's open house, tasting a bean never entered into this
+// platform. See lib/data/cuppingsStore.ts for persistence.
+// =========================================================
+
+// SCA-style 0-100 cupping score — matches the numbers written on a real
+// cupping form, unlike the 1-5 personal `rating` used on TastingRecord.
+export const CUPPING_SCORE_MIN = 60;
+export const CUPPING_SCORE_MAX = 100;
+export const CUPPING_SCORE_DEFAULT = 84;
+
+export interface CuppingRecord {
+  id: string;
+  userId: string;
+  originCountry: string; // country of origin — free text, not tied to lib/data/coffeeBelt.ts
+  originRegion: string;
+  beanName: string; // lot/bean name as written on the cupping sheet
+  roasterName: string; // free text — the roaster who roasted this sample, on or off platform
+  cuppingDate: string; // ISO date (yyyy-mm-dd)
+  location: string; // where the cupping took place
+  acidity: number; // 1-5
+  body: number; // 1-5
+  brightness: number; // 1-5
+  sensoryTags: SensoryTagId[]; // aroma/flavor descriptors — same flavor-wheel picker as TastingRecord
+  subDescriptors: FlavorSubDescriptors;
+  liked: string; // "что понравилось"
+  disliked: string; // "что не понравилось"
+  notes: string; // free-form notes beyond liked/disliked
+  finalScore: number; // SCA-style 0-100 score
+  createdAt: string; // ISO timestamp
+}
+
+// =========================================================
+// Coffee industry events — festival/expo listings shown alongside the
+// coffee-shop map (see app/map/page.tsx). Hardcoded seed data for now, same
+// no-backend idiom as everything else in lib/data — see
+// lib/data/coffeeEvents.ts.
+// =========================================================
+
+export interface CoffeeEvent {
+  id: string;
+  title: string;
+  startDate: string; // ISO date
+  endDate: string; // ISO date — same as startDate for single-day events
+  city: string;
+  location: string; // venue name/address
+  description: string;
+  url: string; // official event page — '' if none
+}

@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useCoffeeShops } from '@/lib/data/useCoffeeShops';
 import { CafeDetailPanel } from '@/components/map/CafeDetailPanel';
+import { EventsBoard } from '@/components/coffee/EventsBoard';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 import type { FlyTarget } from '@/components/map/CafeMapClient';
 
@@ -36,6 +37,7 @@ function hasValidCoords(lat: unknown, lng: unknown): lat is number {
 // (Navbar, roaster/cafe dashboards) is a plain link here, not an embed.
 export default function MapPage() {
   const shops = useCoffeeShops();
+  const [view, setView] = useState<'map' | 'events'>('map');
   const [selectedCity, setSelectedCity] = useState('all');
   // Holding just the id (not a snapshot of the whole CoffeeShop object)
   // means the open detail panel re-derives from the live `shops` list on
@@ -87,40 +89,72 @@ export default function MapPage() {
           <Link href="/" className="text-xs uppercase tracking-widest2 text-ink-400 font-body shrink-0">
             ← Coffee Passport
           </Link>
-          <h1 className="font-display text-lg text-ink-900 truncate">Карта кофеен-партнёров</h1>
+          <h1 className="font-display text-lg text-ink-900 truncate">
+            {view === 'map' ? 'Карта кофеен-партнёров' : 'Ближайшие мероприятия'}
+          </h1>
         </div>
-        <label className="flex items-center gap-2 text-xs text-ink-400 shrink-0">
-          Город
-          <select
-            value={selectedCity}
-            onChange={(event) => setSelectedCity(event.target.value)}
-            className="rounded-md border border-ink-200 bg-parchment-200 px-3 py-2 text-sm text-ink-900"
-          >
-            <option value="all">Все города ({shops.length})</option>
-            {cityCounts.map(([city, count]) => (
-              <option key={city} value={city}>
-                {city} [{count}]
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center rounded-md border border-ink-200 overflow-hidden text-xs">
+            <button
+              type="button"
+              onClick={() => setView('map')}
+              aria-pressed={view === 'map'}
+              className={`px-3 py-2 transition-colors ${
+                view === 'map' ? 'bg-ink-900 text-parchment-100' : 'bg-parchment-200 text-ink-700'
+              }`}
+            >
+              🗺️ Кофейни
+            </button>
+            <button
+              type="button"
+              onClick={() => setView('events')}
+              aria-pressed={view === 'events'}
+              className={`px-3 py-2 transition-colors ${
+                view === 'events' ? 'bg-ink-900 text-parchment-100' : 'bg-parchment-200 text-ink-700'
+              }`}
+            >
+              📅 Мероприятия
+            </button>
+          </div>
+          {view === 'map' && (
+            <label className="flex items-center gap-2 text-xs text-ink-400 shrink-0">
+              Город
+              <select
+                value={selectedCity}
+                onChange={(event) => setSelectedCity(event.target.value)}
+                className="rounded-md border border-ink-200 bg-parchment-200 px-3 py-2 text-sm text-ink-900"
+              >
+                <option value="all">Все города ({shops.length})</option>
+                {cityCounts.map(([city, count]) => (
+                  <option key={city} value={city}>
+                    {city} [{count}]
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
       </header>
 
       <div className="flex-1 relative">
-        <ErrorBoundary
-          fallback={
-            <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-center px-6">
-              <p className="text-sm text-ink-700">Не удалось отобразить карту.</p>
-              <p className="text-xs text-ink-400">Обновите страницу — данные о кофейнях не пострадали.</p>
-            </div>
-          }
-        >
-          <CafeMapClient
-            shops={geocodedShops}
-            flyTarget={flyTarget}
-            onSelectShop={(shop) => setSelectedShopId(shop.id)}
-          />
-        </ErrorBoundary>
+        {view === 'events' ? (
+          <EventsBoard />
+        ) : (
+          <ErrorBoundary
+            fallback={
+              <div className="w-full h-full flex flex-col items-center justify-center gap-2 text-center px-6">
+                <p className="text-sm text-ink-700">Не удалось отобразить карту.</p>
+                <p className="text-xs text-ink-400">Обновите страницу — данные о кофейнях не пострадали.</p>
+              </div>
+            }
+          >
+            <CafeMapClient
+              shops={geocodedShops}
+              flyTarget={flyTarget}
+              onSelectShop={(shop) => setSelectedShopId(shop.id)}
+            />
+          </ErrorBoundary>
+        )}
       </div>
 
       {selectedShop && (

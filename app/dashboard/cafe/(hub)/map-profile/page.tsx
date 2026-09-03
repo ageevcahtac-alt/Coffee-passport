@@ -6,6 +6,7 @@ import { getCoffeeShopById, saveCoffeeShop } from '@/lib/data/coffeeShops';
 import { useCoffeeShops } from '@/lib/data/useCoffeeShops';
 import { useStaffSession } from '@/lib/auth/staffSession';
 import { geocodeAddress } from '@/lib/utils/geocode';
+import { fileToCompressedDataUrl, isImageFile } from '@/lib/utils/imageFile';
 import type { CoffeeShop } from '@/lib/types/coffee';
 
 // Leaflet needs `window` at import time — same reason app/map/page.tsx
@@ -87,6 +88,8 @@ export default function CafeMapProfilePage() {
   const [geocoding, setGeocoding] = useState(false);
   const [geocodeError, setGeocodeError] = useState('');
   const [recenterSignal, setRecenterSignal] = useState(0);
+  const [uploadingSlot, setUploadingSlot] = useState<1 | 2 | 3 | null>(null);
+  const [uploadError, setUploadError] = useState('');
 
   // Only re-seed the form from the store on a real shop-id change (staff
   // session switching cafes) — not on every store notification, which
@@ -104,10 +107,30 @@ export default function CafeMapProfilePage() {
   }
 
   const filledPhotos = [form.photo1, form.photo2, form.photo3].map((p) => p.trim()).filter(Boolean);
-  // "строго от 1 до 3 фотографий" — the form only ever offers 3 slots, so
-  // the upper bound is structural; the lower bound (at least one) is the
-  // one actually worth enforcing before save.
-  const canSave = filledPhotos.length >= 1 && filledPhotos.length <= MAX_PHOTOS;
+  // Photos are optional — a shop's location/coordinates must save even
+  // before any photo has been uploaded, per the task's "не блокировать
+  // сохранение координат из-за отсутствующего фото" requirement. The form
+  // still only ever offers MAX_PHOTOS slots, so the upper bound stays
+  // structural (each slot just overwrites itself on re-upload).
+  const canSave = true;
+
+  async function handlePhotoFile(slot: 1 | 2 | 3, file: File | null) {
+    if (!file) return;
+    if (!isImageFile(file)) {
+      setUploadError('Выберите файл изображения (JPG, PNG…).');
+      return;
+    }
+    setUploadError('');
+    setUploadingSlot(slot);
+    try {
+      const dataUrl = await fileToCompressedDataUrl(file);
+      update(`photo${slot}` as 'photo1' | 'photo2' | 'photo3', dataUrl);
+    } catch {
+      setUploadError('Не удалось загрузить это фото — попробуйте другой файл.');
+    } finally {
+      setUploadingSlot(null);
+    }
+  }
 
   async function handleGeocode() {
     const query = [form!.address, form!.city].map((part) => part.trim()).filter(Boolean).join(', ');
@@ -329,33 +352,58 @@ export default function CafeMapProfilePage() {
       </div>
 
       <div>
-        <p className="section-label mb-1">Фото (от 1 до {MAX_PHOTOS})</p>
+        <p className="section-label mb-1">Фото (до {MAX_PHOTOS}, необязательно)</p>
         <p className="text-xs text-ink-400 mb-4">
-          Ссылки на фотографии — нужна хотя бы одна, чтобы сохранить профиль.
+          Загрузите фотографии прямо с устройства — профиль можно сохранить и без них.
         </p>
-        <div className="flex flex-col gap-3">
-          <input
-            value={form.photo1}
-            onChange={(e) => update('photo1', e.target.value)}
-            placeholder="Ссылка на фото 1 (обязательно)"
-            className={fieldClasses}
-          />
-          <input
-            value={form.photo2}
-            onChange={(e) => update('photo2', e.target.value)}
-            placeholder="Ссылка на фото 2"
-            className={fieldClasses}
-          />
-          <input
-            value={form.photo3}
-            onChange={(e) => update('photo3', e.target.value)}
-            placeholder="Ссылка на фото 3"
-            className={fieldClasses}
-          />
+        <div className="grid grid-cols-3 gap-3">
+          {([1, 2, 3] as const).map((slot) => {
+            const key = `photo${slot}` as const;
+            const value = form[key];
+            const isUploading = uploadingSlot === slot;
+            return (
+              <div key={slot} className="flex flex-col gap-2">
+                <div className="aspect-square rounded-md border border-ink-200 bg-parchment-200 overflow-hidden flex items-center justify-center">
+                  {value ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- data: URL / partner-supplied URL, not a Next-optimizable local asset
+                    <img src={value} alt={`Фото ${slot}`} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-xs text-ink-300">Нет фото</span>
+                  )}
+                </div>
+                <label
+                  className="text-center text-xs rounded-md border border-ink-200 px-2 py-2 cursor-pointer
+                             text-ink-700 hover:bg-parchment-300 transition-colors
+                             aria-disabled:opacity-40 aria-disabled:pointer-events-none"
+                  aria-disabled={isUploading}
+                >
+                  {isUploading ? 'Загрузка…' : value ? 'Заменить' : 'Загрузить'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      void handlePhotoFile(slot, file);
+                      e.target.value = '';
+                    }}
+                    disabled={isUploading}
+                    className="hidden"
+                  />
+                </label>
+                {value && (
+                  <button
+                    type="button"
+                    onClick={() => update(key, '')}
+                    className="text-[11px] text-ink-400 underline underline-offset-2 hover:text-ink-700"
+                  >
+                    Удалить
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
-        {filledPhotos.length === 0 && (
-          <p className="text-xs text-ink-500 mt-2">⚠ Добавьте хотя бы одну ссылку на фото.</p>
-        )}
+        {uploadError && <p className="text-xs text-ink-500 mt-3">⚠ {uploadError}</p>}
       </div>
 
       <button
