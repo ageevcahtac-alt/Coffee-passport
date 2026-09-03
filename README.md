@@ -50,3 +50,49 @@ npm run dev
 
 See `coffee-passport-mvp-plan.md` (shared earlier) for the full route/component map
 and database schema rationale. `DESIGN.md` documents the visual design plan.
+
+## Environment variables
+
+See `.env.example` for the full list — copy it to `.env.local` and fill
+in. Two groups quietly no-op without their values instead of breaking
+anything, so it's easy to miss that they're not configured:
+
+- `RESEND_API_KEY` / `PARTNER_NOTIFY_EMAIL` / `PARTNER_NOTIFY_FROM` —
+  partner-lead email notifications (`app/api/partner-requests`). Without
+  these, a lead is still saved to the database, it just doesn't send an
+  email.
+- `EVENTS_CRON_SECRET` / `EVENT_SOURCE_ICS_URLS` — see "Scheduled
+  maintenance" below.
+
+## Scheduled maintenance (events board)
+
+The "Ближайшие мероприятия" board (`/api/events`,
+`supabase/migrations/0014_events_module.sql`) needs a daily pass to
+archive events whose `end_date` has passed and to pull new candidates
+from any configured `.ics` calendar feeds. Both jobs live behind
+secret-gated API routes (`app/api/cron/events-archive`,
+`app/api/cron/events-aggregate`) — there's no cron built into this app
+or into Render, so the actual scheduler is
+`.github/workflows/events-cron.yml`, a GitHub Actions workflow. The
+workflow itself is complete; it only needs two secrets set once to start
+running:
+
+1. **On the deployed app** (Render → your service → Environment), set
+   `EVENTS_CRON_SECRET` to any long random string. This is the value
+   both cron routes check for in the request's
+   `Authorization: Bearer <secret>` header before doing anything —
+   without it (or with the wrong value) they reply `401 Unauthorized`.
+2. **On GitHub** (repo → Settings → Secrets and variables → Actions →
+   "New repository secret"), add:
+   - `APP_URL` — the deployed app's base URL, e.g.
+     `https://coffee-passport.onrender.com` (no trailing slash)
+   - `EVENTS_CRON_SECRET` — the exact same value you set in step 1
+3. That's it, no code or workflow change needed. Once both secrets
+   exist, the workflow runs automatically every day at 03:00 UTC, and
+   can also be triggered on demand from the repo's **Actions** tab →
+   "Events maintenance (archive + aggregate)" → **Run workflow**.
+
+Optional: to actually pull events from somewhere instead of only ones
+added by hand in `/dashboard/admin/events`, also set
+`EVENT_SOURCE_ICS_URLS` on the deployed app to one or more comma-
+separated `.ics` calendar feed URLs (see `lib/events/sources`).
