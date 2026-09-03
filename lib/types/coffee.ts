@@ -426,20 +426,25 @@ export interface CuppingRecord {
 
 // =========================================================
 // Coffee industry events — festival/expo listings shown alongside the
-// coffee-shop map (see app/map/page.tsx). Hardcoded seed data for now, same
-// no-backend idiom as everything else in lib/data — see
-// lib/data/coffeeEvents.ts.
+// coffee-shop map (see app/map/page.tsx) and on /journey. DB-backed (see
+// supabase/migrations/0014_events_module.sql), fetched through
+// /api/events (public, active+upcoming only) — no local seed data
+// anymore. See lib/data/events.ts for the admin-facing CRUD used by
+// /dashboard/admin/events.
 // =========================================================
+
+export type EventStatus = 'active' | 'archived' | 'pending_review';
 
 export interface CoffeeEvent {
   id: string;
   title: string;
+  location: string; // город/площадка, one combined field
+  description: string;
   startDate: string; // ISO date
   endDate: string; // ISO date — same as startDate for single-day events
-  city: string;
-  location: string; // venue name/address
-  description: string;
-  url: string; // official event page — '' if none
+  link: string; // official event page — '' if none
+  status: EventStatus;
+  source: string; // 'manual' or an aggregator EventSource id
 }
 
 // The pure sensory read of one cup — every field TastingForm collects, with

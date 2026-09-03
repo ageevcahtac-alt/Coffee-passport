@@ -189,6 +189,27 @@ type UntypedRow = Record<string, unknown>;
 type NoRelationships = { Relationships: [] };
 
 // =========================================================
+// Events — see supabase/migrations/0014_events_module.sql.
+// =========================================================
+
+export type EventStatus = 'active' | 'archived' | 'pending_review';
+
+export type EventRow = {
+  id: string;
+  title: string;
+  location: string;
+  description: string;
+  start_date: string; // ISO date (yyyy-mm-dd)
+  end_date: string;
+  link: string;
+  status: EventStatus;
+  source: string;
+  created_at: string;
+  updated_at: string;
+};
+export type EventInsert = EventRow;
+
+// =========================================================
 // Loyalty, Ranks & Subscriptions — see supabase/migrations/0012_loyalty_module.sql.
 // shop_id is plain text everywhere here, same as cafe_id/coffee_shop_id
 // elsewhere in this file — there is no public.shops table.
@@ -290,6 +311,7 @@ export type Database = {
         Insert: LoyaltyTransactionInsert;
         Update: Partial<LoyaltyTransactionInsert>;
       } & NoRelationships;
+      events: { Row: EventRow; Insert: EventInsert; Update: Partial<EventInsert> } & NoRelationships;
     };
     Views: {
       checkins_roaster_view: { Row: CheckinRoasterViewRow } & NoRelationships;
@@ -317,6 +339,20 @@ export type Database = {
           p_subscription_id?: string | null;
         };
         Returns: GuestShopStatusRow;
+      };
+      // See supabase/migrations/0014_events_module.sql.
+      events_archive_expired: { Args: Record<string, never>; Returns: number };
+      events_ingest_candidate: {
+        Args: {
+          p_title: string;
+          p_location: string;
+          p_description: string;
+          p_start_date: string;
+          p_end_date: string;
+          p_link: string;
+          p_source: string;
+        };
+        Returns: boolean;
       };
     };
   };

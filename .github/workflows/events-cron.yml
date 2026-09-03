@@ -1,0 +1,31 @@
+name: Events maintenance (archive + aggregate)
+
+# Daily cron for the events board — see supabase/migrations/0014_events_module.sql
+# and app/api/cron/*. This repo has no hosted cron runner (deployed on
+# Render, not Vercel), so a scheduled GitHub Actions workflow is the real,
+# working scheduler: it needs no dashboard clicking beyond setting the two
+# repo secrets below once.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   APP_URL            — e.g. https://coffee-passport.onrender.com
+#   EVENTS_CRON_SECRET — must match the EVENTS_CRON_SECRET env var set on
+#                        the deployed app; both routes reject the request
+#                        with 401 if it doesn't match.
+on:
+  schedule:
+    - cron: '0 3 * * *' # 03:00 UTC daily
+  workflow_dispatch: {} # manual "Run workflow" button, for testing
+
+jobs:
+  archive-and-aggregate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Archive expired events
+        run: |
+          curl --fail-with-body -sS -X POST "${{ secrets.APP_URL }}/api/cron/events-archive" \
+            -H "Authorization: Bearer ${{ secrets.EVENTS_CRON_SECRET }}"
+
+      - name: Aggregate new event candidates
+        run: |
+          curl --fail-with-body -sS -X POST "${{ secrets.APP_URL }}/api/cron/events-aggregate" \
+            -H "Authorization: Bearer ${{ secrets.EVENTS_CRON_SECRET }}"

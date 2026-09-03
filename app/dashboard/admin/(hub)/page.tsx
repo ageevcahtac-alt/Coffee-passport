@@ -74,11 +74,9 @@ export default function AdminFeedbackPage() {
   }
 
   return (
-    <main className="min-h-dvh px-6 py-16">
-      <div className="max-w-2xl mx-auto w-full">
-        <p className="section-label mb-2">Кабинет администратора</p>
-        <h1 className="font-display text-3xl text-ink-900 mb-8">Обратная связь и проблемы</h1>
-
+    <div>
+      <p className="section-label mb-6">Обратная связь и проблемы</p>
+      <div>
         <div className="flex flex-wrap gap-3 mb-8">
           <div>
             <label htmlFor="role-filter" className="block text-xs text-ink-400 mb-1.5">
@@ -135,7 +133,7 @@ export default function AdminFeedbackPage() {
           </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }
 
