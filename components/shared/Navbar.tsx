@@ -30,6 +30,7 @@ export function Navbar({ userEmail }: { userEmail: string | null }) {
               <>
                 <Link href="/journey" className={NAV_LINK_CLASSES}>🧳 Journey</Link>
                 <Link href="/my-taste" className={NAV_LINK_CLASSES}>🧪 My Taste</Link>
+                <Link href="/loyalty" className={NAV_LINK_CLASSES}>💳 Мои карты</Link>
                 <form action={signOut}>
                   <button type="submit" className={NAV_LINK_CLASSES}>Sign out</button>
                 </form>
@@ -111,6 +112,13 @@ export function Navbar({ userEmail }: { userEmail: string | null }) {
                     className="py-3 border-b border-ink-100 hover:text-ink-900"
                   >
                     🧪 My Taste
+                  </Link>
+                  <Link
+                    href="/loyalty"
+                    onClick={() => setMenuOpen(false)}
+                    className="py-3 border-b border-ink-100 hover:text-ink-900"
+                  >
+                    💳 Мои карты
                   </Link>
                   <form action={signOut}>
                     <button type="submit" className="w-full text-left py-3 border-b border-ink-100 hover:text-ink-900">

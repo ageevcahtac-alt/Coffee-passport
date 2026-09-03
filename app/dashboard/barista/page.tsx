@@ -10,6 +10,7 @@ import { useBrewingRecipes } from '@/lib/data/useBrewingRecipes';
 import { addBrewingRecipe } from '@/lib/data/brewingRecipesStore';
 import { BaristaRecipeForm } from '@/components/barista/BaristaRecipeForm';
 import { BaristaFeedback } from '@/components/barista/BaristaFeedback';
+import { BaristaLoyaltyPanel } from '@/components/loyalty/BaristaLoyaltyPanel';
 import { useStaffSession } from '@/lib/auth/staffSession';
 import { BREWING_METHODS, type Barista, type BrewingRecipe, type Lot } from '@/lib/types/coffee';
 
@@ -30,6 +31,8 @@ export default function BaristaDashboardPage() {
           {shop.name} · {shop.city}
         </p>
         <h1 className="font-display text-3xl text-ink-900 mb-10">{barista.name}</h1>
+
+        <BaristaLoyaltyPanel shopId={cafeId ?? ''} />
 
         <BaristaFeedback baristaId={barista.id} />
 

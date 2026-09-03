@@ -134,6 +134,10 @@ export type ProfileRow = {
   roaster_id: string | null;
   barista_id: string | null;
   display_name: string | null;
+  // Mirrored from auth.users on signup (see 0012_loyalty_module.sql) — lets
+  // staff-facing queries read a guest's email without joining auth.users
+  // directly, which PostgREST can't do.
+  email: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -184,6 +188,70 @@ type UntypedRow = Record<string, unknown>;
 
 type NoRelationships = { Relationships: [] };
 
+// =========================================================
+// Loyalty, Ranks & Subscriptions — see supabase/migrations/0012_loyalty_module.sql.
+// shop_id is plain text everywhere here, same as cafe_id/coffee_shop_id
+// elsewhere in this file — there is no public.shops table.
+// =========================================================
+
+export type ShopRankRow = {
+  id: string;
+  shop_id: string;
+  rank_name: string;
+  rank_order: number;
+  discount_percent: number;
+  required_visits: number;
+  required_spend: number;
+  retention_days: number;
+  created_at: string;
+  updated_at: string;
+};
+export type ShopRankInsert = ShopRankRow;
+
+export type GuestShopStatusRow = {
+  id: string;
+  guest_id: string;
+  shop_id: string;
+  current_rank_id: string | null;
+  visits_count: number;
+  total_spent: number;
+  last_visit_at: string | null;
+  rank_expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+// Never written directly by a client (see loyalty_redeem/
+// loyalty_sell_subscription) — Insert/Update mirror Row purely to satisfy
+// postgrest-js's GenericTable shape (see this file's own header note);
+// nothing in lib/data/loyalty.ts ever calls .insert()/.update() on this table.
+export type GuestShopStatusInsert = GuestShopStatusRow;
+
+export type SubscriptionRow = {
+  id: string;
+  guest_id: string;
+  shop_id: string;
+  initial_nominal: number;
+  current_balance: number;
+  status: 'active' | 'exhausted' | 'expired';
+  created_at: string;
+  updated_at: string;
+};
+export type SubscriptionInsert = SubscriptionRow;
+
+export type LoyaltyTransactionRow = {
+  id: string;
+  guest_id: string;
+  shop_id: string;
+  barista_id: string | null;
+  subscription_id: string | null;
+  type: 'sell_subscription' | 'deduct_points';
+  gross_amount: number;
+  discount_applied: number;
+  net_amount: number;
+  created_at: string;
+};
+export type LoyaltyTransactionInsert = LoyaltyTransactionRow;
+
 export type Database = {
   public: {
     Tables: {
@@ -206,6 +274,22 @@ export type Database = {
         Insert: CheckinReplyInsert;
         Update: Partial<CheckinReplyInsert>;
       } & NoRelationships;
+      shop_ranks: { Row: ShopRankRow; Insert: ShopRankInsert; Update: Partial<ShopRankInsert> } & NoRelationships;
+      guest_shop_statuses: {
+        Row: GuestShopStatusRow;
+        Insert: GuestShopStatusInsert;
+        Update: Partial<GuestShopStatusInsert>;
+      } & NoRelationships;
+      subscriptions: {
+        Row: SubscriptionRow;
+        Insert: SubscriptionInsert;
+        Update: Partial<SubscriptionInsert>;
+      } & NoRelationships;
+      loyalty_transactions: {
+        Row: LoyaltyTransactionRow;
+        Insert: LoyaltyTransactionInsert;
+        Update: Partial<LoyaltyTransactionInsert>;
+      } & NoRelationships;
     };
     Views: {
       checkins_roaster_view: { Row: CheckinRoasterViewRow } & NoRelationships;
@@ -216,6 +300,24 @@ export type Database = {
       // self-targeting (auth.uid()), and only actually promotes one of the
       // three hardcoded pilot demo emails; no arguments.
       dev_seed_staff_profile: { Args: Record<string, never>; Returns: ProfileRow };
+      // See supabase/migrations/0012_loyalty_module.sql.
+      loyalty_rank_for: {
+        Args: { p_shop_id: string; p_visits: number; p_spend: number };
+        Returns: string | null;
+      };
+      loyalty_sell_subscription: {
+        Args: { p_guest_id: string; p_shop_id: string; p_nominal: number };
+        Returns: SubscriptionRow;
+      };
+      loyalty_redeem: {
+        Args: {
+          p_guest_id: string;
+          p_shop_id: string;
+          p_gross_amount: number;
+          p_subscription_id?: string | null;
+        };
+        Returns: GuestShopStatusRow;
+      };
     };
   };
 };

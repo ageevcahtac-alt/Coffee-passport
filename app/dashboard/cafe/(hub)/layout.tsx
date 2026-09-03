@@ -9,6 +9,7 @@ const TABS = [
   { href: '/dashboard/cafe', label: 'Меню зерна' },
   { href: '/dashboard/cafe/analytics', label: 'Отзывы гостей' },
   { href: '/dashboard/cafe/team', label: 'Команда / Персонал' },
+  { href: '/dashboard/cafe/loyalty', label: 'Лояльность' },
   { href: '/dashboard/cafe/map-profile', label: 'Профиль на карте' },
   { href: '/dashboard/cafe/equipment', label: 'Оборудование' },
 ] as const;
