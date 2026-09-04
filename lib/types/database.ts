@@ -330,6 +330,10 @@ export type CafeMenuEntryRow = {
   is_active: boolean;
   status: LotMenuStatusRow;
   status_changed_at: string;
+  // Set when status = 'discontinuing' — see
+  // supabase/migrations/0018_cafe_menu_scheduled_removal.sql. Null for
+  // every other status.
+  scheduled_removal_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -422,6 +426,8 @@ export type Database = {
         };
         Returns: GuestShopStatusRow;
       };
+      // See supabase/migrations/0018_cafe_menu_scheduled_removal.sql.
+      cafe_menu_expire_discontinuing: { Args: Record<string, never>; Returns: number };
       // See supabase/migrations/0014_events_module.sql.
       events_archive_expired: { Args: Record<string, never>; Returns: number };
       events_ingest_candidate: {

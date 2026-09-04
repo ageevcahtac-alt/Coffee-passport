@@ -32,6 +32,12 @@ export interface CafeMenuEntry {
   isActive: boolean;
   status: LotMenuStatus;
   statusChangedAt: string; // ISO timestamp
+  // Only ever set while status === 'discontinuing' — see
+  // supabase/migrations/0018_cafe_menu_scheduled_removal.sql and
+  // components/coffee/CountdownTimer.tsx. setMenuLotStatus below forces
+  // this back to null for every other status, so callers never need to
+  // remember to clear it themselves.
+  scheduledRemovalAt: string | null;
 }
 
 type ShopMenuEntries = Record<string, CafeMenuEntry>; // lotId -> entry
@@ -45,7 +51,7 @@ const DEFAULT_MENU: Record<string, string[]> = {
 };
 
 function defaultEntry(): CafeMenuEntry {
-  return { isActive: true, status: 'active', statusChangedAt: new Date(0).toISOString() };
+  return { isActive: true, status: 'active', statusChangedAt: new Date(0).toISOString(), scheduledRemovalAt: null };
 }
 
 // useSyncExternalStore requires getSnapshot to return a referentially stable
@@ -73,13 +79,18 @@ const listeners = new Set<() => void>();
 // still be sitting in a browser's localStorage from before `status`
 // existed — same defensive normalize-on-read idiom as lotsStore.ts's
 // normalizeLot.
-function normalizeShopEntries(raw: Record<string, boolean | CafeMenuEntry>): ShopMenuEntries {
+function normalizeShopEntries(raw: Record<string, boolean | Partial<CafeMenuEntry>>): ShopMenuEntries {
   const normalized: ShopMenuEntries = {};
   for (const [lotId, value] of Object.entries(raw)) {
     normalized[lotId] =
       typeof value === 'boolean'
-        ? { isActive: value, status: 'active', statusChangedAt: new Date(0).toISOString() }
-        : { isActive: value.isActive, status: value.status ?? 'active', statusChangedAt: value.statusChangedAt ?? new Date(0).toISOString() };
+        ? { isActive: value, status: 'active', statusChangedAt: new Date(0).toISOString(), scheduledRemovalAt: null }
+        : {
+            isActive: value.isActive ?? true,
+            status: value.status ?? 'active',
+            statusChangedAt: value.statusChangedAt ?? new Date(0).toISOString(),
+            scheduledRemovalAt: value.scheduledRemovalAt ?? null,
+          };
   }
   return normalized;
 }
@@ -146,6 +157,7 @@ function rowToEntry(row: CafeMenuEntryRow): CafeMenuEntry {
     isActive: row.is_active,
     status: row.status,
     statusChangedAt: row.status_changed_at,
+    scheduledRemovalAt: row.scheduled_removal_at,
   };
 }
 
@@ -178,6 +190,7 @@ function writeThroughEntry(shopId: string, lotId: string, entry: CafeMenuEntry):
     is_active: entry.isActive,
     status: entry.status,
     status_changed_at: entry.statusChangedAt,
+    scheduled_removal_at: entry.scheduledRemovalAt,
     created_at: entry.statusChangedAt,
     updated_at: new Date().toISOString(),
   };
@@ -195,7 +208,12 @@ function writeThroughEntry(shopId: string, lotId: string, entry: CafeMenuEntry):
 export function addLotToMenu(shopId: string, lotId: string): void {
   const current = getMenuEntries(shopId);
   if (current[lotId]) return;
-  const entry: CafeMenuEntry = { isActive: true, status: 'new', statusChangedAt: new Date().toISOString() };
+  const entry: CafeMenuEntry = {
+    isActive: true,
+    status: 'new',
+    statusChangedAt: new Date().toISOString(),
+    scheduledRemovalAt: null,
+  };
   write({ ...readOverrides(), [shopId]: { ...current, [lotId]: entry } });
   writeThroughEntry(shopId, lotId, entry);
 }
@@ -213,13 +231,27 @@ export function setMenuLotActive(shopId: string, lotId: string, isActive: boolea
 }
 
 // The lifecycle status control — "Новинка / Активен / Выводим" (see
-// components/cafe/LotMenuCard.tsx / LotDetailModal.tsx). Stamps
-// statusChangedAt so history isn't lost even though nothing reads it yet
-// beyond "is this the current status."
-export function setMenuLotStatus(shopId: string, lotId: string, status: LotMenuStatus): void {
+// components/cafe/LotStatusControl.tsx). Stamps statusChangedAt so history
+// isn't lost even though nothing reads it yet beyond "is this the current
+// status." scheduledRemovalAt is only meaningful for 'discontinuing' —
+// forced to null for every other status here, so a caller flipping back to
+// 'active'/'new' can never accidentally leave a stale removal date behind
+// (which would otherwise silently re-arm cafe_menu_expire_discontinuing()
+// the next time status went back to 'discontinuing' without a fresh date).
+export function setMenuLotStatus(
+  shopId: string,
+  lotId: string,
+  status: LotMenuStatus,
+  scheduledRemovalAt: string | null = null
+): void {
   const current = getMenuEntries(shopId);
   const existing = current[lotId] ?? defaultEntry();
-  const entry: CafeMenuEntry = { ...existing, status, statusChangedAt: new Date().toISOString() };
+  const entry: CafeMenuEntry = {
+    ...existing,
+    status,
+    statusChangedAt: new Date().toISOString(),
+    scheduledRemovalAt: status === 'discontinuing' ? scheduledRemovalAt : null,
+  };
   write({ ...readOverrides(), [shopId]: { ...current, [lotId]: entry } });
   writeThroughEntry(shopId, lotId, entry);
 }

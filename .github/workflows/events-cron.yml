@@ -1,10 +1,12 @@
-name: Events maintenance (archive + aggregate)
+name: Daily maintenance (events + cafe menu)
 
-# Daily cron for the events board — see supabase/migrations/0014_events_module.sql
-# and app/api/cron/*. This repo has no hosted cron runner (deployed on
-# Render, not Vercel), so a scheduled GitHub Actions workflow is the real,
-# working scheduler: it needs no dashboard clicking beyond setting the two
-# repo secrets below once.
+# Daily cron for the events board (see supabase/migrations/0014_events_module.sql)
+# and, since this workflow already exists, the cafe-menu scheduled-removal
+# expiry too (see supabase/migrations/0018_cafe_menu_scheduled_removal.sql)
+# — both live under app/api/cron/*. This repo has no hosted cron runner
+# (deployed on Render, not Vercel), so a scheduled GitHub Actions workflow
+# is the real, working scheduler: it needs no dashboard clicking beyond
+# setting the two repo secrets below once.
 #
 # Required repo secrets (Settings → Secrets and variables → Actions):
 #   APP_URL            — e.g. https://coffee-passport.onrender.com
@@ -28,4 +30,9 @@ jobs:
       - name: Aggregate new event candidates
         run: |
           curl --fail-with-body -sS -X POST "${{ secrets.APP_URL }}/api/cron/events-aggregate" \
+            -H "Authorization: Bearer ${{ secrets.EVENTS_CRON_SECRET }}"
+
+      - name: Expire scheduled cafe menu removals
+        run: |
+          curl --fail-with-body -sS -X POST "${{ secrets.APP_URL }}/api/cron/cafe-menu-expire" \
             -H "Authorization: Bearer ${{ secrets.EVENTS_CRON_SECRET }}"

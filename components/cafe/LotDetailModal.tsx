@@ -47,6 +47,7 @@ export function LotDetailModal({
   isActive,
   onToggleActive,
   status,
+  scheduledRemovalAt,
   onChangeStatus,
   discontinuedByRoaster,
   onClose,
@@ -60,7 +61,8 @@ export function LotDetailModal({
   isActive: boolean;
   onToggleActive: (next: boolean) => void;
   status: LotMenuStatus;
-  onChangeStatus: (status: LotMenuStatus) => void;
+  scheduledRemovalAt: string | null;
+  onChangeStatus: (status: LotMenuStatus, scheduledRemovalAt: string | null) => void;
   discontinuedByRoaster: boolean;
   onClose: () => void;
 }) {
@@ -173,7 +175,7 @@ export function LotDetailModal({
 
         {isActive && (
           <div className="mb-6">
-            <LotStatusControl value={status} onChange={onChangeStatus} />
+            <LotStatusControl value={status} scheduledRemovalAt={scheduledRemovalAt} onChange={onChangeStatus} />
           </div>
         )}
 

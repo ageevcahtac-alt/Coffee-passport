@@ -10,6 +10,7 @@ import { consumePendingShop, markPendingShop } from '@/lib/journey/pendingShopFl
 import { consumePendingRoaster, markPendingRoaster } from '@/lib/journey/pendingRoasterFlag';
 import { getRoasterById } from '@/lib/data/roasters';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
+import { syncCafeMenuFromSupabase } from '@/lib/data/cafeMenuStore';
 import { UNSPECIFIED_BARISTA_ID } from '@/lib/data/baristas';
 import { useCoffeeShops } from '@/lib/data/useCoffeeShops';
 import { useRoasters } from '@/lib/data/useRoasters';
@@ -17,6 +18,7 @@ import { useCurrentUser } from '@/lib/auth/currentUser';
 import { useRoastProfiles } from '@/lib/data/useRoastProfiles';
 import { LocationStep } from '@/components/coffee/LocationStep';
 import { LotPassport } from '@/components/coffee/LotPassport';
+import { LotRemovalCountdown } from '@/components/coffee/LotRemovalCountdown';
 import { ProducerRoasterCard } from '@/components/coffee/ProducerRoasterCard';
 import { RoastProfileSummaryCard } from '@/components/coffee/RoastProfileSummaryCard';
 import { RoasterCafeRecommendations } from '@/components/coffee/RoasterCafeRecommendations';
@@ -84,6 +86,12 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
   // defaults to the scanned lot's own roasterId until the guest corrects it.
   const [selectedShopId, setSelectedShopId] = useState<string | null>(null);
   const [selectedRoasterId, setSelectedRoasterId] = useState<string | null>(null);
+
+  // Warms the cafe-menu cache for LotRemovalCountdown below — nothing else
+  // on this page reads it yet.
+  useEffect(() => {
+    if (selectedShopId) void syncCafeMenuFromSupabase(selectedShopId);
+  }, [selectedShopId]);
 
   // Landing here right after saving a tasting (FarmerPinningModal's × or
   // the taste flow's own navigation) already knows which shop/roaster the
@@ -224,6 +232,10 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
 
       <div className={`max-w-md mx-auto w-full mt-10 ${justRevealed ? 'reveal-fade' : ''}`}>
         <LotPassport lot={lot} roaster={roaster} />
+      </div>
+
+      <div className="max-w-md mx-auto w-full mt-4">
+        <LotRemovalCountdown shopId={selectedShopId} lotId={lot.id} variant="notice" />
       </div>
 
       <div className="max-w-md mx-auto w-full mt-10">

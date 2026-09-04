@@ -8,6 +8,7 @@ import { useCafeMenuLotIds, useCafeMenuEntries } from '@/lib/data/useCafeMenu';
 import { syncCafeMenuFromSupabase } from '@/lib/data/cafeMenuStore';
 import { getShopAnnouncements, type ShopAnnouncement } from '@/lib/utils/shopAnnouncements';
 import { ROAST_TYPE_LABELS } from '@/lib/types/coffee';
+import { LotRemovalCountdown } from './LotRemovalCountdown';
 
 // "Обновления на баре" — the guest-facing side of a cafe's lot lifecycle
 // status (see components/cafe/LotStatusControl.tsx). Scoped to shops the
@@ -76,6 +77,11 @@ function AnnouncementCard({
     >
       {isNew ? '✨ ' : '⚠ '}
       {text}
+      {!isNew && (
+        <div className="mt-1.5">
+          <LotRemovalCountdown shopId={shopId} lotId={lot.id} />
+        </div>
+      )}
     </Link>
   );
 }

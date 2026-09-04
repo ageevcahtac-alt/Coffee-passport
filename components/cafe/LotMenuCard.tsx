@@ -14,6 +14,7 @@ export function LotMenuCard({
   isActive,
   onToggleActive,
   status,
+  scheduledRemovalAt,
   onChangeStatus,
   discontinuedByRoaster = false,
   onOpenDetail,
@@ -22,7 +23,8 @@ export function LotMenuCard({
   isActive: boolean;
   onToggleActive: (next: boolean) => void;
   status: LotMenuStatus;
-  onChangeStatus: (status: LotMenuStatus) => void;
+  scheduledRemovalAt: string | null;
+  onChangeStatus: (status: LotMenuStatus, scheduledRemovalAt: string | null) => void;
   discontinuedByRoaster?: boolean;
   onOpenDetail: () => void;
 }) {
@@ -84,7 +86,7 @@ export function LotMenuCard({
 
       {isActive && (
         <div className="mt-4">
-          <LotStatusControl value={status} onChange={onChangeStatus} />
+          <LotStatusControl value={status} scheduledRemovalAt={scheduledRemovalAt} onChange={onChangeStatus} />
         </div>
       )}
 

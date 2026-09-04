@@ -55,8 +55,9 @@ export default function CafeMenuPage() {
               lot={lot}
               isActive={menuEntries[lot.id]?.isActive ?? false}
               status={menuEntries[lot.id]?.status ?? 'active'}
+              scheduledRemovalAt={menuEntries[lot.id]?.scheduledRemovalAt ?? null}
               onToggleActive={(next) => setMenuLotActive(activeShopId, lot.id, next)}
-              onChangeStatus={(status) => setMenuLotStatus(activeShopId, lot.id, status)}
+              onChangeStatus={(status, scheduledRemovalAt) => setMenuLotStatus(activeShopId, lot.id, status, scheduledRemovalAt)}
               discontinuedByRoaster={!lot.inRoasterCatalog}
               onOpenDetail={() => setOpenLotId(lot.id)}
             />
@@ -74,8 +75,9 @@ export default function CafeMenuPage() {
           benchmarkLoading={benchmarksLoading}
           isActive={menuEntries[openLot.id]?.isActive ?? false}
           status={menuEntries[openLot.id]?.status ?? 'active'}
+          scheduledRemovalAt={menuEntries[openLot.id]?.scheduledRemovalAt ?? null}
           onToggleActive={(next) => setMenuLotActive(activeShopId, openLot.id, next)}
-          onChangeStatus={(status) => setMenuLotStatus(activeShopId, openLot.id, status)}
+          onChangeStatus={(status, scheduledRemovalAt) => setMenuLotStatus(activeShopId, openLot.id, status, scheduledRemovalAt)}
           discontinuedByRoaster={!openLot.inRoasterCatalog}
           onClose={() => setOpenLotId(null)}
         />
