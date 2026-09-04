@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { useLots } from '@/lib/data/useLots';
 import { useCafeMenuLotIds } from '@/lib/data/useCafeMenu';
+import { syncCafeMenuFromSupabase } from '@/lib/data/cafeMenuStore';
 import { useBrewingRecipes } from '@/lib/data/useBrewingRecipes';
 import { addRecipeAsDraft, publishRecipe, updateBrewingRecipe, deleteBrewingRecipe } from '@/lib/data/brewingRecipesStore';
 import { useBaristaProfiles } from '@/lib/data/useBaristaProfiles';
@@ -21,6 +22,9 @@ export default function BaristaDashboardPage() {
   const { baristaId, cafeId } = useStaffSession();
   const barista = useBaristaProfiles().find((candidate) => candidate.id === baristaId);
   const shop = cafeId ? getCoffeeShopById(cafeId) : undefined;
+  useEffect(() => {
+    void syncCafeMenuFromSupabase(cafeId ?? '');
+  }, [cafeId]);
   const lots = useLots();
   const menuLotIds = useCafeMenuLotIds(cafeId ?? '');
   const menuLots = lots.filter((lot) => menuLotIds.includes(lot.id));

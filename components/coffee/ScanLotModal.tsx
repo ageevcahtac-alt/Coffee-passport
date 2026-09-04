@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLots } from '@/lib/data/useLots';
-import { getMenuLotIds } from '@/lib/data/cafeMenuStore';
+import { getMenuLotIds, syncCafeMenuFromSupabase } from '@/lib/data/cafeMenuStore';
 import { extractLotId } from '@/lib/utils/lotId';
 import { QrScanner } from '@/components/coffee/QrScanner';
 
@@ -22,6 +22,15 @@ export function ScanLotModal({ onClose }: { onClose: () => void }) {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [scannerFailed, setScannerFailed] = useState(false);
+
+  // getMenuLotIds below reads the local cache synchronously (it's called
+  // from a plain resolve function, not a hook, so it can't await this
+  // itself) — kick the fetch off as early as possible, on mount, so the
+  // cache is warm by the time a real scan/submit happens a beat later,
+  // same best-effort pattern as syncEquipmentFromSupabase elsewhere.
+  useEffect(() => {
+    void syncCafeMenuFromSupabase(ACTIVE_SHOP_ID);
+  }, []);
 
   function resolveAndNavigate(raw: string) {
     const lotId = extractLotId(raw);
