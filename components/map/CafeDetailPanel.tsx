@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import type { CoffeeShop, RoastType } from '@/lib/types/coffee';
 import { useLots } from '@/lib/data/useLots';
 import { useCafeMenuEntries } from '@/lib/data/useCafeMenu';
+import { syncCafeMenuFromSupabase } from '@/lib/data/cafeMenuStore';
 
 // "Активное зерно в наличии" buckets a shop's active menu into three
 // roast-purpose tags plus a 4th "Архив" count for lots the shop toggled OFF
@@ -28,6 +29,10 @@ function bucketFor(roastType: RoastType): Exclude<SupplyLabel, 'Архив'> {
 // hasn't filled in photos/phone/socials/description must never crash the
 // map, only show less.
 function useSupplyData(shop: CoffeeShop) {
+  useEffect(() => {
+    void syncCafeMenuFromSupabase(shop.id);
+  }, [shop.id]);
+
   const lots = useLots() ?? [];
   const entries = useCafeMenuEntries(shop.id) ?? {};
   const counts: Record<SupplyLabel, number> = { Эспрессо: 0, Фильтр: 0, Дрипы: 0, Архив: 0 };
@@ -35,7 +40,7 @@ function useSupplyData(shop: CoffeeShop) {
 
   for (const lot of lots) {
     if (!lot || !(lot.id in entries)) continue;
-    if (entries[lot.id]) {
+    if (entries[lot.id].isActive) {
       counts[bucketFor(lot.roastType)] += 1;
       activeLotNames.push(lot.name ?? lot.id);
     } else {

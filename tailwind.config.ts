@@ -52,6 +52,11 @@ const config: Config = {
           700: '#3E4A35',
         },
         rating: '#A0522D',
+        // Burnt-bean red — the "discontinuing/warning" accent (see
+        // LOT_MENU_STATUS_ACCENT in lib/types/coffee.ts). The only
+        // warning-tier color in the palette; used nowhere else so it keeps
+        // one meaning, same discipline as gold/moss/rating.
+        scorch: '#9A3B34',
       },
       fontFamily: {
         display: ['var(--font-display)', 'Georgia', 'serif'],

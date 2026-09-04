@@ -1,8 +1,10 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { useCoffeeShops } from '@/lib/data/useCoffeeShops';
 import { useCafeMenuEntries } from '@/lib/data/useCafeMenu';
+import { syncCafeMenuFromSupabase } from '@/lib/data/cafeMenuStore';
 import type { CoffeeShop, Lot } from '@/lib/types/coffee';
 
 // "Карта поставок" — every accredited coffee shop currently listing at
@@ -42,9 +44,13 @@ function ShopSupplyRow({
   myLots: Lot[];
   myLotIds: Set<string>;
 }) {
+  useEffect(() => {
+    void syncCafeMenuFromSupabase(shop.id);
+  }, [shop.id]);
+
   const entries = useCafeMenuEntries(shop.id);
   const activeLotNames = myLots
-    .filter((lot) => myLotIds.has(lot.id) && entries[lot.id])
+    .filter((lot) => myLotIds.has(lot.id) && entries[lot.id]?.isActive)
     .map((lot) => lot.name);
 
   if (activeLotNames.length === 0) return null;

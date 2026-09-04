@@ -47,7 +47,7 @@ export function CoffeeShopProfileCard({
       </dl>
 
       <p className="section-label mb-3">Продегустированные лоты</p>
-      <ul className="flex flex-col gap-1.5">
+      <ul className="flex flex-col gap-1.5 mb-4">
         {lots.map((lot) => {
           const roaster = getRoasterById(lot.roasterId);
           return (
@@ -67,6 +67,13 @@ export function CoffeeShopProfileCard({
           );
         })}
       </ul>
+
+      <Link
+        href={`/shop/${shop.id}`}
+        className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900"
+      >
+        Смотреть меню кофейни →
+      </Link>
     </div>
   );
 }

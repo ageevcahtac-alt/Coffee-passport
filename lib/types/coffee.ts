@@ -25,6 +25,31 @@ export const ROAST_TYPE_LABELS: Record<RoastType, string> = {
   alternative: 'Альтернатива',
 };
 
+// A cafe's per-lot lifecycle state — distinct from Lot.inRoasterCatalog
+// (the roaster's own "still in production" flag) and from a menu entry's
+// isActive (the master "shown to guests at all" switch, see
+// lib/data/cafeMenuStore.ts). status is only meaningful while isActive is
+// true, and drives both the cafe dashboard's status control and the
+// guest-facing "Обновления на баре" announcements — see
+// supabase/migrations/0017_cafe_menu_entries.sql.
+export type LotMenuStatus = 'new' | 'active' | 'discontinuing';
+
+export const LOT_MENU_STATUS_LABELS: Record<LotMenuStatus, string> = {
+  new: 'Новинка',
+  active: 'Активен',
+  discontinuing: 'Выводим из ассортимента',
+};
+
+// Which palette accent (see tailwind.config.ts / DESIGN.md) marks each
+// status — moss is already reserved for "fresh" content, scorch is the one
+// new token this feature adds for the warning state. null means "no accent,
+// this is the unremarkable default state."
+export const LOT_MENU_STATUS_ACCENT: Record<LotMenuStatus, 'moss' | 'scorch' | null> = {
+  new: 'moss',
+  active: null,
+  discontinuing: 'scorch',
+};
+
 // The roaster's own cupping read of the lot, 1-5 per axis — distinct from the
 // consumer's per-cup sensory tags/rating recorded on a TastingRecord.
 export interface RoasterFlavorProfile {

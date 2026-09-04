@@ -13,6 +13,7 @@ import type { AnonymizedCheckin } from '@/lib/data/checkinsRoasterView';
 import { LotGuestAnalytics } from '@/components/roaster/LotGuestAnalytics';
 import { CommunityHighlights } from '@/components/coffee/CommunityHighlights';
 import { RoasterSupplyMapWidget } from '@/components/roaster/RoasterSupplyMapWidget';
+import { CatalogHierarchy } from '@/components/coffee/CatalogHierarchy';
 import { useStaffSession } from '@/lib/auth/staffSession';
 
 type CatalogTab = 'active' | 'archived';
@@ -25,7 +26,6 @@ export default function RoasterDashboardPage() {
   const myLots = lots.filter((lot) => lot.roasterId === roasterId);
 
   const [tab, setTab] = useState<CatalogTab>('active');
-  const [openCountry, setOpenCountry] = useState<string | null>(null);
 
   // "Снять с обжарки" only flips Lot.inRoasterCatalog — it never touches
   // check-in history or a guest's already-saved passport (see the field's
@@ -34,14 +34,6 @@ export default function RoasterDashboardPage() {
   const activeLots = myLots.filter((lot) => lot.inRoasterCatalog);
   const archivedLots = myLots.filter((lot) => !lot.inRoasterCatalog);
   const shownLots = tab === 'active' ? activeLots : archivedLots;
-
-  const countryGroups = new Map<string, Lot[]>();
-  for (const lot of shownLots) {
-    const group = countryGroups.get(lot.country) ?? [];
-    group.push(lot);
-    countryGroups.set(lot.country, group);
-  }
-  const sortedCountries = Array.from(countryGroups.keys()).sort((a, b) => a.localeCompare(b));
 
   function toggleCatalog(lot: Lot) {
     saveLot({ ...lot, inRoasterCatalog: !lot.inRoasterCatalog });
@@ -107,52 +99,17 @@ export default function RoasterDashboardPage() {
                 : 'Архив пуст — сюда попадают лоты, снятые с обжарки.'}
           </p>
         ) : (
-          <div className="flex flex-col gap-3">
-            {sortedCountries.map((country) => {
-              const countryLots = countryGroups.get(country) ?? [];
-              const isOpen = openCountry === country;
-              return (
-                <div
-                  key={country}
-                  className="rounded-md border border-ink-200 bg-parchment-100 overflow-hidden"
-                >
-                  <button
-                    type="button"
-                    onClick={() => setOpenCountry(isOpen ? null : country)}
-                    aria-expanded={isOpen}
-                    className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left"
-                  >
-                    <h2 className="font-display text-lg text-ink-900 leading-tight">{country}</h2>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-xs text-ink-400">{countryLots.length} лотов</span>
-                      <span
-                        className={`text-ink-400 text-lg leading-none transition-transform ${
-                          isOpen ? 'rotate-180' : ''
-                        }`}
-                        aria-hidden="true"
-                      >
-                        ⌄
-                      </span>
-                    </div>
-                  </button>
-
-                  {isOpen && (
-                    <div className="flex flex-col gap-4 px-5 pb-5">
-                      {countryLots.map((lot) => (
-                        <LotRow
-                          key={lot.id}
-                          lot={lot}
-                          checkins={checkins}
-                          loading={checkinsLoading}
-                          onToggleCatalog={() => toggleCatalog(lot)}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          <CatalogHierarchy
+            lots={shownLots}
+            renderLot={(lot) => (
+              <LotRow
+                lot={lot}
+                checkins={checkins}
+                loading={checkinsLoading}
+                onToggleCatalog={() => toggleCatalog(lot)}
+              />
+            )}
+          />
         )}
       </div>
     </main>

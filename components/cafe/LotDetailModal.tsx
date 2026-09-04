@@ -5,10 +5,11 @@ import Link from 'next/link';
 import { getRoasterById } from '@/lib/data/roasters';
 import { downloadLotQrPdf } from '@/lib/utils/qrPdf';
 import type { LotBenchmark } from '@/lib/data/cafeLotBenchmarks';
-import { DEFECT_TAGS, FLAVOR_AXES, type Lot, type TastingRecord } from '@/lib/types/coffee';
+import { DEFECT_TAGS, FLAVOR_AXES, type Lot, type LotMenuStatus, type TastingRecord } from '@/lib/types/coffee';
 import { FlavorRadar } from '@/components/coffee/FlavorRadar';
 import { StarRating } from '@/components/coffee/StarRating';
 import { LotRatingBenchmarks } from './LotRatingBenchmarks';
+import { LotStatusControl } from './LotStatusControl';
 
 type DetailTab = 'concept' | 'ratings' | 'defects';
 
@@ -45,6 +46,8 @@ export function LotDetailModal({
   benchmarkLoading,
   isActive,
   onToggleActive,
+  status,
+  onChangeStatus,
   discontinuedByRoaster,
   onClose,
 }: {
@@ -56,6 +59,8 @@ export function LotDetailModal({
   benchmarkLoading: boolean;
   isActive: boolean;
   onToggleActive: (next: boolean) => void;
+  status: LotMenuStatus;
+  onChangeStatus: (status: LotMenuStatus) => void;
   discontinuedByRoaster: boolean;
   onClose: () => void;
 }) {
@@ -165,6 +170,12 @@ export function LotDetailModal({
             />
           </button>
         </div>
+
+        {isActive && (
+          <div className="mb-6">
+            <LotStatusControl value={status} onChange={onChangeStatus} />
+          </div>
+        )}
 
         <div role="tablist" aria-label="Раздел карточки лота" className="flex gap-1.5 mb-6">
           <DetailTabButton active={tab === 'concept'} onClick={() => setTab('concept')} label="Задумка" />

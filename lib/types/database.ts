@@ -317,10 +317,33 @@ export type BaristaProfileRow = {
 };
 export type BaristaProfileInsert = BaristaProfileRow;
 
+// =========================================================
+// Cafe menu entries — see supabase/migrations/0017_cafe_menu_entries.sql.
+// =========================================================
+
+export type LotMenuStatusRow = 'new' | 'active' | 'discontinuing';
+
+export type CafeMenuEntryRow = {
+  id: string;
+  coffee_shop_id: string;
+  lot_id: string;
+  is_active: boolean;
+  status: LotMenuStatusRow;
+  status_changed_at: string;
+  created_at: string;
+  updated_at: string;
+};
+export type CafeMenuEntryInsert = CafeMenuEntryRow;
+
 export type Database = {
   public: {
     Tables: {
       recipes: { Row: RecipeRow; Insert: RecipeInsert; Update: Partial<RecipeInsert> } & NoRelationships;
+      cafe_menu_entries: {
+        Row: CafeMenuEntryRow;
+        Insert: CafeMenuEntryInsert;
+        Update: Partial<CafeMenuEntryInsert>;
+      } & NoRelationships;
       custom_brew_methods: {
         Row: CustomBrewMethodRow;
         Insert: CustomBrewMethodInsert;

@@ -1,7 +1,8 @@
 'use client';
 
 import { getRoasterById } from '@/lib/data/roasters';
-import type { Lot } from '@/lib/types/coffee';
+import type { Lot, LotMenuStatus } from '@/lib/types/coffee';
+import { LotStatusControl } from './LotStatusControl';
 
 // Deliberately compact — the full benchmark/rating/defect breakdown for a
 // lot now lives in LotDetailModal (opened via onOpenDetail), so a shop with
@@ -12,12 +13,16 @@ export function LotMenuCard({
   lot,
   isActive,
   onToggleActive,
+  status,
+  onChangeStatus,
   discontinuedByRoaster = false,
   onOpenDetail,
 }: {
   lot: Lot;
   isActive: boolean;
   onToggleActive: (next: boolean) => void;
+  status: LotMenuStatus;
+  onChangeStatus: (status: LotMenuStatus) => void;
   discontinuedByRoaster?: boolean;
   onOpenDetail: () => void;
 }) {
@@ -76,6 +81,12 @@ export function LotMenuCard({
           />
         </button>
       </div>
+
+      {isActive && (
+        <div className="mt-4">
+          <LotStatusControl value={status} onChange={onChangeStatus} />
+        </div>
+      )}
 
       <button
         type="button"

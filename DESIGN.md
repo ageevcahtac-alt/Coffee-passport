@@ -21,6 +21,9 @@ event, not a badge.
 - `moss` #5C6B4F — origin/fresh-crop tags, quiet secondary accent (not gold, not red)
 - `rating` #A0522D — personal-rating accent, deliberately distinct from `gold` so the
   Q-score vs. user-rating distinction (the core product idea) is visually reinforced
+- `scorch` #9A3B34 — the one warning/urgency accent (a lot a cafe is about to discontinue),
+  deliberately distinct from `rating`'s sienna so "warning" never reads as "someone's
+  personal rating"
 
 This deliberately avoids the near-universal "warm cream + terracotta" AI-default — parchment
 reads as paper/form rather than a lifestyle-brand cream, and gold/moss/rating triangulate
