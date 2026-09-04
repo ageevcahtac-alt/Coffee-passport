@@ -7,6 +7,7 @@ import { purgeVotesForUser } from '@/lib/data/recipeVotesStore';
 import { purgeKitchenRecipesForUser } from '@/lib/data/kitchenRecipesStore';
 import { purgeCustomCoffeeForUser } from '@/lib/data/customCoffeeStore';
 import { purgeCustomCoffeeCuppingsForUser } from '@/lib/data/customCoffeeCuppingsStore';
+import { purgeMutedShopsForUser } from '@/lib/data/shopMutePreferencesStore';
 
 const ACTIVE_USER_KEY = 'coffee-passport:active-user';
 
@@ -58,6 +59,7 @@ export function reconcileUserScope(newUserId: string, isAuthenticated: boolean):
     purgeKitchenRecipesForUser(previousUserId);
     purgeCustomCoffeeForUser(previousUserId);
     purgeCustomCoffeeCuppingsForUser(previousUserId);
+    purgeMutedShopsForUser(previousUserId);
   }
 
   try {

@@ -22,10 +22,10 @@ function addDays(days: number): string {
 
 // The cafe-side lifecycle selector — "Новинка / Активен / Выводим" — plus,
 // once "Выводим" is picked, the removal-timeframe sub-picker the spec asks
-// for ("через 1 неделю, 1 месяц или конкретной даты"), computing
-// scheduled_removal_at from whichever preset (or custom date) the cafe
-// chooses. Only meaningful while the lot's "В меню кофейни" toggle is on
-// (see lib/data/cafeMenuStore.ts's isActive/status split), so callers
+// for (1 неделя / 1 месяц / 2 месяца / конкретная дата и время), computing
+// scheduled_removal_at from whichever preset (or custom date+time) the
+// cafe chooses. Only meaningful while the lot's "В меню кофейни" toggle is
+// on (see lib/data/cafeMenuStore.ts's isActive/status split), so callers
 // render this only in that state.
 export function LotStatusControl({
   value,
@@ -36,10 +36,10 @@ export function LotStatusControl({
   scheduledRemovalAt: string | null;
   onChange: (status: LotMenuStatus, scheduledRemovalAt: string | null) => void;
 }) {
-  // Local-only draft for the custom-date input — only committed via
-  // onChange once the cafe actually picks "Своя дата", same "don't fire on
+  // Local-only draft for the custom date+time input — only committed via
+  // onChange once the cafe clicks "Применить дату", same "don't fire on
   // every keystroke" restraint as the rest of this app's forms.
-  const [customDate, setCustomDate] = useState('');
+  const [customDateTime, setCustomDateTime] = useState('');
 
   function selectStatus(status: LotMenuStatus) {
     if (status !== 'discontinuing') {
@@ -85,23 +85,24 @@ export function LotStatusControl({
           <div className="flex flex-wrap gap-2 mb-2">
             <PresetButton label="Через неделю" onClick={() => onChange('discontinuing', addDays(7))} />
             <PresetButton label="Через месяц" onClick={() => onChange('discontinuing', addDays(30))} />
+            <PresetButton label="Через 2 месяца" onClick={() => onChange('discontinuing', addDays(60))} />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <input
-              type="date"
-              value={customDate}
-              min={new Date().toISOString().slice(0, 10)}
-              onChange={(event) => setCustomDate(event.target.value)}
+              type="datetime-local"
+              value={customDateTime}
+              min={new Date().toISOString().slice(0, 16)}
+              onChange={(event) => setCustomDateTime(event.target.value)}
               className={fieldClasses}
             />
             <button
               type="button"
-              disabled={!customDate}
-              onClick={() => onChange('discontinuing', new Date(customDate).toISOString())}
+              disabled={!customDateTime}
+              onClick={() => onChange('discontinuing', new Date(customDateTime).toISOString())}
               className="text-xs text-ink-700 underline underline-offset-2 hover:text-ink-900
                          disabled:opacity-40 disabled:pointer-events-none"
             >
-              Применить дату
+              Применить дату и время
             </button>
           </div>
           {scheduledRemovalAt && (

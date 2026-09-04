@@ -8,6 +8,7 @@ import { useCafeMenuLotIds, useCafeMenuEntries } from '@/lib/data/useCafeMenu';
 import { syncCafeMenuFromSupabase } from '@/lib/data/cafeMenuStore';
 import { CatalogHierarchy } from '@/components/coffee/CatalogHierarchy';
 import { GuestLotPreviewCard } from '@/components/coffee/GuestLotPreviewCard';
+import { ShopMuteToggle } from '@/components/coffee/ShopMuteToggle';
 import type { RoastType } from '@/lib/types/coffee';
 
 // The guest-facing, read-only "Меню кофейни" — the enthusiast side of the
@@ -53,7 +54,11 @@ export default function ShopMenuPage({ params }: { params: { shopId: string } })
           />
           <p className="text-xs uppercase tracking-widest2 text-ink-400 font-body">{shop.city}</p>
         </div>
-        <h1 className="font-display text-3xl text-ink-900 mb-10">{shop.name}</h1>
+        <h1 className="font-display text-3xl text-ink-900 mb-6">{shop.name}</h1>
+
+        <div className="mb-10">
+          <ShopMuteToggle shopId={params.shopId} />
+        </div>
 
         {menuLots.length === 0 ? (
           <p className="text-ink-500 text-sm">Меню кофейни пока не заполнено.</p>

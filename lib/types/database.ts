@@ -339,10 +339,26 @@ export type CafeMenuEntryRow = {
 };
 export type CafeMenuEntryInsert = CafeMenuEntryRow;
 
+// =========================================================
+// Shop mute preferences — see supabase/migrations/0019_shop_mute_preferences.sql.
+// =========================================================
+
+export type ShopMutePreferenceRow = {
+  guest_id: string;
+  shop_id: string;
+  created_at: string;
+};
+export type ShopMutePreferenceInsert = ShopMutePreferenceRow;
+
 export type Database = {
   public: {
     Tables: {
       recipes: { Row: RecipeRow; Insert: RecipeInsert; Update: Partial<RecipeInsert> } & NoRelationships;
+      shop_mute_preferences: {
+        Row: ShopMutePreferenceRow;
+        Insert: ShopMutePreferenceInsert;
+        Update: Partial<ShopMutePreferenceInsert>;
+      } & NoRelationships;
       cafe_menu_entries: {
         Row: CafeMenuEntryRow;
         Insert: CafeMenuEntryInsert;

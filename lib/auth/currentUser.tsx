@@ -5,6 +5,7 @@ import { reconcileUserScope } from '@/lib/journey/userScope';
 import { syncCheckinsForUser } from '@/lib/journey/store';
 import { syncRecipesFromSupabase } from '@/lib/data/brewingRecipesStore';
 import { syncBaristaProfilesFromSupabase } from '@/lib/data/baristaProfileStore';
+import { syncMutedShopsFromSupabase } from '@/lib/data/shopMutePreferencesStore';
 
 const ANON_ID_KEY = 'coffee-passport:anon-id';
 
@@ -81,6 +82,7 @@ export function CurrentUserProvider({
       syncCheckinsForUser(resolvedId, isAuthenticated),
       syncRecipesFromSupabase(resolvedId, isAuthenticated),
       syncBaristaProfilesFromSupabase(),
+      syncMutedShopsFromSupabase(resolvedId, isAuthenticated),
     ]);
   }, [authUserId]);
 
