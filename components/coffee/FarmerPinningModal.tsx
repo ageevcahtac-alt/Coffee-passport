@@ -3,6 +3,9 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CoffeeShop, Lot } from '@/lib/types/coffee';
+import { useBaristaProfiles } from '@/lib/data/useBaristaProfiles';
+import { UNSPECIFIED_BARISTA_ID } from '@/lib/data/baristas';
+import { BaristaProfileCard } from '@/components/barista/BaristaProfileCard';
 
 // Same teardrop marker silhouette as CoffeeBeltMap's real pins, reused here
 // so the ritual visually foreshadows the actual map.
@@ -20,8 +23,21 @@ const PIN_MARKER_PATH =
 // already lives), the gold CTA sends them to the Coffee Belt map instead —
 // both are real destinations, there's no plain "cancel" once the tasting
 // is already saved.
-export function FarmerPinningModal({ lot, shop }: { lot: Lot; shop: CoffeeShop }) {
+export function FarmerPinningModal({
+  lot,
+  shop,
+  baristaId,
+}: {
+  lot: Lot;
+  shop: CoffeeShop;
+  // Optional — only barista's own card (Кадр 3.5) renders when this points
+  // at a real, named barista (not the "Не указан" placeholder every shop
+  // roster carries — see lib/data/baristas.ts).
+  baristaId?: string | null;
+}) {
   const router = useRouter();
+  const barista = useBaristaProfiles().find((candidate) => candidate.id === baristaId);
+  const showBarista = Boolean(barista && barista.id !== UNSPECIFIED_BARISTA_ID);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -89,6 +105,13 @@ export function FarmerPinningModal({ lot, shop }: { lot: Lot; shop: CoffeeShop }
             <strong className="font-medium">{shop.name}</strong> на карте Кофейного пояса!
           </p>
         </div>
+
+        {/* Кадр 3.5 — кто приготовил чашку, опционально */}
+        {showBarista && barista && (
+          <div className="reveal-fade mb-8" style={{ animationDelay: '1.7s' }}>
+            <BaristaProfileCard barista={barista} />
+          </div>
+        )}
 
         {/* Кадр 4 — золотая кнопка перехода к карте */}
         <div className="reveal-fade" style={{ animationDelay: '2s' }}>

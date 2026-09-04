@@ -1,7 +1,5 @@
 'use client';
 
-import type { BrewingMethodId } from '@/lib/types/coffee';
-
 // Crowd-sourced grind-conversion data points. Every time an enthusiast
 // adapts a recipe to a different grinder and actually saves the setting
 // they used, that's a real (fromModel, toModel, method) → confirmed
@@ -17,7 +15,10 @@ export interface GrindConfirmation {
   fromSetting: string;
   toModel: string;
   toSetting: string;
-  brewingMethodId: BrewingMethodId;
+  // Widened to plain string (was BrewingMethodId) — a recipe's method can
+  // now also be a STANDARD_BREW_METHOD_CATEGORIES id or a custom method id,
+  // see BrewingRecipe.brewingMethodId's own comment in lib/types/coffee.ts.
+  brewingMethodId: string;
   createdAt: string;
 }
 

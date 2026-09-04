@@ -41,7 +41,7 @@ export function estimateGrindSetting({
   fromModel: string;
   fromSettingText: string;
   toModel: string;
-  brewingMethodId: BrewingMethodId;
+  brewingMethodId: string;
   confirmations: GrindConfirmation[];
 }): GrindEstimate | null {
   if (!fromModel.trim() || !toModel.trim() || fromModel === toModel) return null;
@@ -60,7 +60,7 @@ export function estimateGrindSetting({
 
   if (confirmedValues.length > 0) {
     const average = confirmedValues.reduce((sum, value) => sum + value, 0) / confirmedValues.length;
-    const unit = GRIND_REFERENCE_TABLE[toModel]?.[brewingMethodId]?.unit ?? '';
+    const unit = GRIND_REFERENCE_TABLE[toModel]?.[brewingMethodId as BrewingMethodId]?.unit ?? '';
     const rounded = roundToOneDecimal(average);
     return {
       rawValue: rounded,
@@ -73,8 +73,8 @@ export function estimateGrindSetting({
   // Fall back to the static reference-range interpolation: where does
   // fromSetting sit within fromModel's typical range for this method, and
   // what's the equivalent position in toModel's typical range?
-  const fromRange = GRIND_REFERENCE_TABLE[fromModel]?.[brewingMethodId];
-  const toRange = GRIND_REFERENCE_TABLE[toModel]?.[brewingMethodId];
+  const fromRange = GRIND_REFERENCE_TABLE[fromModel]?.[brewingMethodId as BrewingMethodId];
+  const toRange = GRIND_REFERENCE_TABLE[toModel]?.[brewingMethodId as BrewingMethodId];
   const fromValue = parseLeadingNumber(fromSettingText);
   if (!fromRange || !toRange || fromValue === null) return null;
 

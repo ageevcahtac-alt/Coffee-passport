@@ -179,6 +179,73 @@ export function addBrewingRecipe(input: Omit<BrewingRecipe, 'id' | 'createdAt'>)
   return recipe;
 }
 
+// Awaited variant of addBrewingRecipe used specifically for barista/
+// enthusiast creation — those two author types are quota-scoped (see
+// supabase/migrations/0016_recipe_quota_limits.sql), so unlike
+// addBrewingRecipe's fire-and-forget write, a rejection from the DB
+// trigger must be surfaced instead of silently keeping a local-only
+// phantom draft the server never actually accepted.
+export async function addRecipeAsDraft(
+  input: Omit<BrewingRecipe, 'id' | 'createdAt' | 'isPublic'>
+): Promise<{ recipe: BrewingRecipe | null; error: string | null }> {
+  const recipe: BrewingRecipe = {
+    ...input,
+    isPublic: false,
+    id: generateId(),
+    createdAt: new Date().toISOString(),
+  };
+
+  const { error } = await getBrowserSupabaseClient().from('recipes').insert(recipeToRow(recipe));
+  if (error) return { recipe: null, error: error.message };
+
+  write([recipe, ...read()]);
+  return { recipe, error: null };
+}
+
+// Flips an existing draft to published — subject to the same 14-day-per-
+// method cooldown the trigger enforces; a rejection here means the client-
+// side check in lib/utils/recipeLimits.ts was stale (another tab/device
+// published in the meantime) rather than never having run at all.
+export async function publishRecipe(id: string): Promise<{ error: string | null }> {
+  const existing = read().find((recipe) => recipe.id === id);
+  if (!existing) return { error: 'Рецепт не найден.' };
+
+  const { error } = await getBrowserSupabaseClient()
+    .from('recipes')
+    .update({ is_public: true })
+    .eq('id', id);
+  if (error) return { error: error.message };
+
+  write(read().map((recipe) => (recipe.id === id ? { ...recipe, isPublic: true } : recipe)));
+  return { error: null };
+}
+
+// Full update, for the "Редактировать" action on an existing (draft or
+// already-published) recipe the current user/barista owns — RLS already
+// permits this (0005's "owner manages own recipes" and 0007's "staff
+// manage own org recipes" are both `for all`), there was just no app-level
+// function for it before this task (every recipe write used to be a fresh
+// insert — see "Адаптировать под себя", which always creates a new row via
+// parentRecipeId rather than editing in place).
+export async function updateBrewingRecipe(recipe: BrewingRecipe): Promise<{ error: string | null }> {
+  const { error } = await getBrowserSupabaseClient()
+    .from('recipes')
+    .update(recipeToRow(recipe))
+    .eq('id', recipe.id);
+  if (error) return { error: error.message };
+
+  write(read().map((existing) => (existing.id === recipe.id ? recipe : existing)));
+  return { error: null };
+}
+
+export async function deleteBrewingRecipe(id: string): Promise<{ error: string | null }> {
+  const { error } = await getBrowserSupabaseClient().from('recipes').delete().eq('id', id);
+  if (error) return { error: error.message };
+
+  write(read().filter((recipe) => recipe.id !== id));
+  return { error: null };
+}
+
 // Called on a real account switch on this device/browser (see
 // lib/journey/userScope.ts) — drops only the outgoing user's own enthusiast
 // recipes, never roaster/coffee_shop entries (those are shared catalog

@@ -247,7 +247,7 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
         )}
       </div>
 
-      {showPinningRitual && shop && <FarmerPinningModal lot={lot} shop={shop} />}
+      {showPinningRitual && shop && <FarmerPinningModal lot={lot} shop={shop} baristaId={baristaId} />}
     </main>
   );
 }

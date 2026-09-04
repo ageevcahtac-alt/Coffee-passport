@@ -1,4 +1,3 @@
-import type { BrewingMethodId } from '@/lib/types/coffee';
 import { getControlChartBand } from '@/lib/utils/extraction';
 
 // Inline responsive SVG — same no-chart-library convention as
@@ -24,7 +23,7 @@ export function ExtractionChart({
   brewingMethodId,
   points,
 }: {
-  brewingMethodId: BrewingMethodId;
+  brewingMethodId: string;
   points: ExtractionPoint[];
 }) {
   const band = getControlChartBand(brewingMethodId);

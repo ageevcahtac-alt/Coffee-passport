@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { BrewingRecipe } from '@/lib/types/coffee';
 import { computeExtraction } from '@/lib/utils/extraction';
+import { formatTastingDate } from '@/lib/utils/date';
 import { ExtractionChart, type ExtractionPoint } from '@/components/coffee/ExtractionChart';
 import { VoteButtons } from '@/components/coffee/VoteButtons';
 
@@ -12,6 +13,13 @@ export function RecipeCard({
   onAdapt,
   isCommunityTop = false,
   titleOverride,
+  isOwnBarista = false,
+  onEdit,
+  onPublish,
+  onDelete,
+  publishing = false,
+  deleting = false,
+  publishBlockedUntil = null,
 }: {
   recipe: BrewingRecipe;
   currentUserId: string;
@@ -27,14 +35,35 @@ export function RecipeCard({
   // per-tab list in ExtractionTab, say, where several roaster/shop
   // recipes can appear side by side and need to stay distinguishable).
   titleOverride?: string;
+  // barista recipes can't be identified as "own" via authorType/authorId
+  // === currentUserId the way an enthusiast recipe can (currentUserId is a
+  // guest account id, never a barista id) — the caller (barista dashboard)
+  // already knows it's rendering that barista's own recipe, so it just
+  // says so directly.
+  isOwnBarista?: boolean;
+  // Edit/Publish/Delete are only ever wired up by callers showing a
+  // barista's or enthusiast's OWN recipes (LotRecipeRow, ExtractionTab's
+  // "Мои рецепты" tab, MyRecipesShelf) — omitted entirely elsewhere (e.g.
+  // browsing someone else's published recipe), so the buttons simply don't
+  // render there.
+  onEdit?: (recipe: BrewingRecipe) => void;
+  onPublish?: (recipe: BrewingRecipe) => void;
+  onDelete?: (recipe: BrewingRecipe) => void;
+  publishing?: boolean;
+  deleting?: boolean;
+  // Next eligible publish date for this recipe's (author, method) pair —
+  // null means publishing is allowed right now. See
+  // lib/utils/recipeLimits.ts's getNextPublishEligibleAt.
+  publishBlockedUntil?: Date | null;
 }) {
-  const isOwn = recipe.authorType === 'enthusiast' && recipe.authorId === currentUserId;
+  const isOwn = (recipe.authorType === 'enthusiast' && recipe.authorId === currentUserId) || isOwnBarista;
   const ratio = recipe.doseG > 0 ? recipe.yieldG / recipe.doseG : null;
   const isEspresso = recipe.brewingMethodId === 'espresso';
   const badge = titleOverride ? { text: titleOverride, className: getAuthorBadge(recipe, isOwn).className } : getAuthorBadge(recipe, isOwn);
-  // Every published recipe is votable — roaster/coffee_shop/barista
-  // recipes are always isPublic (see ProRecipeForm), an enthusiast's is
-  // only once they've opted in. Powers /top-recipes' three categories.
+  // Every published recipe is votable — roaster/coffee_shop recipes are
+  // always isPublic (see ProRecipeForm); barista and enthusiast recipes
+  // only once explicitly published (see RECIPE_LIMITS' publish cooldown).
+  // Powers /top-recipes' three categories.
   const isVotable = recipe.isPublic;
 
   const [showExtraction, setShowExtraction] = useState(false);
@@ -75,6 +104,11 @@ export function RecipeCard({
           >
             {badge.text}
           </span>
+          {isOwn && !recipe.isPublic && (onPublish || onDelete) && (
+            <span className="inline-block mt-1 ml-1.5 rounded-full border border-ink-300 text-ink-500 text-[10px] uppercase tracking-widest2 px-2 py-0.5">
+              Черновик
+            </span>
+          )}
           {isOwn && (recipe.grinderModel || recipe.equipmentModel) && (
             <p className="text-[11px] text-ink-400 mt-1.5 break-words">
               {[recipe.grinderModel, recipe.equipmentModel].filter(Boolean).join(' · ')}
@@ -162,6 +196,45 @@ export function RecipeCard({
         )}
         {isVotable && <VoteButtons recipeId={recipe.id} currentUserId={currentUserId} />}
       </div>
+
+      {isOwn && (onEdit || onPublish || onDelete) && (
+        <div className="border-t border-ink-200 mt-4 pt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+          {onEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(recipe)}
+              className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900"
+            >
+              Редактировать
+            </button>
+          )}
+          {onPublish && !recipe.isPublic && (
+            <button
+              type="button"
+              onClick={() => onPublish(recipe)}
+              disabled={publishing || Boolean(publishBlockedUntil)}
+              className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900 disabled:opacity-40 disabled:pointer-events-none disabled:no-underline"
+            >
+              {publishing ? 'Публикация…' : 'Опубликовать'}
+            </button>
+          )}
+          {onPublish && !recipe.isPublic && publishBlockedUntil && (
+            <span className="text-xs text-ink-400">
+              Доступно с {formatTastingDate(publishBlockedUntil.toISOString())}
+            </span>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(recipe)}
+              disabled={deleting}
+              className="text-sm text-rating underline underline-offset-2 hover:text-ink-900 disabled:opacity-40"
+            >
+              {deleting ? 'Удаление…' : 'Удалить'}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

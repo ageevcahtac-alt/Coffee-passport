@@ -6,9 +6,15 @@ import { ESPRESSO_MACHINE_MODELS } from '@/lib/types/coffee';
 import { useEquipment } from '@/lib/data/useEquipment';
 import { syncEquipmentFromSupabase } from '@/lib/data/equipmentStore';
 import { useCustomDevices } from '@/lib/data/useCustomDevices';
+import { useCustomBrewMethods } from '@/lib/data/useCustomBrewMethods';
+import { useBrewingRecipes } from '@/lib/data/useBrewingRecipes';
 import { buildFilterDeviceCatalog } from '@/lib/utils/filterDeviceCatalog';
+import { canCreateDraft } from '@/lib/utils/recipeLimits';
+import { resolveBrewMethodLabel } from '@/lib/utils/resolveBrewMethodLabel';
 import { ComboSelect } from '@/components/shared/ComboSelect';
 import { BrewingMethodSelector } from '@/components/coffee/BrewingMethodSelector';
+import { RecipeBrewMethodSelector } from '@/components/coffee/RecipeBrewMethodSelector';
+import { RecipeQuotaPanel } from '@/components/coffee/RecipeQuotaPanel';
 
 const fieldClasses =
   'w-full rounded-md border border-ink-200 bg-parchment-100 px-4 py-3 text-sm ' +
@@ -17,7 +23,7 @@ const fieldClasses =
 type RecipeInput = Omit<BrewingRecipe, 'id' | 'createdAt'>;
 
 interface FormState {
-  brewingMethodId: BrewingMethodId | null;
+  brewingMethodId: string | null;
   doseG: string;
   yieldG: string;
   measuredTds: string;
@@ -73,6 +79,13 @@ export function ProRecipeForm({
   isBenchmark,
   grinderOptions,
   initialRecipe,
+  // True when initialRecipe is being edited in place (caller will call
+  // updateBrewingRecipe with the existing id/createdAt), as opposed to
+  // initialRecipe being used only as a prefill template for a brand-new
+  // recipe. Only meaningful for authorType 'barista' today — it skips the
+  // draft-slot quota gate (editing doesn't consume a new slot) and changes
+  // the submit button's label.
+  isEditing = false,
   onSave,
   onCancel,
 }: {
@@ -90,6 +103,7 @@ export function ProRecipeForm({
   isBenchmark: boolean;
   grinderOptions: string[];
   initialRecipe?: BrewingRecipe;
+  isEditing?: boolean;
   onSave: (recipe: RecipeInput) => void;
   onCancel?: () => void;
 }) {
@@ -108,8 +122,14 @@ export function ProRecipeForm({
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  const isBarista = authorType === 'barista';
   const isEspresso = form.brewingMethodId === 'espresso';
-  const isCustomMethod = form.brewingMethodId === 'custom';
+  const isCustomMethod = !isBarista && form.brewingMethodId === 'custom';
+  const customBrewMethods = useCustomBrewMethods().filter(
+    (method) => method.ownerType === 'barista' && method.ownerId === authorId
+  );
+  const allRecipes = useBrewingRecipes();
+  const methodLabel = form.brewingMethodId ? resolveBrewMethodLabel(form.brewingMethodId, customBrewMethods) : '';
   const filterDeviceCatalog = useMemo(
     () => buildFilterDeviceCatalog(approvedCustomDevices, myEquipment?.favoriteDeviceIds ?? []),
     [approvedCustomDevices, myEquipment]
@@ -142,7 +162,9 @@ export function ProRecipeForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately excludes isEspresso/form fields so this doesn't re-run on every keystroke, just brewingMethodId changes and the one-time Garage load
   }, [form.brewingMethodId, myEquipment]);
 
-  const canSave = Boolean(form.brewingMethodId && form.doseG && form.yieldG);
+  const draftSlotAvailable =
+    !isBarista || isEditing || !form.brewingMethodId || canCreateDraft(allRecipes, 'barista', authorId, form.brewingMethodId);
+  const canSave = Boolean(form.brewingMethodId && form.doseG && form.yieldG) && draftSlotAvailable;
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -173,7 +195,11 @@ export function ProRecipeForm({
       pressureBar: isEspresso && form.pressureBar ? Number(form.pressureBar) : null,
       pressureProfile: isEspresso ? form.pressureProfile.trim() : '',
       notes: form.notes.trim(),
-      isPublic: true, // roaster/coffee_shop recipes are always public by nature
+      // Barista recipes now always start (or stay, when editing) as a
+      // draft — publishing is a separate, cooldown-gated action (see
+      // RecipeQuotaPanel / publishRecipe). Roaster/coffee_shop recipes are
+      // still always public by nature, unaffected by the quota system.
+      isPublic: isBarista ? (isEditing ? (initialRecipe?.isPublic ?? false) : false) : true,
     };
 
     onSave(recipe);
@@ -183,8 +209,29 @@ export function ProRecipeForm({
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
       <div>
         <p className="section-label mb-4">Способ приготовления</p>
-        <BrewingMethodSelector value={form.brewingMethodId} onChange={(id) => update('brewingMethodId', id)} />
+        {isBarista ? (
+          <RecipeBrewMethodSelector
+            ownerType="barista"
+            ownerId={authorId}
+            value={form.brewingMethodId}
+            onChange={(id) => update('brewingMethodId', id)}
+          />
+        ) : (
+          <BrewingMethodSelector
+            value={form.brewingMethodId as BrewingMethodId | null}
+            onChange={(id) => update('brewingMethodId', id)}
+          />
+        )}
       </div>
+
+      {isBarista && form.brewingMethodId && (
+        <RecipeQuotaPanel
+          authorType="barista"
+          authorId={authorId}
+          brewingMethodId={form.brewingMethodId}
+          methodLabel={methodLabel}
+        />
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -325,7 +372,13 @@ export function ProRecipeForm({
           className="flex-1 inline-flex items-center justify-center rounded-md bg-ink-900
                      text-parchment-100 font-body font-medium text-sm px-6 py-4
                      hover:bg-ink-800 transition-colors disabled:opacity-40 disabled:pointer-events-none">
-          {initialRecipe ? 'Сохранить рецепт' : 'Опубликовать рецепт'}
+          {isBarista
+            ? isEditing
+              ? 'Сохранить изменения'
+              : 'Сохранить черновик'
+            : initialRecipe
+              ? 'Сохранить рецепт'
+              : 'Опубликовать рецепт'}
         </button>
       </div>
     </form>

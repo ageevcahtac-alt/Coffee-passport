@@ -10,6 +10,7 @@ import { getBaristaById } from '@/lib/data/baristas';
 import { formatTastingDate } from '@/lib/utils/date';
 import { StarRating } from './StarRating';
 import { FlavorMeter } from './ProducerRoasterCard';
+import { BaristaRecipeDisclosure } from '@/components/barista/BaristaRecipeDisclosure';
 
 // Full, unabridged read of a single TastingRecord — every field the guest
 // filled in during the blind-cupping flow (TastingForm), rendered without
@@ -131,6 +132,12 @@ export function TastingRecordDetails({ record }: { record: TastingRecord }) {
         )}
         {record.baristaNote && <p className="text-sm text-ink-700">{record.baristaNote}</p>}
       </div>
+
+      <BaristaRecipeDisclosure
+        lotId={record.lotId}
+        brewingMethod={record.brewingMethod}
+        baristaId={record.baristaId}
+      />
     </div>
   );
 }

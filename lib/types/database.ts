@@ -25,6 +25,34 @@
 //      `never`-collapse as (1), not a visible type error at the
 //      declaration site.
 
+// =========================================================
+// Recipe quota limits — see supabase/migrations/0016_recipe_quota_limits.sql.
+// =========================================================
+
+export type CustomBrewMethodRow = {
+  id: string;
+  owner_type: 'barista' | 'enthusiast';
+  owner_id: string;
+  label: string;
+  created_at: string;
+};
+export type CustomBrewMethodInsert = CustomBrewMethodRow;
+
+// Read-only from the app's point of view — the only writer is the
+// enforce_recipe_quotas() trigger (security definer, no direct grant to
+// authenticated/anon). Insert/Update are still declared, matching this
+// file's own header note on why postgrest-js needs them structurally, but
+// nothing in lib/data ever calls .insert()/.update() on this table.
+export type RecipePublishEventRow = {
+  id: string;
+  recipe_id: string;
+  author_type: string;
+  author_id: string;
+  brewing_method_id: string;
+  published_at: string;
+};
+export type RecipePublishEventInsert = RecipePublishEventRow;
+
 export type RecipeRow = {
   id: string;
   lot_id: string;
@@ -273,10 +301,41 @@ export type LoyaltyTransactionRow = {
 };
 export type LoyaltyTransactionInsert = LoyaltyTransactionRow;
 
+// =========================================================
+// Barista profiles — see supabase/migrations/0015_barista_profiles.sql.
+// =========================================================
+
+export type BaristaProfileRow = {
+  id: string;
+  coffee_shop_id: string;
+  name: string;
+  favorite_origin: string;
+  favorite_brew_method: string;
+  avatar_url: string;
+  created_at: string;
+  updated_at: string;
+};
+export type BaristaProfileInsert = BaristaProfileRow;
+
 export type Database = {
   public: {
     Tables: {
       recipes: { Row: RecipeRow; Insert: RecipeInsert; Update: Partial<RecipeInsert> } & NoRelationships;
+      custom_brew_methods: {
+        Row: CustomBrewMethodRow;
+        Insert: CustomBrewMethodInsert;
+        Update: Partial<CustomBrewMethodInsert>;
+      } & NoRelationships;
+      recipe_publish_events: {
+        Row: RecipePublishEventRow;
+        Insert: RecipePublishEventInsert;
+        Update: Partial<RecipePublishEventInsert>;
+      } & NoRelationships;
+      barista_profiles: {
+        Row: BaristaProfileRow;
+        Insert: BaristaProfileInsert;
+        Update: Partial<BaristaProfileInsert>;
+      } & NoRelationships;
       equipment_garage: {
         Row: EquipmentGarageRow;
         Insert: EquipmentGarageUpsert;

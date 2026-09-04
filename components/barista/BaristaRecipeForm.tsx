@@ -14,6 +14,7 @@ export function BaristaRecipeForm({
   barista,
   shop,
   initialRecipe,
+  isEditing = false,
   onSave,
   onCancel,
 }: {
@@ -21,6 +22,7 @@ export function BaristaRecipeForm({
   barista: Barista;
   shop: CoffeeShop;
   initialRecipe?: BrewingRecipe;
+  isEditing?: boolean;
   onSave: (recipe: Omit<BrewingRecipe, 'id' | 'createdAt'>) => void;
   onCancel?: () => void;
 }) {
@@ -34,6 +36,7 @@ export function BaristaRecipeForm({
       isBenchmark={false}
       grinderOptions={PRO_GRINDER_MODELS}
       initialRecipe={initialRecipe}
+      isEditing={isEditing}
       onSave={onSave}
       onCancel={onCancel}
     />

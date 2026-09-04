@@ -1,5 +1,3 @@
-import type { BrewingMethodId } from '@/lib/types/coffee';
-
 // The classic SCA "brewing control chart" math: Extraction Yield % is
 // derived from dose, yield, and the brewed cup's TDS% (a refractometer
 // reading) — not from the water's mineral TDS (see BrewingRecipe.waterTds
@@ -46,7 +44,7 @@ export interface ControlChartBand {
 // band. Every other brewing method shares the classic filter gold-cup
 // target — a reasonable reference even for methods (AeroPress, siphon)
 // that don't have their own official SCA chart.
-export function getControlChartBand(brewingMethodId: BrewingMethodId): ControlChartBand {
+export function getControlChartBand(brewingMethodId: string): ControlChartBand {
   if (brewingMethodId === 'espresso') {
     return {
       eyMin: 14,

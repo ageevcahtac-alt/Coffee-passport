@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { reconcileUserScope } from '@/lib/journey/userScope';
 import { syncCheckinsForUser } from '@/lib/journey/store';
 import { syncRecipesFromSupabase } from '@/lib/data/brewingRecipesStore';
+import { syncBaristaProfilesFromSupabase } from '@/lib/data/baristaProfileStore';
 
 const ANON_ID_KEY = 'coffee-passport:anon-id';
 
@@ -79,6 +80,7 @@ export function CurrentUserProvider({
     void Promise.allSettled([
       syncCheckinsForUser(resolvedId, isAuthenticated),
       syncRecipesFromSupabase(resolvedId, isAuthenticated),
+      syncBaristaProfilesFromSupabase(),
     ]);
   }, [authUserId]);
 

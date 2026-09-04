@@ -102,6 +102,12 @@ export interface Barista {
   id: string;
   name: string;
   coffeeShopId: string; // '' for shop-agnostic entries like "Не указан"
+  // Personal-preference layer shown on the tasting Success Screen and the
+  // guest's saved drink card — see supabase/migrations/0015_barista_profiles.sql
+  // and components/barista/BaristaProfileCard.tsx. '' means "not set yet".
+  favoriteOrigin: string; // e.g. "Эфиопия"
+  favoriteBrewMethod: BrewingMethodId | '';
+  avatarUrl: string;
 }
 
 export const BREWING_METHODS = [
@@ -293,6 +299,51 @@ export interface RoastProfile {
 
 export type RecipeAuthorType = 'roaster' | 'coffee_shop' | 'barista' | 'enthusiast';
 
+// The fixed brewing-method categories a barista/enthusiast picks from when
+// AUTHORING a recipe (components/coffee/RecipeBrewMethodSelector.tsx) —
+// deliberately separate from BrewingMethodId/BREWING_METHODS above, which
+// stays the guest blind-tasting flow's own method list (includes espresso/
+// cupping, has no quota system). Roaster/coffee_shop recipes also keep
+// using the full BrewingMethodId set via the original BrewingMethodSelector
+// — this list and its quotas (see RECIPE_LIMITS) only ever apply to
+// author_type 'barista'/'enthusiast', per supabase/migrations/0016_recipe_quota_limits.sql.
+export const STANDARD_BREW_METHOD_CATEGORIES = [
+  { id: 'hario_v60', label: 'Hario V60' },
+  { id: 'chemex', label: 'Chemex' },
+  { id: 'aeropress', label: 'AeroPress' },
+  { id: 'kalita_wave', label: 'Kalita Wave' },
+  { id: 'batch_brew', label: 'Batch Brew' },
+  { id: 'clever_dripper', label: 'Clever Dripper' },
+  { id: 'french_press', label: 'French Press' },
+  { id: 'syphon', label: 'Сифон (Syphon)' },
+  { id: 'cezve_ibrik', label: 'Турка / Джезва (Cezve/Ibrik)' },
+  { id: 'cold_brew', label: 'Cold Brew' },
+] as const;
+
+export type StandardBrewMethodCategoryId = (typeof STANDARD_BREW_METHOD_CATEGORIES)[number]['id'];
+
+// max_custom_methods / max_drafts_per_method / max_public_interval_per_method
+// from the product spec — mirrored by the DB trigger in 0016 (the real
+// enforcement) and by lib/utils/recipeLimits.ts (client-side UX only).
+export const RECIPE_LIMITS = {
+  maxCustomMethods: 5,
+  maxDraftsPerMethod: 5,
+  publicIntervalDays: 14,
+} as const;
+
+// A barista's or enthusiast's own named brewing method, beyond the 10
+// standard categories — capped at RECIPE_LIMITS.maxCustomMethods per owner,
+// enforced by the trg_enforce_custom_method_limit trigger. Owner-private,
+// no approval workflow (unlike CustomDevice below, which promotes into a
+// platform-wide preset list — a different axis, "which physical device").
+export interface CustomBrewMethod {
+  id: string; // 'custom-<generateId()>'
+  ownerType: 'barista' | 'enthusiast';
+  ownerId: string;
+  label: string;
+  createdAt: string; // ISO timestamp
+}
+
 export const PRO_GRINDER_MODELS = ['Mahlkönig EK43', 'Mahlkönig Peak', 'Ditting KR804', 'Mythos One', 'Compak E10'];
 export const HOME_GRINDER_MODELS = ['Comandante C40', 'Timemore C2/C3', '1Zpresso J-Max', 'Baratza Encore/Sette', 'Fellow Ode', 'DF64'];
 export const ESPRESSO_MACHINE_MODELS = ['La Marzocco Linea PB', 'Victoria Arduino Eagle One', 'Slayer', 'Nuova Simonelli Aurelia', 'Synesso MVP Hydra'];
@@ -300,7 +351,15 @@ export const ESPRESSO_MACHINE_MODELS = ['La Marzocco Linea PB', 'Victoria Arduin
 export interface BrewingRecipe {
   id: string;
   lotId: string;
-  brewingMethodId: BrewingMethodId;
+  // Widened from BrewingMethodId to plain string: a barista/enthusiast
+  // recipe's method is either a StandardBrewMethodCategoryId or a
+  // CustomBrewMethod.id ('custom-...'), neither of which is a
+  // BrewingMethodId literal. Every read site already does `===`/`.find()`
+  // comparisons with a sane fallback (RecipeCard's isEspresso check,
+  // lib/utils/extraction.ts's getControlChartBand, MyRecipesShelf's label
+  // lookup), so this is safe at runtime for roaster/coffee_shop recipes
+  // too (they keep using real BrewingMethodId values, unaffected).
+  brewingMethodId: string;
   authorType: RecipeAuthorType;
   authorId: string; // roasterId / coffeeShopId / demo user id, depending on authorType
   authorName: string; // display label

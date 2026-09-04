@@ -1,17 +1,22 @@
 'use client';
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import type { BrewingMethodId, BrewingRecipe, Lot } from '@/lib/types/coffee';
-import { ESPRESSO_MACHINE_MODELS, HOME_GRINDER_MODELS } from '@/lib/types/coffee';
+import type { BrewingRecipe, Lot } from '@/lib/types/coffee';
+import { HOME_GRINDER_MODELS } from '@/lib/types/coffee';
 import { useGrindConfirmations } from '@/lib/data/useGrindConfirmations';
 import { addGrindConfirmation } from '@/lib/data/grindConfirmationsStore';
 import { estimateGrindSetting } from '@/lib/utils/grindConvert';
 import { useEquipment } from '@/lib/data/useEquipment';
 import { syncEquipmentFromSupabase } from '@/lib/data/equipmentStore';
 import { useCustomDevices } from '@/lib/data/useCustomDevices';
+import { useCustomBrewMethods } from '@/lib/data/useCustomBrewMethods';
+import { useBrewingRecipes } from '@/lib/data/useBrewingRecipes';
 import { buildFilterDeviceCatalog } from '@/lib/utils/filterDeviceCatalog';
+import { canCreateDraft } from '@/lib/utils/recipeLimits';
+import { resolveBrewMethodLabel } from '@/lib/utils/resolveBrewMethodLabel';
 import { ComboSelect } from '@/components/shared/ComboSelect';
-import { BrewingMethodSelector } from '@/components/coffee/BrewingMethodSelector';
+import { RecipeBrewMethodSelector } from '@/components/coffee/RecipeBrewMethodSelector';
+import { RecipeQuotaPanel } from '@/components/coffee/RecipeQuotaPanel';
 
 const fieldClasses =
   'w-full rounded-md border border-ink-200 bg-parchment-100 px-4 py-3 text-sm ' +
@@ -20,7 +25,7 @@ const fieldClasses =
 type RecipeInput = Omit<BrewingRecipe, 'id' | 'createdAt'>;
 
 interface FormState {
-  brewingMethodId: BrewingMethodId | null;
+  brewingMethodId: string | null;
   doseG: string;
   yieldG: string;
   measuredTds: string;
@@ -37,7 +42,32 @@ interface FormState {
   isPublic: boolean;
 }
 
-function toFormState(source?: BrewingRecipe): FormState {
+// source drives the "Адаптировать под себя" prefill — dose/yield/water/
+// notes copied, grinder/equipment/measuredTds deliberately left blank (the
+// user maps them to their own gear). editingRecipe drives true in-place
+// editing — every field (grinder/equipment/measuredTds included) is
+// copied, since this is the SAME recipe, not a new one adapted from it.
+function toFormState(source?: BrewingRecipe, editingRecipe?: BrewingRecipe): FormState {
+  const full = editingRecipe;
+  if (full) {
+    return {
+      brewingMethodId: full.brewingMethodId,
+      doseG: String(full.doseG),
+      yieldG: String(full.yieldG),
+      measuredTds: full.measuredTdsPercent !== null ? String(full.measuredTdsPercent) : '',
+      grinderModel: full.grinderModel,
+      grinderSetting: full.grinderSetting,
+      waterTempC: String(full.waterTempC),
+      waterBrand: full.waterBrand,
+      waterTds: full.waterTds !== null ? String(full.waterTds) : '',
+      waterCustomMineralization: full.waterCustomMineralization,
+      bloomTimeSec: full.bloomTimeSec !== null ? String(full.bloomTimeSec) : '',
+      totalTimeSec: String(full.totalTimeSec),
+      equipmentModel: full.equipmentModel,
+      notes: full.notes,
+      isPublic: full.isPublic,
+    };
+  }
   return {
     brewingMethodId: source?.brewingMethodId ?? null,
     doseG: source ? String(source.doseG) : '',
@@ -66,6 +96,7 @@ export function EnthusiastRecipeForm({
   currentUserId,
   currentUserName,
   sourceRecipe,
+  editingRecipe,
   onSave,
   onCancel,
 }: {
@@ -73,10 +104,15 @@ export function EnthusiastRecipeForm({
   currentUserId: string;
   currentUserName: string;
   sourceRecipe?: BrewingRecipe;
+  // True in-place edit of an existing recipe the user owns — distinct from
+  // sourceRecipe's "Адаптировать под себя" (which prefills a subset of
+  // fields into a brand-new recipe). The caller passes updateBrewingRecipe
+  // instead of addRecipeAsDraft to onSave's result when this is set.
+  editingRecipe?: BrewingRecipe;
   onSave: (recipe: RecipeInput) => void;
   onCancel?: () => void;
 }) {
-  const [form, setForm] = useState<FormState>(() => toFormState(sourceRecipe));
+  const [form, setForm] = useState<FormState>(() => toFormState(sourceRecipe, editingRecipe));
   const grindConfirmations = useGrindConfirmations();
   // Garage might not be loaded locally yet if the user never visited
   // /journey/equipment on this device — pull it from Supabase so auto-fill
@@ -86,12 +122,15 @@ export function EnthusiastRecipeForm({
   }, [currentUserId]);
   const myEquipment = useEquipment().find((setup) => setup.userId === currentUserId);
   const approvedCustomDevices = useCustomDevices().filter((device) => device.approved);
-  const isEspressoMethod = form.brewingMethodId === 'espresso';
-  const isCustomMethod = form.brewingMethodId === 'custom';
   const filterDeviceCatalog = useMemo(
     () => buildFilterDeviceCatalog(approvedCustomDevices, myEquipment?.favoriteDeviceIds ?? []),
     [approvedCustomDevices, myEquipment]
   );
+  const customBrewMethods = useCustomBrewMethods().filter(
+    (method) => method.ownerType === 'enthusiast' && method.ownerId === currentUserId
+  );
+  const allRecipes = useBrewingRecipes();
+  const methodLabel = form.brewingMethodId ? resolveBrewMethodLabel(form.brewingMethodId, customBrewMethods) : '';
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -99,22 +138,19 @@ export function EnthusiastRecipeForm({
 
   // Auto-fill from the saved Equipment Garage setup (see
   // components/coffee/EquipmentGarage.tsx) whenever the brewing method
-  // changes — espresso pulls the espresso setup (grinder + machine + water),
-  // every other method pulls the filter setup (grinder + water only — the
-  // filter *device* field below is deliberately left for the user to pick,
-  // since a Filter Setup can have several favorite devices with no single
-  // unambiguous default; it's reordered instead, garage favorites first).
-  // Only fills fields that are still empty, so it never clobbers an
-  // adapt-flow prefill or something the user already typed.
+  // changes — the RecipeBrewMethodSelector's 10 categories + custom
+  // methods are all filter/immersion methods (no espresso among them, see
+  // STANDARD_BREW_METHOD_CATEGORIES), so this always pulls the filter Garage
+  // setup now. Only fills fields that are still empty, so it never clobbers
+  // an adapt-flow prefill or something the user already typed.
   useEffect(() => {
     if (!form.brewingMethodId || !myEquipment) return;
-    const grinder = isEspressoMethod ? myEquipment.espressoGrinder : myEquipment.filterGrinder;
-    const water = isEspressoMethod ? myEquipment.espressoWater : myEquipment.filterWater;
+    const grinder = myEquipment.filterGrinder;
+    const water = myEquipment.filterWater;
 
     setForm((prev) => ({
       ...prev,
       grinderModel: prev.grinderModel || grinder,
-      equipmentModel: isEspressoMethod ? prev.equipmentModel || myEquipment.espressoMachine : prev.equipmentModel,
       waterCustomMineralization: prev.waterCustomMineralization || water,
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when the method changes, not on every equipment/form update
@@ -134,7 +170,9 @@ export function EnthusiastRecipeForm({
     });
   }, [sourceRecipe, form.grinderModel, form.brewingMethodId, grindConfirmations]);
 
-  const canSave = Boolean(form.brewingMethodId && form.doseG && form.yieldG);
+  const draftSlotAvailable =
+    Boolean(editingRecipe) || !form.brewingMethodId || canCreateDraft(allRecipes, 'enthusiast', currentUserId, form.brewingMethodId);
+  const canSave = Boolean(form.brewingMethodId && form.doseG && form.yieldG) && draftSlotAvailable;
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -166,7 +204,7 @@ export function EnthusiastRecipeForm({
       authorId: currentUserId,
       authorName: currentUserName,
       isBenchmark: false,
-      parentRecipeId: sourceRecipe?.id ?? null,
+      parentRecipeId: editingRecipe ? editingRecipe.parentRecipeId : sourceRecipe?.id ?? null,
       doseG: Number(form.doseG),
       yieldG: Number(form.yieldG),
       measuredTdsPercent: form.measuredTds ? Number(form.measuredTds) : null,
@@ -184,6 +222,14 @@ export function EnthusiastRecipeForm({
       pressureBar: null,
       pressureProfile: '',
       notes: form.notes.trim(),
+      // On a fresh save this is the "Опубликовать сразу" checkbox's intent
+      // — the caller (see ExtractionTab's handleSaveEnthusiastRecipe) always
+      // inserts as a draft first, then attempts an actual publish only when
+      // this is true, subject to the per-method cooldown. While editing,
+      // the checkbox is hidden (see JSX below) so form.isPublic just stays
+      // at its initial editingRecipe.isPublic value — editing never changes
+      // publish state by itself, that's a separate action (RecipeCard's
+      // "Опубликовать" button).
       isPublic: form.isPublic,
     };
 
@@ -192,7 +238,7 @@ export function EnthusiastRecipeForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-      {sourceRecipe && (
+      {sourceRecipe && !editingRecipe && (
         <p className="text-xs text-ink-400">
           Адаптируется от рецепта «{sourceRecipe.authorName}» — доза, выход, вода и заметки скопированы, помол и
           оборудование оставлены пустыми под вашу технику.
@@ -201,8 +247,22 @@ export function EnthusiastRecipeForm({
 
       <div>
         <p className="section-label mb-4">Способ приготовления</p>
-        <BrewingMethodSelector value={form.brewingMethodId} onChange={(id) => update('brewingMethodId', id)} />
+        <RecipeBrewMethodSelector
+          ownerType="enthusiast"
+          ownerId={currentUserId}
+          value={form.brewingMethodId}
+          onChange={(id) => update('brewingMethodId', id)}
+        />
       </div>
+
+      {form.brewingMethodId && (
+        <RecipeQuotaPanel
+          authorType="enthusiast"
+          authorId={currentUserId}
+          brewingMethodId={form.brewingMethodId}
+          methodLabel={methodLabel}
+        />
+      )}
 
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -275,26 +335,13 @@ export function EnthusiastRecipeForm({
       </div>
 
       {form.brewingMethodId && (
-        isEspressoMethod ? (
-          <ComboSelect label="Эспрессо-машина" options={ESPRESSO_MACHINE_MODELS} value={form.equipmentModel}
-            onChange={(v) => update('equipmentModel', v)} />
-        ) : isCustomMethod ? (
-          <div>
-            <label htmlFor="er-custom-device" className="block text-xs text-ink-400 mb-1.5">
-              Свой способ / кастомный девайс
-            </label>
-            <input id="er-custom-device" value={form.equipmentModel} onChange={(e) => update('equipmentModel', e.target.value)}
-              placeholder="Например: перколятор, турка, кемекс-самоделка…" className={fieldClasses} />
-          </div>
-        ) : (
-          <ComboSelect
-            label="Устройство для фильтра"
-            options={filterDeviceCatalog.options}
-            priorityOptions={filterDeviceCatalog.priorityOptions}
-            value={form.equipmentModel}
-            onChange={(v) => update('equipmentModel', v)}
-          />
-        )
+        <ComboSelect
+          label="Устройство для фильтра"
+          options={filterDeviceCatalog.options}
+          priorityOptions={filterDeviceCatalog.priorityOptions}
+          value={form.equipmentModel}
+          onChange={(v) => update('equipmentModel', v)}
+        />
       )}
 
       <div>
@@ -305,18 +352,20 @@ export function EnthusiastRecipeForm({
           className={fieldClasses} />
       </div>
 
-      <label className="flex items-start gap-3 rounded-md border border-ink-200 bg-parchment-100 p-4 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={form.isPublic}
-          onChange={(e) => update('isPublic', e.target.checked)}
-          className="mt-0.5 h-4 w-4 accent-current text-gold-500 shrink-0"
-        />
-        <span className="text-xs text-ink-700 leading-relaxed">
-          Опубликовать рецепт в общедоступной базе Coffee Passport (отказываюсь от авторских претензий, разрешаю
-          свободное использование рецепта сообществом).
-        </span>
-      </label>
+      {!editingRecipe && (
+        <label className="flex items-start gap-3 rounded-md border border-ink-200 bg-parchment-100 p-4 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.isPublic}
+            onChange={(e) => update('isPublic', e.target.checked)}
+            className="mt-0.5 h-4 w-4 accent-current text-gold-500 shrink-0"
+          />
+          <span className="text-xs text-ink-700 leading-relaxed">
+            Опубликовать рецепт в общедоступной базе Coffee Passport (отказываюсь от авторских претензий, разрешаю
+            свободное использование рецепта сообществом) — при доступной публикации для этого способа.
+          </span>
+        </label>
+      )}
 
       <div className="flex gap-3">
         {onCancel && (
@@ -331,7 +380,7 @@ export function EnthusiastRecipeForm({
           className="flex-1 inline-flex items-center justify-center rounded-md bg-ink-900
                      text-parchment-100 font-body font-medium text-sm px-6 py-4
                      hover:bg-ink-800 transition-colors disabled:opacity-40 disabled:pointer-events-none">
-          Сохранить в мой лог
+          {editingRecipe ? 'Сохранить изменения' : 'Сохранить в мой лог'}
         </button>
       </div>
     </form>
