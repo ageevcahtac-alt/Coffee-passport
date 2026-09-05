@@ -156,6 +156,198 @@ export type BrewingMethodId = (typeof BREWING_METHODS)[number]['id'];
 // which render a free-text device input only when this is selected).
 export const FILTER_BREWING_METHODS = BREWING_METHODS.filter((method) => method.id !== 'espresso');
 
+// =========================================================
+// Drink selection — asked once, before the blind flavor assessment, in the
+// Энтузиаст QR-scan flow (/passport/[lotId]/taste). See
+// components/coffee/DrinkTypeSelector.tsx (Level 1 category + Level 2 drink
+// type/method) and MilkBaseSelector.tsx (the milk decision tree). Kept as
+// its own step so the guest commits to "what am I drinking" before tasting
+// starts, rather than reverse-engineering it from the flavor notes.
+// =========================================================
+
+export type DrinkCategory = 'milk_based' | 'black_coffee' | 'filter_alternative';
+
+export const DRINK_CATEGORIES: { id: DrinkCategory; label: string }[] = [
+  { id: 'milk_based', label: 'Напитки с молоком' },
+  { id: 'black_coffee', label: 'Чёрный кофе' },
+  { id: 'filter_alternative', label: 'Фильтр / Альтернатива' },
+];
+
+// Breve carries a footnote in the UI (50/50 cream+milk) — every other entry
+// here is self-explanatory, so `hint` stays optional and unset elsewhere.
+export const MILK_DRINK_TYPES = [
+  { id: 'cappuccino', label: 'Капучино' },
+  { id: 'flat_white', label: 'Флэт Уайт' },
+  { id: 'latte', label: 'Латте' },
+  { id: 'breve', label: 'Бриф (Breve)', hint: 'В этом напитке используются сливки и молоко в соотношении 50/50' },
+  { id: 'raf', label: 'Раф' },
+  { id: 'custom', label: 'Свой напиток' },
+] as const;
+export type MilkDrinkTypeId = (typeof MILK_DRINK_TYPES)[number]['id'];
+
+export const BLACK_COFFEE_DRINK_TYPES = [
+  { id: 'ristretto', label: 'Ристретто' },
+  { id: 'espresso', label: 'Эспрессо' },
+  { id: 'americano', label: 'Американо' },
+  { id: 'lungo', label: 'Лунго' },
+  { id: 'custom', label: 'Свой напиток' },
+] as const;
+export type BlackCoffeeDrinkTypeId = (typeof BLACK_COFFEE_DRINK_TYPES)[number]['id'];
+
+export const FILTER_ALTERNATIVE_DRINK_TYPES = [
+  { id: 'batch_brew', label: 'Батч-брю (фильтр-машина)' },
+  { id: 'v60', label: 'V60 (воронка)' },
+  { id: 'aeropress', label: 'Аэропресс' },
+  { id: 'chemex', label: 'Кемекс' },
+  { id: 'siphon', label: 'Сифон' },
+  { id: 'immersion', label: 'Immersion (Клевер и др.)' },
+  { id: 'custom', label: 'Свой способ' },
+] as const;
+export type FilterAlternativeDrinkTypeId = (typeof FILTER_ALTERNATIVE_DRINK_TYPES)[number]['id'];
+
+// Maps a Filter/Alternative Level-2 choice onto the existing brewing-method
+// axis (BrewingMethodId/BREWING_METHODS above) — "what did you order" and
+// "how was it brewed" are the same fact for this category, so picking a
+// device here can pre-fill the later barista step instead of asking twice.
+// 'custom' has no counterpart (BREWING_METHODS' own 'custom' entry covers
+// it identically), so it's deliberately excluded from this map's keys.
+export const FILTER_ALTERNATIVE_TO_BREWING_METHOD: Record<
+  Exclude<FilterAlternativeDrinkTypeId, 'custom'>,
+  BrewingMethodId
+> = {
+  batch_brew: 'batch_brew',
+  v60: 'v60',
+  aeropress: 'aeropress',
+  chemex: 'chemex',
+  siphon: 'siphon',
+  immersion: 'immersion',
+};
+
+export type MilkBaseType = 'cow' | 'plant';
+export type CowMilkType = 'whole' | 'normalized';
+
+export const COW_MILK_TYPE_LABELS: Record<CowMilkType, string> = {
+  whole: 'Цельное',
+  normalized: 'Нормализованное по жиру',
+};
+
+export const PLANT_MILK_TYPES = [
+  { id: 'oat', label: 'Овсяное' },
+  { id: 'coconut', label: 'Кокосовое' },
+  { id: 'almond', label: 'Миндальное' },
+  { id: 'soy', label: 'Соевое' },
+  { id: 'hazelnut', label: 'Фундучное' },
+  { id: 'custom', label: 'Другое' },
+] as const;
+export type PlantMilkTypeId = (typeof PLANT_MILK_TYPES)[number]['id'];
+
+// Quick-pick fat percentages — the field also accepts free entry (e.g. a
+// house-blended 1.5%), these are just the common presets.
+export const COW_MILK_FAT_PRESETS = [2.5, 3.2, 3.5, 4.0];
+
+// The guest's pre-tasting pick — the finalized shape flattened onto
+// TastingRecord once the flow is done. Every field past drinkCategory is
+// optional in practice — only the branch matching drinkCategory (and, for
+// milk, milkBaseType) is ever populated.
+export interface DrinkSelection {
+  drinkCategory: DrinkCategory;
+  drinkType: string; // an id from the category's own list above, or 'custom'
+  customDrinkName: string; // filled when drinkType === 'custom'
+  milkBaseType: MilkBaseType | null; // milk_based only
+  cowMilkType: CowMilkType | null; // milk_based + cow only
+  isLactoseFree: boolean; // milk_based + cow only
+  fatContentPercent: number | null; // milk_based + cow only
+  plantMilkType: string | null; // milk_based + plant only — a PlantMilkTypeId, or free text when 'custom'
+}
+
+// Working shape while the guest is still filling out DrinkTypeSelector /
+// MilkBaseSelector — drinkCategory starts unset (null) so nothing is
+// pre-selected, unlike the finalized DrinkSelection above where it's
+// required. isDrinkSelectionComplete() is the single gate that promotes a
+// draft into a real DrinkSelection once every field its branch needs is
+// filled in.
+export type DrinkSelectionDraft = Omit<DrinkSelection, 'drinkCategory'> & {
+  drinkCategory: DrinkCategory | null;
+};
+
+// Keyed lookup for DrinkTypeSelector's Level-2 chips and for rendering a
+// saved TastingRecord's drink back out as a label (see describeDrinkType
+// below) — one source of truth for "which list belongs to which category".
+export const DRINK_TYPES_BY_CATEGORY: Record<
+  DrinkCategory,
+  readonly { id: string; label: string; hint?: string }[]
+> = {
+  milk_based: MILK_DRINK_TYPES,
+  black_coffee: BLACK_COFFEE_DRINK_TYPES,
+  filter_alternative: FILTER_ALTERNATIVE_DRINK_TYPES,
+};
+
+// Renders a saved record's drink pick back into a display label — the
+// inverse of DrinkTypeSelector's chip selection. Used by TastingRecordCard/
+// TastingRecordDetails; '' (pre-feature records, or an incomplete draft)
+// renders as nothing rather than a confusing placeholder.
+export function describeDrinkType(record: {
+  drinkCategory: DrinkCategory | '';
+  drinkType: string;
+  customDrinkName: string;
+}): string {
+  if (!record.drinkCategory || !record.drinkType) return '';
+  if (record.drinkType === 'custom') return record.customDrinkName || 'Свой напиток';
+  const list = DRINK_TYPES_BY_CATEGORY[record.drinkCategory];
+  return list.find((type) => type.id === record.drinkType)?.label ?? record.drinkType;
+}
+
+// Renders the milk-base branch back into a display label, e.g.
+// "Цельное, 3.2%, безлактозное" or "Овсяное" — '' when the record has no
+// milk-based drink (or predates this feature).
+export function describeMilkBase(record: {
+  milkBaseType: MilkBaseType | null;
+  cowMilkType: CowMilkType | null;
+  isLactoseFree: boolean;
+  fatContentPercent: number | null;
+  plantMilkType: string | null;
+}): string {
+  if (record.milkBaseType === 'cow') {
+    const parts: string[] = [];
+    if (record.cowMilkType) parts.push(COW_MILK_TYPE_LABELS[record.cowMilkType]);
+    if (record.fatContentPercent !== null) parts.push(`${record.fatContentPercent}%`);
+    if (record.isLactoseFree) parts.push('безлактозное');
+    return parts.join(', ');
+  }
+  if (record.milkBaseType === 'plant') {
+    const preset = PLANT_MILK_TYPES.find((option) => option.id === record.plantMilkType);
+    return preset?.label ?? record.plantMilkType ?? '';
+  }
+  return '';
+}
+
+export function emptyDrinkSelectionDraft(): DrinkSelectionDraft {
+  return {
+    drinkCategory: null,
+    drinkType: '',
+    customDrinkName: '',
+    milkBaseType: null,
+    cowMilkType: null,
+    isLactoseFree: false,
+    fatContentPercent: null,
+    plantMilkType: null,
+  };
+}
+
+// Gates the "Далее" button on the drink-selection step — every branch of
+// the tree described at the top of this section must be fully resolved
+// before the guest can move on to the (still-blind) taste assessment.
+export function isDrinkSelectionComplete(draft: DrinkSelectionDraft): draft is DrinkSelection {
+  if (!draft.drinkCategory || !draft.drinkType) return false;
+  if (draft.drinkType === 'custom' && !draft.customDrinkName.trim()) return false;
+  if (draft.drinkCategory === 'milk_based') {
+    if (!draft.milkBaseType) return false;
+    if (draft.milkBaseType === 'cow' && (!draft.cowMilkType || draft.fatContentPercent === null)) return false;
+    if (draft.milkBaseType === 'plant' && !draft.plantMilkType?.trim()) return false;
+  }
+  return true;
+}
+
 export const SENSORY_TAGS = [
   { id: 'sweetness', label: 'Сладость' },
   { id: 'acidity', label: 'Кислотность' },
@@ -265,6 +457,22 @@ export interface TastingRecord {
   // as RoasterFlavorProfile so the two can be compared directly once the
   // roaster's reference profile unlocks (see TasteComparison).
   guestFlavorProfile: RoasterFlavorProfile;
+  // Drink selection, picked before the taste step — see DrinkSelection above.
+  // drinkCategory is '' for records saved before this feature shipped.
+  drinkCategory: DrinkCategory | '';
+  drinkType: string;
+  customDrinkName: string;
+  milkBaseType: MilkBaseType | null;
+  cowMilkType: CowMilkType | null;
+  isLactoseFree: boolean;
+  fatContentPercent: number | null;
+  plantMilkType: string | null;
+  // Adaptive taste axes (see SensoryEvaluationValues below) — additive to
+  // guestFlavorProfile, only populated for the branch that produced them.
+  milkBalance: number | null;
+  coffeeReadability: number | null;
+  creaminess: number | null;
+  aftertaste: number | null;
   createdAt: string; // ISO timestamp
 }
 
@@ -547,4 +755,13 @@ export interface SensoryEvaluationValues {
   liked: string;
   disliked: string;
   note: string;
+  // Adaptive extra axes (Уровень 3) — layered on top of guestFlavorProfile
+  // rather than replacing any of its four fixed axes, so the roaster-vs-
+  // guest comparison (TasteComparison) stays identical across every drink
+  // category. Only the branch matching the drink category is ever
+  // populated; the other branch's fields stay null.
+  milkBalance: number | null; // milk-based only — баланс кофе и молока
+  coffeeReadability: number | null; // milk-based only — читаемость кофе через молоко
+  creaminess: number | null; // milk-based only — сливочность
+  aftertaste: number | null; // black coffee / filter-alternative only — послевкусие
 }

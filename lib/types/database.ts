@@ -125,6 +125,24 @@ export type CheckinRow = {
   barista_id: string;
   barista_rating: number;
   barista_note: string;
+  // Drink selection, picked before the blind taste assessment — see
+  // supabase/migrations/0021_drink_evaluation.sql and
+  // components/coffee/DrinkTypeSelector.tsx / MilkBaseSelector.tsx.
+  // '' means "not specified" (rows recorded before this feature shipped).
+  drink_category: string;
+  drink_type: string;
+  custom_drink_name: string;
+  milk_base_type: string | null;
+  cow_milk_type: string | null;
+  is_lactose_free: boolean;
+  fat_content_percent: number | null;
+  plant_milk_type: string | null;
+  // Adaptive taste axes, additive to acidity/sweetness/body/bitterness above
+  // — only ever populated for the branch that produced them.
+  milk_balance: number | null;
+  coffee_readability: number | null;
+  creaminess: number | null;
+  aftertaste: number | null;
   created_at: string;
 };
 export type CheckinInsert = CheckinRow;
@@ -150,6 +168,18 @@ export type CheckinRoasterViewRow = {
   liked: string;
   disliked: string;
   note: string;
+  drink_category: string;
+  drink_type: string;
+  custom_drink_name: string;
+  milk_base_type: string | null;
+  cow_milk_type: string | null;
+  is_lactose_free: boolean;
+  fat_content_percent: number | null;
+  plant_milk_type: string | null;
+  milk_balance: number | null;
+  coffee_readability: number | null;
+  creaminess: number | null;
+  aftertaste: number | null;
   created_at: string;
 };
 

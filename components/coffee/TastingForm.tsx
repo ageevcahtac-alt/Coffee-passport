@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type {
   BodyTexture,
   DefectId,
+  DrinkCategory,
   FlavorSubDescriptors,
   SensoryEvaluationValues,
   SensoryTagId,
@@ -35,10 +36,17 @@ export function TastingForm({
   onSave,
   onCancel,
   submitLabel = 'Сохранить дегустацию в дневник',
+  drinkCategory,
 }: {
   onSave: (values: TastingFormValues) => void;
   onCancel?: () => void;
   submitLabel?: string;
+  // Adapts Уровень 3 with category-specific extra axes, layered on top of
+  // the fixed acidity/sweetness/body/bitterness profile below (never
+  // replacing it — see SensoryEvaluationValues). Omitted by the isolated
+  // "Мой кофе" cupping flow (CustomCoffeeCuppingForm), which has no drink
+  // selection step and renders the original, category-agnostic form.
+  drinkCategory?: DrinkCategory;
 }) {
   const [rating, setRating] = useState(0);
   const [acidity, setAcidity] = useState(3);
@@ -52,6 +60,13 @@ export function TastingForm({
   const [liked, setLiked] = useState('');
   const [disliked, setDisliked] = useState('');
   const [note, setNote] = useState('');
+  const [milkBalance, setMilkBalance] = useState(3);
+  const [coffeeReadability, setCoffeeReadability] = useState(3);
+  const [creaminess, setCreaminess] = useState(3);
+  const [aftertaste, setAftertaste] = useState(3);
+
+  const showMilkAxes = drinkCategory === 'milk_based';
+  const showAftertasteAxis = drinkCategory === 'black_coffee' || drinkCategory === 'filter_alternative';
 
   const canSave = rating > 0;
 
@@ -71,6 +86,24 @@ export function TastingForm({
           <FlavorSlider label="Горечь" value={bitterness} onChange={setBitterness} />
         </div>
       </div>
+
+      {showMilkAxes && (
+        <div>
+          <p className="section-label mb-4">Баланс и текстура</p>
+          <div className="flex flex-col gap-5">
+            <FlavorSlider label="Баланс кофе и молока" value={milkBalance} onChange={setMilkBalance} />
+            <FlavorSlider label="Читаемость кофе через молоко" value={coffeeReadability} onChange={setCoffeeReadability} />
+            <FlavorSlider label="Сливочность" value={creaminess} onChange={setCreaminess} />
+          </div>
+        </div>
+      )}
+
+      {showAftertasteAxis && (
+        <div>
+          <p className="section-label mb-4">Послевкусие</p>
+          <FlavorSlider label="Длительность и чистота послевкусия" value={aftertaste} onChange={setAftertaste} />
+        </div>
+      )}
 
       <div>
         <p className="section-label mb-4">Текстура тела</p>
@@ -157,6 +190,10 @@ export function TastingForm({
               liked,
               disliked,
               note,
+              milkBalance: showMilkAxes ? milkBalance : null,
+              coffeeReadability: showMilkAxes ? coffeeReadability : null,
+              creaminess: showMilkAxes ? creaminess : null,
+              aftertaste: showAftertasteAxis ? aftertaste : null,
             })
           }
           className={`inline-flex items-center justify-center rounded-md bg-ink-900

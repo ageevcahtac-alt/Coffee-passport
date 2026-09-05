@@ -3,6 +3,8 @@ import {
   BREWING_METHODS,
   DEFECT_TAGS,
   SENSORY_TAGS,
+  describeDrinkType,
+  describeMilkBase,
   type TastingRecord,
 } from '@/lib/types/coffee';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
@@ -25,10 +27,15 @@ export function TastingRecordDetails({ record }: { record: TastingRecord }) {
   const bodyTextureLabel = record.bodyTexture
     ? BODY_TEXTURE_OPTIONS.find((option) => option.id === record.bodyTexture)?.label
     : null;
+  const drinkLabel = describeDrinkType(record);
+  const milkLabel = describeMilkBase(record);
 
   return (
     <div className="flex flex-col gap-6">
       <div>
+        {drinkLabel && (
+          <p className="text-xs uppercase tracking-widest2 text-gold-500 mb-1.5">{drinkLabel}</p>
+        )}
         <p className="text-sm text-ink-900 mb-1">
           {shop?.name ?? record.coffeeShopId}
           {shop?.city ? ` · ${shop.city}` : ''}
@@ -37,6 +44,7 @@ export function TastingRecordDetails({ record }: { record: TastingRecord }) {
           Попробовано {formatTastingDate(record.createdAt)}
           {brewingMethod ? ` · ${brewingMethod.label}` : ''}
         </p>
+        {milkLabel && <p className="text-xs text-ink-400 mt-1">Молоко: {milkLabel}</p>}
       </div>
 
       <div>
@@ -53,6 +61,26 @@ export function TastingRecordDetails({ record }: { record: TastingRecord }) {
           <FlavorMeter label="Горечь" value={record.guestFlavorProfile.bitterness} />
         </div>
       </div>
+
+      {(record.milkBalance !== null || record.coffeeReadability !== null || record.creaminess !== null) && (
+        <div>
+          <p className="section-label mb-3">Баланс и текстура</p>
+          <div className="flex flex-col gap-3">
+            {record.milkBalance !== null && <FlavorMeter label="Баланс кофе и молока" value={record.milkBalance} />}
+            {record.coffeeReadability !== null && (
+              <FlavorMeter label="Читаемость кофе через молоко" value={record.coffeeReadability} />
+            )}
+            {record.creaminess !== null && <FlavorMeter label="Сливочность" value={record.creaminess} />}
+          </div>
+        </div>
+      )}
+
+      {record.aftertaste !== null && (
+        <div>
+          <p className="section-label mb-3">Послевкусие</p>
+          <FlavorMeter label="Длительность и чистота послевкусия" value={record.aftertaste} />
+        </div>
+      )}
 
       {bodyTextureLabel && (
         <div>

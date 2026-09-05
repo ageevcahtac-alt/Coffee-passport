@@ -5,11 +5,20 @@ import { useLots } from '@/lib/data/useLots';
 import { useCoffeeShops } from '@/lib/data/useCoffeeShops';
 import { useRoasters } from '@/lib/data/useRoasters';
 import { getBaristasForShop } from '@/lib/data/baristas';
-import type { BrewingMethodId, Lot } from '@/lib/types/coffee';
+import {
+  emptyDrinkSelectionDraft,
+  FILTER_ALTERNATIVE_TO_BREWING_METHOD,
+  isDrinkSelectionComplete,
+  type BrewingMethodId,
+  type DrinkSelectionDraft,
+  type FilterAlternativeDrinkTypeId,
+  type Lot,
+} from '@/lib/types/coffee';
 import { LocationStep } from '@/components/coffee/LocationStep';
 import { BaristaSelector } from '@/components/coffee/BaristaSelector';
 import { RatingInput } from '@/components/coffee/RatingInput';
 import { BrewingMethodSelector } from '@/components/coffee/BrewingMethodSelector';
+import { DrinkTypeSelector } from '@/components/coffee/DrinkTypeSelector';
 import { TastingForm, type TastingFormValues } from '@/components/coffee/TastingForm';
 import { addTastingRecord, getSnapshot as getJourneySnapshot } from '@/lib/journey/store';
 import { markJustRevealed } from '@/lib/journey/revealFlag';
@@ -24,10 +33,15 @@ import { FarmerPinningModal } from '@/components/coffee/FarmerPinningModal';
 // Blind-tasting flow, in the product's mandated order:
 //   1. Scan QR (upstream — see /scan and ScanLotModal)
 //   2. 'location' — coffee shop + roaster (accredited-partner autocompletes)
-//   3. 'taste'    — blind flavor assessment (priority: comes before any
+//   3. 'drink'    — what the guest is drinking (category → specific drink/
+//                   method → milk tree for milk-based) — asked before taste
+//                   so the Level 3 form below can adapt to it, but it's
+//                   still "what did I order", not a taste judgement, so it
+//                   doesn't compromise the blind read
+//   4. 'taste'    — blind flavor assessment (priority: comes before any
 //                   barista/prep detail so it stays uninfluenced)
-//   4. 'barista'  — final step: how it was brewed + who made it + rating
-type Step = 'location' | 'taste' | 'barista';
+//   5. 'barista'  — final step: how it was brewed + who made it + rating
+type Step = 'location' | 'drink' | 'taste' | 'barista';
 
 const fieldClasses =
   'w-full rounded-md border border-ink-200 bg-parchment-100 px-4 py-3 text-sm ' +
@@ -64,6 +78,7 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
   const [baristaRating, setBaristaRating] = useState(0);
   const [baristaNote, setBaristaNote] = useState('');
   const [brewingMethod, setBrewingMethod] = useState<BrewingMethodId | null>(null);
+  const [drinkSelection, setDrinkSelection] = useState<DrinkSelectionDraft>(emptyDrinkSelectionDraft());
   const [pendingTasteValues, setPendingTasteValues] = useState<TastingFormValues | null>(null);
   const [showPinningRitual, setShowPinningRitual] = useState(false);
 
@@ -82,10 +97,27 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
       if (pendingShopId && coffeeShops.some((shop) => shop.id === pendingShopId)) {
         setCoffeeShopId(pendingShopId);
         setRoasterId(pendingRoasterId ?? lot.roasterId);
-        setStep('taste');
+        setStep('drink');
       }
     }
   }, [lot.id]);
+
+  // Filter/Alternative's Level-2 pick already answers "how was it brewed" —
+  // pre-fill brewingMethod from it so the later barista step opens with the
+  // matching device already selected instead of asking the same question
+  // twice. Milk/black-coffee drinks are always machine-espresso-based, so
+  // that step opens pre-set to 'espresso' too, still editable either way.
+  function handleConfirmDrink() {
+    if (!isDrinkSelectionComplete(drinkSelection)) return;
+    if (drinkSelection.drinkCategory === 'filter_alternative') {
+      const drinkType = drinkSelection.drinkType as FilterAlternativeDrinkTypeId;
+      const mapped = drinkType === 'custom' ? undefined : FILTER_ALTERNATIVE_TO_BREWING_METHOD[drinkType];
+      setBrewingMethod(mapped ?? 'custom');
+    } else {
+      setBrewingMethod('espresso');
+    }
+    setStep('taste');
+  }
 
   function handleSaveTaste(values: TastingFormValues) {
     setPendingTasteValues(values);
@@ -94,6 +126,7 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
 
   function handleFinish() {
     if (!coffeeShopId || !baristaId || !brewingMethod || !pendingTasteValues || !userId) return;
+    if (!isDrinkSelectionComplete(drinkSelection)) return;
 
     // Checked before the save so the just-added record doesn't count as
     // "already had this pin" — drives the pin-drop animation on the Coffee
@@ -118,6 +151,14 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
         baristaId,
         baristaRating,
         baristaNote,
+        drinkCategory: drinkSelection.drinkCategory,
+        drinkType: drinkSelection.drinkType,
+        customDrinkName: drinkSelection.customDrinkName,
+        milkBaseType: drinkSelection.milkBaseType,
+        cowMilkType: drinkSelection.cowMilkType,
+        isLactoseFree: drinkSelection.isLactoseFree,
+        fatContentPercent: drinkSelection.fatContentPercent,
+        plantMilkType: drinkSelection.plantMilkType,
         ...pendingTasteValues,
       },
       userId
@@ -168,7 +209,7 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
             <button
               type="button"
               disabled={!coffeeShopId}
-              onClick={() => setStep('taste')}
+              onClick={() => setStep('drink')}
               className="mt-8 inline-flex items-center justify-center w-full rounded-md
                          bg-ink-900 text-parchment-100 font-body font-medium text-sm px-6 py-4
                          hover:bg-ink-800 transition-colors disabled:opacity-40 disabled:pointer-events-none"
@@ -178,10 +219,42 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
           </>
         )}
 
-        {step === 'taste' && (
+        {step === 'drink' && (
+          <>
+            <h1 className="font-display text-2xl text-ink-900 mb-8">Что вы пьёте?</h1>
+            <DrinkTypeSelector value={drinkSelection} onChange={(patch) => setDrinkSelection((prev) => ({ ...prev, ...patch }))} />
+            <div className="flex gap-3 mt-8">
+              <button
+                type="button"
+                onClick={() => setStep('location')}
+                className="inline-flex items-center justify-center rounded-md border
+                           border-ink-200 text-ink-700 font-body font-medium text-sm px-6 py-4
+                           hover:bg-parchment-300 transition-colors"
+              >
+                Назад
+              </button>
+              <button
+                type="button"
+                disabled={!isDrinkSelectionComplete(drinkSelection)}
+                onClick={handleConfirmDrink}
+                className="flex-1 inline-flex items-center justify-center rounded-md
+                           bg-ink-900 text-parchment-100 font-body font-medium text-sm px-6 py-4
+                           hover:bg-ink-800 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              >
+                Далее
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 'taste' && drinkSelection.drinkCategory && (
           <>
             <h1 className="font-display text-2xl text-ink-900 mb-8">Расскажите о чашке</h1>
-            <TastingForm onSave={handleSaveTaste} submitLabel="Далее — работа бариста" />
+            <TastingForm
+              onSave={handleSaveTaste}
+              submitLabel="Далее — работа бариста"
+              drinkCategory={drinkSelection.drinkCategory}
+            />
           </>
         )}
 

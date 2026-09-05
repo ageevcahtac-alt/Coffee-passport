@@ -1,5 +1,5 @@
 import type { TastingRecord } from '@/lib/types/coffee';
-import { BREWING_METHODS } from '@/lib/types/coffee';
+import { BREWING_METHODS, describeDrinkType } from '@/lib/types/coffee';
 import { getMergedLotById } from '@/lib/data/lotsStore';
 import { getRoasterById } from '@/lib/data/roasters';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
@@ -19,6 +19,7 @@ export function TastingRecordCard({
   const shop = getCoffeeShopById(record.coffeeShopId);
   const brewingMethod = BREWING_METHODS.find((method) => method.id === record.brewingMethod);
   const summary = summarizeTasting(record);
+  const drinkLabel = describeDrinkType(record);
 
   if (!lot || !roaster || !shop) return null;
 
@@ -36,6 +37,10 @@ export function TastingRecordCard({
         </div>
         <span className="data-value text-sm text-gold-500 shrink-0">{lot.qGrade.toFixed(1)}</span>
       </div>
+
+      {drinkLabel && (
+        <p className="text-xs uppercase tracking-widest2 text-gold-500 mb-1.5">{drinkLabel}</p>
+      )}
 
       <p className="text-sm text-ink-700 mb-1">
         {shop.name} · {shop.city}
