@@ -4,6 +4,7 @@ import {
   resolveLegacyLotIds,
   detectPublicIdConflicts,
   planVersionActivation,
+  partitionSeedLotsByExisting,
 } from './canonicalLot';
 
 // Covers the pure-logic cases from Stage 4 §35. Cases that are really DB
@@ -61,6 +62,90 @@ describe('detectPublicIdConflicts', () => {
 
   it('reports nothing when every id is unique', () => {
     expect(detectPublicIdConflicts(['LOT-A-001', 'LOT-B-001'])).toEqual([]);
+  });
+});
+
+describe('partitionSeedLotsByExisting', () => {
+  // Regression coverage for the pre-migration review bug: the migration
+  // script originally built its lookup map only from lots it created in
+  // the current run, never from a full `select id, public_id from lots` —
+  // so a Lot already present for any other reason (a prior run, or any
+  // real non-seed Lot) would be wrongly treated as if it didn't exist.
+
+  it(
+    'reproduces the reported bug scenario: an existing non-seed Lot resolves to its real UUID, ' +
+      'is never re-created, and its legacy lot_id maps to it — not unmapped, not a new Lot, not a duplicate',
+    () => {
+      // Supabase already has a canonical Lot for LOT-XO-ETH-001 (created by
+      // some means other than this migration run — a prior run, or a real
+      // roaster write). It is NOT part of the current seed batch below.
+      const fullMappingFromSupabase = new Map([['LOT-XO-ETH-001', 'existing-uuid-123']]);
+
+      // This run's seed batch is a completely different lot — models the
+      // real shape of the bug: SEED_LOTS never even mentions
+      // LOT-XO-ETH-001, so the old buggy code (which only learned about
+      // lots it personally created from SEED_LOTS) could never have put it
+      // in the map at all.
+      const seedBatch = [{ id: 'LOT-NS-KEN-002' }];
+      const { existing, missing } = partitionSeedLotsByExisting(seedBatch, fullMappingFromSupabase);
+
+      // The seed batch's own lot is missing (needs creating) — unrelated to
+      // the bug, just confirms the partition still works normally.
+      expect(missing).toEqual([{ id: 'LOT-NS-KEN-002' }]);
+      expect(existing).toEqual([]);
+
+      // The actual regression check: a legacy checkin/recipe/menu-entry
+      // referencing LOT-XO-ETH-001 — a lot this run never touched or
+      // created — must still resolve against the full mapping.
+      const legacyCheckinLotIds = ['LOT-XO-ETH-001'];
+      const { mapped, unmapped } = resolveLegacyLotIds(legacyCheckinLotIds, fullMappingFromSupabase);
+
+      expect(unmapped).toEqual([]); // NOT unmapped
+      expect(mapped).toEqual([{ legacyId: 'LOT-XO-ETH-001', lotId: 'existing-uuid-123' }]); // resolves to the real existing UUID
+      // NOT a new Lot / NOT a duplicate: nothing above ever added
+      // 'LOT-XO-ETH-001' to `missing`, so no create-Lot code path is ever
+      // reached for it.
+    }
+  );
+
+  it('an existing Lot that also happens to appear in the seed batch is recognized as existing, not re-created', () => {
+    const fullMapping = new Map([['LOT-XO-ETH-001', 'existing-uuid-123']]);
+    const seedBatch = [{ id: 'LOT-XO-ETH-001' }, { id: 'LOT-NS-KEN-002' }];
+
+    const { existing, missing } = partitionSeedLotsByExisting(seedBatch, fullMapping);
+
+    expect(existing).toEqual([{ seed: { id: 'LOT-XO-ETH-001' }, lotId: 'existing-uuid-123' }]);
+    expect(missing).toEqual([{ id: 'LOT-NS-KEN-002' }]);
+  });
+
+  it('a genuinely new seed lot (absent from the full mapping) is correctly classified as missing', () => {
+    const fullMapping = new Map<string, string>(); // Supabase has no canonical lots at all yet
+    const seedBatch = [{ id: 'LOT-XO-ETH-001' }];
+
+    const { existing, missing } = partitionSeedLotsByExisting(seedBatch, fullMapping);
+
+    expect(existing).toEqual([]);
+    expect(missing).toEqual([{ id: 'LOT-XO-ETH-001' }]);
+  });
+
+  it('re-running against a fully-migrated mapping classifies every seed lot as existing — idempotent, no duplicates', () => {
+    const fullMapping = new Map([
+      ['LOT-XO-ETH-001', 'uuid-1'],
+      ['LOT-XO-COL-004', 'uuid-2'],
+      ['LOT-NS-KEN-002', 'uuid-3'],
+      ['LOT-NS-ETH-003', 'uuid-4'],
+    ]);
+    const seedBatch = [
+      { id: 'LOT-XO-ETH-001' },
+      { id: 'LOT-XO-COL-004' },
+      { id: 'LOT-NS-KEN-002' },
+      { id: 'LOT-NS-ETH-003' },
+    ];
+
+    const { existing, missing } = partitionSeedLotsByExisting(seedBatch, fullMapping);
+
+    expect(missing).toEqual([]); // nothing left to create on a second run
+    expect(existing).toHaveLength(4); // every seed lot already accounted for
   });
 });
 

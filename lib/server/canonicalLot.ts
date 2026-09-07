@@ -94,6 +94,45 @@ export function detectPublicIdConflicts(publicIds: readonly string[]): PublicIdC
 }
 
 // =========================================================
+// Seed-vs-existing partitioning — fixes a real bug found in pre-migration
+// review: the migration script originally built its public_id -> lots.id
+// lookup map only from the seed lots it happened to process in the current
+// run, never from a full `select id, public_id from lots` of what already
+// exists in Supabase. A legacy lot_id matching a Lot that exists for any
+// other reason (a prior run, or any future non-seed write) would then be
+// incorrectly reported unmapped instead of resolving to its real row.
+//
+// Fix: callers must build `publicIdToLotId` from a full table read FIRST,
+// then partition the seed list against that complete map — never the
+// reverse. A seed lot found in the map is `existing` (already canonical,
+// skip creation, never touch it again); only lots genuinely absent from
+// the full map are `missing` and need to be created.
+// =========================================================
+export interface SeedLotPartition<T> {
+  existing: Array<{ seed: T; lotId: string }>;
+  missing: T[];
+}
+
+export function partitionSeedLotsByExisting<T extends { id: string }>(
+  seedLots: readonly T[],
+  publicIdToLotId: ReadonlyMap<string, string>
+): SeedLotPartition<T> {
+  const existing: Array<{ seed: T; lotId: string }> = [];
+  const missing: T[] = [];
+
+  for (const seed of seedLots) {
+    const lotId = publicIdToLotId.get(seed.id);
+    if (lotId) {
+      existing.push({ seed, lotId });
+    } else {
+      missing.push(seed);
+    }
+  }
+
+  return { existing, missing };
+}
+
+// =========================================================
 // Reference profile version transitions (Reference Roast Profile and
 // Reference Taste Profile share this exact rule — Stage 3 §06/§07/§25).
 // Activating a new version never mutates the row it replaces: the previous

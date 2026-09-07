@@ -29,7 +29,11 @@
 import { createClient } from '@supabase/supabase-js';
 import { SEED_ROASTERS } from '../lib/data/roasters';
 import { LOTS as SEED_LOTS } from '../lib/data/lots';
-import { generatePublicLotId, resolveLegacyLotIds, detectPublicIdConflicts } from '../lib/server/canonicalLot';
+import {
+  resolveLegacyLotIds,
+  detectPublicIdConflicts,
+  partitionSeedLotsByExisting,
+} from '../lib/server/canonicalLot';
 
 interface MigrationReport {
   roasters: { created: number; skipped: number; conflicts: string[] };
@@ -105,13 +109,37 @@ async function main() {
   }
 
   // ---------------------------------------------------------------
-  // Step 2 — Coffee (origin) + Green Lot + Lot, derived from each seed Lot.
+  // Step 2a — Load the FULL canonical mapping from Supabase before touching
+  // seed data at all. This is the fix for the bug found in pre-migration
+  // review: the previous version only ever learned about lots it created
+  // in the current run, so any Lot already present for any other reason
+  // (a prior run, or any future non-seed write) would be misreported as
+  // unmapped later in Step 3. One query, done once, before any decision
+  // about what needs creating.
+  // ---------------------------------------------------------------
+  const { data: existingLotRows, error: existingLotsError } = await supabase.from('lots').select('id, public_id');
+  if (existingLotsError) {
+    throw new Error(`Failed to load existing lots for the canonical mapping: ${existingLotsError.message}`);
+  }
+
+  const lotIdByPublicId = new Map<string, string>(); // public_id -> lots.id (uuid)
+  for (const row of existingLotRows ?? []) {
+    lotIdByPublicId.set(row.public_id, row.id);
+  }
+
+  // ---------------------------------------------------------------
+  // Step 2b — Coffee (origin) + Green Lot + Lot, but only for seed Lots
+  // that the full mapping above shows are genuinely absent. A seed Lot
+  // already present (`existing`, from this table or from a prior run) is
+  // never re-created — partitionSeedLotsByExisting is the same pure logic
+  // covered by canonicalLot.test.ts, so this split is exactly what's
+  // tested there, not a fresh ad-hoc check.
   //
   // Seed data has no separate Coffee/GreenLot records — only the flat Lot
   // shape. Per Stage 3, one Coffee + one Green Lot is created per distinct
-  // seed Lot as its origin/physical-batch backing, since there is no
-  // existing data richer than that to split from. This is a one-time seed
-  // convenience, not a general rule for future roaster-authored Lots
+  // MISSING seed Lot as its origin/physical-batch backing, since there is
+  // no existing data richer than that to split from. This is a one-time
+  // seed convenience, not a general rule for future roaster-authored Lots
   // (which should create Coffee/Green Lot explicitly going forward).
   // ---------------------------------------------------------------
   const seedPublicIds = SEED_LOTS.map((lot) => lot.id);
@@ -120,19 +148,18 @@ async function main() {
     report.lots.conflicts.push(...seedConflicts.map((c) => `duplicate seed public_id ${c.publicId} (${c.occurrences}x)`));
   }
 
-  const lotIdByPublicId = new Map<string, string>(); // public_id -> lots.id (uuid)
+  const { existing: alreadyCanonicalSeedLots, missing: missingSeedLots } = partitionSeedLotsByExisting(
+    SEED_LOTS,
+    lotIdByPublicId
+  );
+  report.lots.skipped += alreadyCanonicalSeedLots.length;
+  // The map already has every one of these from Step 2a — nothing further
+  // to do for them, they are intentionally never touched again.
 
-  for (const lot of SEED_LOTS) {
+  for (const lot of missingSeedLots) {
     const roasterId = roasterIdBySlug.get(lot.roasterId);
     if (!roasterId) {
       report.lots.conflicts.push(`${lot.id}: unresolved roasterId '${lot.roasterId}' — skipped, not guessed`);
-      continue;
-    }
-
-    const { data: existingLot } = await supabase.from('lots').select('id').eq('public_id', lot.id).maybeSingle();
-    if (existingLot) {
-      lotIdByPublicId.set(lot.id, existingLot.id);
-      report.lots.skipped += 1;
       continue;
     }
 
