@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import QRCode from 'qrcode';
 import { downloadLotQrPdf } from '@/lib/utils/qrPdf';
 import { useLots } from '@/lib/data/useLots';
 import { useAnonymizedCheckins } from '@/lib/data/useAnonymizedCheckins';
 import { getRoasterById } from '@/lib/data/roasters';
-import { saveLot } from '@/lib/data/lotsStore';
+import { saveLot, syncLotsFromSupabase } from '@/lib/data/lotsStore';
 import { ROAST_TYPE_LABELS, type Lot } from '@/lib/types/coffee';
 import type { AnonymizedCheckin } from '@/lib/data/checkinsRoasterView';
 import { LotGuestAnalytics } from '@/components/roaster/LotGuestAnalytics';
@@ -21,6 +21,12 @@ type CatalogTab = 'active' | 'archived';
 export default function RoasterDashboardPage() {
   const { roasterId } = useStaffSession();
   const lots = useLots();
+  // Canonical Lot catalog (Stage 4 Phase 4.4) — see syncLotsFromSupabase's
+  // own comment in lib/data/lotsStore.ts. No-op until migrations 0022-0025
+  // are applied and the backfill script has been run.
+  useEffect(() => {
+    void syncLotsFromSupabase();
+  }, []);
   const { checkins, loading: checkinsLoading } = useAnonymizedCheckins();
   const roaster = roasterId ? getRoasterById(roasterId) : undefined;
   const myLots = lots.filter((lot) => lot.roasterId === roasterId);

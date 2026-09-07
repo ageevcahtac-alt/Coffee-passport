@@ -11,6 +11,8 @@ import { consumePendingRoaster, markPendingRoaster } from '@/lib/journey/pending
 import { getRoasterById } from '@/lib/data/roasters';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { syncCafeMenuFromSupabase } from '@/lib/data/cafeMenuStore';
+import { syncLotsFromSupabase } from '@/lib/data/lotsStore';
+import { syncRoastProfilesFromSupabase } from '@/lib/data/roastProfilesStore';
 import { UNSPECIFIED_BARISTA_ID } from '@/lib/data/baristas';
 import { useCoffeeShops } from '@/lib/data/useCoffeeShops';
 import { useRoasters } from '@/lib/data/useRoasters';
@@ -54,7 +56,20 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
+  // Canonical Lot catalog (Stage 4 Phase 4.4) — overlays the real
+  // public.lots/reference_taste_profiles rows onto the same seed+
+  // localStorage cache useLots() already reads, same idiom as
+  // syncCafeMenuFromSupabase below. A no-op until migrations 0022-0025 are
+  // applied and the backfill script has been run.
+  useEffect(() => {
+    void syncLotsFromSupabase();
+  }, []);
+
   const lot = lots.find((candidate) => candidate.id === params.lotId);
+
+  useEffect(() => {
+    if (lot) void syncRoastProfilesFromSupabase(lot.roasterId);
+  }, [lot?.roasterId]);
   const roaster = lot ? getRoasterById(lot.roasterId) : undefined;
   const latestRoastProfile =
     useRoastProfiles()

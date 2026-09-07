@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useLots } from '@/lib/data/useLots';
+import { syncLotsFromSupabase } from '@/lib/data/lotsStore';
 import { useCafeMenuEntries } from '@/lib/data/useCafeMenu';
 import { addLotToMenu } from '@/lib/data/cafeMenuStore';
 import { getRoasterById } from '@/lib/data/roasters';
@@ -14,6 +15,12 @@ export default function AddLotPage() {
   const { cafeId } = useStaffSession();
   const activeShopId = cafeId ?? '';
   const lots = useLots();
+  // Canonical Lot catalog (Stage 4 Phase 4.4) — see syncLotsFromSupabase's
+  // own comment in lib/data/lotsStore.ts. No-op until migrations 0022-0025
+  // are applied and the backfill script has been run.
+  useEffect(() => {
+    void syncLotsFromSupabase();
+  }, []);
   const menuEntries = useCafeMenuEntries(activeShopId);
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
