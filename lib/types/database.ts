@@ -56,6 +56,9 @@ export type RecipePublishEventInsert = RecipePublishEventRow;
 export type RecipeRow = {
   id: string;
   lot_id: string;
+  // Canonical Lot FK — see supabase/migrations/0024_canonical_lot_fk_columns.sql.
+  // Optional at insert (defaults to null), same reasoning as CheckinRow.lot_ref.
+  lot_ref?: string | null;
   brewing_method_id: string;
   author_type: 'roaster' | 'coffee_shop' | 'barista' | 'enthusiast';
   author_id: string;
@@ -107,6 +110,14 @@ export type CheckinRow = {
   id: string;
   owner_user_id: string;
   lot_id: string;
+  // Canonical Lot FK — see supabase/migrations/0024_canonical_lot_fk_columns.sql.
+  // Optional at insert (defaults to null): existing write call sites don't
+  // set it yet (Stage 4 Phase 4.4 covers reads only), and historical rows
+  // predating this column are null forever, per Stage 4 §32.
+  lot_ref?: string | null;
+  // The reference_taste_profiles row that was `active` for this lot at the
+  // moment this checkin was recorded — captured once, never updated later.
+  reference_taste_profile_ref?: string | null;
   roaster_id: string;
   coffee_shop_id: string;
   brewing_method: string;
@@ -357,6 +368,9 @@ export type CafeMenuEntryRow = {
   id: string;
   coffee_shop_id: string;
   lot_id: string;
+  // Canonical Lot FK — see supabase/migrations/0024_canonical_lot_fk_columns.sql.
+  // Optional at insert (defaults to null), same reasoning as CheckinRow.lot_ref.
+  lot_ref?: string | null;
   is_active: boolean;
   status: LotMenuStatusRow;
   status_changed_at: string;
@@ -379,6 +393,135 @@ export type ShopMutePreferenceRow = {
   created_at: string;
 };
 export type ShopMutePreferenceInsert = ShopMutePreferenceRow;
+
+// =========================================================
+// Canonical Lot — see supabase/migrations/0022_canonical_lot_core.sql,
+// 0023_canonical_lot_profiles.sql. Stage 3 Canonical Lot Architecture /
+// Stage 4 implementation. `roasters`/`coffee_shops` here are thin identity
+// anchors only (id + slug + name) — not the full localStorage Roaster/
+// CoffeeShop profile shape from lib/types/coffee.ts, which is unrelated
+// and untouched by this migration.
+// =========================================================
+
+export type RoasterOrgRow = {
+  id: string;
+  slug: string;
+  name: string;
+  created_at: string;
+};
+export type RoasterOrgInsert = Omit<RoasterOrgRow, 'id' | 'created_at'>;
+
+export type CoffeeShopOrgRow = {
+  id: string;
+  slug: string;
+  name: string;
+  created_at: string;
+};
+export type CoffeeShopOrgInsert = Omit<CoffeeShopOrgRow, 'id' | 'created_at'>;
+
+export type CoffeeRow = {
+  id: string;
+  roaster_id: string;
+  country: string;
+  region: string;
+  farm: string;
+  producer: string;
+  variety: string;
+  altitude: string;
+  processing: string;
+  harvest_year: string;
+  created_at: string;
+  updated_at: string;
+};
+export type CoffeeInsert = Omit<CoffeeRow, 'id' | 'created_at' | 'updated_at'>;
+
+export type GreenLotRow = {
+  id: string;
+  coffee_id: string;
+  roaster_id: string;
+  purchased_kg: number | null;
+  purchase_date: string | null;
+  contract_reference: string;
+  notes: string;
+  created_at: string;
+};
+export type GreenLotInsert = Omit<GreenLotRow, 'id' | 'created_at'>;
+
+export type LotStatus = 'draft' | 'testing' | 'active' | 'archived';
+
+export type LotRow = {
+  id: string;
+  public_id: string;
+  roaster_id: string;
+  green_lot_id: string;
+  name: string;
+  descriptors: string[];
+  q_grade: number | null;
+  roast_type: string;
+  roast_profile_label: string;
+  status: LotStatus;
+  in_roaster_catalog: boolean;
+  legacy_text_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+export type LotInsert = Omit<LotRow, 'id' | 'created_at' | 'updated_at'>;
+
+export type ReferenceProfileStatusRow = 'draft' | 'active' | 'superseded';
+
+export type ReferenceRoastProfileRow = {
+  id: string;
+  lot_id: string;
+  version: number;
+  status: ReferenceProfileStatusRow;
+  machine_model: string;
+  target_curve: { timeSec: number; bt: number | null; et: number | null; ror: number | null }[];
+  agtron_target: number | null;
+  notes: string;
+  effective_from: string;
+  created_at: string;
+  created_by: string | null;
+};
+export type ReferenceRoastProfileInsert = Omit<ReferenceRoastProfileRow, 'id' | 'created_at'>;
+
+export type RoastBatchRow = {
+  id: string;
+  lot_id: string;
+  reference_roast_profile_id: string | null;
+  batch_number: string;
+  roasted_at: string;
+  machine_model: string;
+  green_kg: number | null;
+  charge_temp: number | null;
+  drop_temp: number | null;
+  first_crack_time_sec: number | null;
+  total_time_sec: number | null;
+  dtr_percent: number | null;
+  agtron_number: number | null;
+  curve: { timeSec: number; bt: number | null; et: number | null; ror: number | null }[];
+  notes: string;
+  created_by: string | null;
+  created_at: string;
+};
+// roast_batches rows are immutable (enforced by a DB trigger, see 0023) —
+// there is deliberately no Update type; nothing may ever call .update() on
+// this table.
+export type RoastBatchInsert = Omit<RoastBatchRow, 'id' | 'created_at'>;
+
+export type ReferenceTasteProfileRow = {
+  id: string;
+  lot_id: string;
+  version: number;
+  status: ReferenceProfileStatusRow;
+  acidity: number;
+  sweetness: number;
+  body: number;
+  bitterness: number;
+  effective_from: string;
+  created_at: string;
+  created_by: string | null;
+};
+export type ReferenceTasteProfileInsert = Omit<ReferenceTasteProfileRow, 'id' | 'created_at'>;
 
 export type Database = {
   public: {
@@ -444,6 +587,26 @@ export type Database = {
         Update: Partial<LoyaltyTransactionInsert>;
       } & NoRelationships;
       events: { Row: EventRow; Insert: EventInsert; Update: Partial<EventInsert> } & NoRelationships;
+      roasters: { Row: RoasterOrgRow; Insert: RoasterOrgInsert; Update: Partial<RoasterOrgInsert> } & NoRelationships;
+      coffee_shops: {
+        Row: CoffeeShopOrgRow;
+        Insert: CoffeeShopOrgInsert;
+        Update: Partial<CoffeeShopOrgInsert>;
+      } & NoRelationships;
+      coffees: { Row: CoffeeRow; Insert: CoffeeInsert; Update: Partial<CoffeeInsert> } & NoRelationships;
+      green_lots: { Row: GreenLotRow; Insert: GreenLotInsert; Update: Partial<GreenLotInsert> } & NoRelationships;
+      lots: { Row: LotRow; Insert: LotInsert; Update: Partial<LotInsert> } & NoRelationships;
+      reference_roast_profiles: {
+        Row: ReferenceRoastProfileRow;
+        Insert: ReferenceRoastProfileInsert;
+        Update: Partial<ReferenceRoastProfileInsert>;
+      } & NoRelationships;
+      roast_batches: { Row: RoastBatchRow; Insert: RoastBatchInsert; Update: never } & NoRelationships;
+      reference_taste_profiles: {
+        Row: ReferenceTasteProfileRow;
+        Insert: ReferenceTasteProfileInsert;
+        Update: Partial<ReferenceTasteProfileInsert>;
+      } & NoRelationships;
     };
     Views: {
       checkins_roaster_view: { Row: CheckinRoasterViewRow } & NoRelationships;
