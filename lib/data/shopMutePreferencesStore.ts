@@ -125,3 +125,41 @@ export async function syncMutedShopsFromSupabase(userId: string, isAuthenticated
 export function purgeMutedShopsForUser(userId: string): void {
   write(read().filter((record) => record.userId !== userId));
 }
+
+// ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — muteShop/
+// unmuteShop only ever attempt the Supabase write `if (isAuthenticated)`,
+// so an anonymous guest's mute list is local-only, tagged under this
+// device's anon id, and would otherwise become invisible the moment
+// isShopMuted() starts being called with the real authenticated userId
+// instead. (userId, shopId) is effectively unique — same "the
+// already-authenticated record wins, never duplicated" rule as
+// recipeVotesStore's claimVotesForUser, since muting the same shop twice
+// under one account has no meaning to dedupe by anything else. Only the
+// records that actually get claimed are inserted to Supabase — a shop
+// already muted for real on this account has nothing new to sync.
+export async function claimMutedShopsForUser(anonUserId: string, realUserId: string): Promise<void> {
+  const existing = read();
+  const anonRecords = existing.filter((record) => record.userId === anonUserId);
+  if (anonRecords.length === 0) return;
+
+  const realShopIds = new Set(existing.filter((record) => record.userId === realUserId).map((record) => record.shopId));
+  const toClaim = anonRecords.filter((record) => !realShopIds.has(record.shopId));
+
+  write(
+    existing
+      .filter((record) => !(record.userId === anonUserId && realShopIds.has(record.shopId)))
+      .map((record) => (record.userId === anonUserId ? { ...record, userId: realUserId } : record))
+  );
+
+  if (toClaim.length === 0) return;
+  try {
+    const { error } = await getBrowserSupabaseClient()
+      .from('shop_mute_preferences')
+      .insert(toClaim.map((record) => ({ guest_id: realUserId, shop_id: record.shopId, created_at: record.createdAt })));
+    if (error) {
+      console.warn('[shop_mute_preferences] Failed to sync claimed anonymous mutes, kept local-only:', error.message);
+    }
+  } catch (err) {
+    console.warn('[shop_mute_preferences] Claiming anonymous mutes threw, kept local-only:', err);
+  }
+}

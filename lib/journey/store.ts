@@ -1,7 +1,7 @@
 'use client';
 
 import type { TastingRecord } from '@/lib/types/coffee';
-import type { CheckinRow } from '@/lib/types/database';
+import type { CheckinCommunityViewRow, CheckinRow } from '@/lib/types/database';
 import { getBrowserSupabaseClient } from '@/lib/supabase/browserClient';
 import { generateId } from '@/lib/utils/id';
 import { findCanonicalLotByPublicId, getActiveReferenceTasteProfile } from '@/lib/data/canonicalLotStore';
@@ -51,6 +51,7 @@ function normalizeRecord(record: TastingRecord): TastingRecord {
     coffeeReadability: record.coffeeReadability ?? null,
     creaminess: record.creaminess ?? null,
     aftertaste: record.aftertaste ?? null,
+    isPublic: record.isPublic ?? false,
     referenceTasteProfileId: record.referenceTasteProfileId ?? null,
   };
 }
@@ -132,6 +133,7 @@ export function rowToRecord(row: CheckinRow): TastingRecord {
     coffeeReadability: row.coffee_readability ?? null,
     creaminess: row.creaminess ?? null,
     aftertaste: row.aftertaste ?? null,
+    isPublic: row.is_public ?? false,
     createdAt: row.created_at,
     referenceTasteProfileId: row.reference_taste_profile_ref ?? null,
   };
@@ -174,6 +176,7 @@ export function recordToRow(record: TastingRecord): CheckinRow {
     coffee_readability: record.coffeeReadability,
     creaminess: record.creaminess,
     aftertaste: record.aftertaste,
+    is_public: record.isPublic,
     created_at: record.createdAt,
     reference_taste_profile_ref: record.referenceTasteProfileId ?? null,
   };
@@ -188,10 +191,13 @@ function mergeById(local: TastingRecord[], incoming: TastingRecord[]): TastingRe
 }
 
 // Pulls this signed-in user's own checkins from Supabase and overlays them
-// onto the local cache. Checkins have no public tier (unlike recipes) —
-// only ever meaningful for a real account, so this is a no-op for
-// anonymous browsing (nothing to pull, and owner_user_id is a uuid column
-// an anonymous device id wouldn't cast into anyway).
+// onto the local cache. A guest's own full checkin record still has no
+// public tier (unlike recipes) — only ever meaningful for a real account,
+// so this is a no-op for anonymous browsing (nothing to pull, and
+// owner_user_id is a uuid column an anonymous device id wouldn't cast into
+// anyway). getCommunityTastingsForLot below is the separate, narrow
+// exception: an explicitly opted-in SUBSET of fields, anonymized, readable
+// by anyone — see COMMUNITY_LAYER_PRODUCT_AUDIT.md.
 export async function syncCheckinsForUser(userId: string, isAuthenticated: boolean): Promise<void> {
   if (!isAuthenticated) return;
   try {
@@ -285,4 +291,105 @@ export function addTastingRecord(
 // stay consistent regardless of call order.
 export function purgeRecordsForUser(userId: string): void {
   write(read().filter((record) => record.userId !== userId));
+}
+
+// GAP 2 (IDENTITY_SESSION_CONTINUITY_IMPLEMENTATION.md) — called once, right
+// after a guest authenticates for the first time on THIS device (see
+// lib/auth/currentUser.tsx), so their pre-signup anonymous tastings don't
+// silently vanish from their own history the moment currentUserId stops
+// matching the anonymous id that created them.
+//
+// Ownership proof, precisely: `anonUserId` is read from this exact device's
+// own ANON_ID_KEY, immediately before the caller authenticated — the same
+// id every anonymous read/write on this browser has used all along. This
+// is not a cross-user or cross-device operation: it only ever touches
+// records already sitting in THIS browser's own local cache, tagged with
+// THIS browser's own anonymous id. No other user's data is reachable from
+// here (an anonymous checkin can never have reached Supabase in the first
+// place — owner_user_id references auth.users(id), which no anonymous id
+// can satisfy — so there is nothing server-side to UPDATE, only local
+// records to re-own and then insert for the first time).
+//
+// Re-tagging is destructive (userId is changed in place, records are never
+// duplicated), which makes this naturally idempotent and self-limiting: once
+// a record is re-tagged to a real account, nothing is left under the old
+// anonymous id for a second call — or a second, different account signing
+// into this same device later — to find. isPublic is carried through
+// completely unchanged: signing up never flips a private tasting to public,
+// and never touches an already-opted-in one either way.
+export async function claimAnonymousTastings(anonUserId: string, realUserId: string): Promise<void> {
+  const existing = read();
+  const claimed = existing.filter((record) => record.userId === anonUserId);
+  if (claimed.length === 0) return;
+
+  const reowned = claimed.map((record) => ({ ...record, userId: realUserId }));
+  write(existing.map((record) => (record.userId === anonUserId ? { ...record, userId: realUserId } : record)));
+
+  // Best-effort, same convention as addTastingRecord's own Supabase write:
+  // the local re-tag above already fixed this device's own view regardless
+  // of whether this insert succeeds — a failure here just means these
+  // tastings won't show up on another device yet, not that they're lost.
+  try {
+    const { error } = await getBrowserSupabaseClient().from('checkins').insert(reowned.map(recordToRow));
+    if (error) {
+      console.warn('[checkins] Failed to sync claimed anonymous tastings, kept local-only:', error.message);
+    }
+  } catch (err) {
+    console.warn('[checkins] Claiming anonymous tastings threw, kept local-only:', err);
+  }
+}
+
+// A community-shared tasting, as returned by public.checkins_community_view
+// (see 0026_checkins_community_sharing.sql) — deliberately narrower than
+// TastingRecord: no id/owner/shop/barista fields exist on the view at all,
+// only what's meaningful to "how did the community perceive this coffee's
+// taste." Anonymous by construction — see the migration's own comment for
+// why there is no author identity to attach.
+export interface CommunityTasting {
+  rating: number;
+  guestFlavorProfile: { acidity: number; sweetness: number; body: number; bitterness: number };
+  brewingMethod: string;
+  liked: string;
+  disliked: string;
+  note: string;
+  createdAt: string;
+}
+
+function rowToCommunityTasting(row: CheckinCommunityViewRow): CommunityTasting {
+  return {
+    rating: row.rating,
+    guestFlavorProfile: {
+      acidity: row.acidity,
+      sweetness: row.sweetness,
+      body: row.body,
+      bitterness: row.bitterness,
+    },
+    brewingMethod: row.brewing_method,
+    liked: row.liked,
+    disliked: row.disliked,
+    note: row.note,
+    createdAt: row.created_at,
+  };
+}
+
+// Public, no sign-in required to read (same tier as public recipes) — see
+// the view's own grant. Newest first, capped the same way every other
+// "recent activity" feed in this app is (see CommunityHighlights.tsx's
+// FEED_LIMIT) rather than paginating a list that's expected to stay short.
+const COMMUNITY_TASTINGS_LIMIT = 5;
+
+export async function getCommunityTastingsForLot(lotId: string): Promise<CommunityTasting[]> {
+  try {
+    const supabase = getBrowserSupabaseClient();
+    const { data, error } = await supabase
+      .from('checkins_community_view')
+      .select('*')
+      .eq('lot_id', lotId)
+      .order('created_at', { ascending: false })
+      .limit(COMMUNITY_TASTINGS_LIMIT);
+    if (error || !data) return [];
+    return (data as CheckinCommunityViewRow[]).map(rowToCommunityTasting);
+  } catch {
+    return [];
+  }
 }

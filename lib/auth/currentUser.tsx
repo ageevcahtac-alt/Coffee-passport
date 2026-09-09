@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { reconcileUserScope } from '@/lib/journey/userScope';
 import { syncCheckinsForUser } from '@/lib/journey/store';
+import { claimAnonymousUserData } from '@/lib/journey/claimAnonymousData';
 import { syncRecipesFromSupabase } from '@/lib/data/brewingRecipesStore';
 import { syncBaristaProfilesFromSupabase } from '@/lib/data/baristaProfileStore';
 import { syncMutedShopsFromSupabase } from '@/lib/data/shopMutePreferencesStore';
@@ -26,6 +27,21 @@ const CurrentUserContext = createContext<CurrentUserState>({
   isAuthenticated: false,
   ready: false,
 });
+
+// Read-only counterpart to getOrCreateAnonId() below — used only to check
+// "did this device already have an anonymous identity before this
+// authentication" (see claimAnonymousTastings' call site). Must never
+// create one: calling this instead of getOrCreateAnonId() when resolving
+// an anonymous guest's own id would generate a fresh id every time
+// ANON_ID_KEY happened to be unset, defeating its whole "stable per
+// browser" purpose.
+function readExistingAnonId(): string | null {
+  try {
+    return window.localStorage.getItem(ANON_ID_KEY);
+  } catch {
+    return null;
+  }
+}
 
 function getOrCreateAnonId(): string {
   try {
@@ -70,6 +86,25 @@ export function CurrentUserProvider({
   useEffect(() => {
     const resolvedId = authUserId ?? getOrCreateAnonId();
     const isAuthenticated = Boolean(authUserId);
+
+    // GAP 2 (IDENTITY_SESSION_CONTINUITY_IMPLEMENTATION.md) — must run
+    // BEFORE reconcileUserScope, and must read the anon id directly rather
+    // than trust any earlier render's state: this is the one moment this
+    // device's pre-signup anonymous history can still be identified, right
+    // as `authUserId` first becomes non-null. Only ever claims records
+    // already sitting in this device's own local cache under this device's
+    // own anon id — never anything cross-device or cross-account.
+    //
+    // ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — widened from
+    // claimAnonymousTastings alone to claimAnonymousUserData, which claims
+    // tastings plus every other personal, userId-scoped local store (see
+    // that function's own comment for the full list and each store's
+    // ownership rules) through the exact same one call site.
+    if (isAuthenticated) {
+      const anonId = readExistingAnonId();
+      if (anonId) void claimAnonymousUserData(anonId, resolvedId);
+    }
+
     reconcileUserScope(resolvedId, isAuthenticated);
     // State is set immediately — first paint never waits on the network.
     // The syncs below run in the background: Supabase is the source of

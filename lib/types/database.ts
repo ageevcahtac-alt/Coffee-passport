@@ -154,9 +154,34 @@ export type CheckinRow = {
   coffee_readability: number | null;
   creaminess: number | null;
   aftertaste: number | null;
+  // Explicit opt-in consent to list this tasting (anonymously) in Community
+  // Tastings — see 0026_checkins_community_sharing.sql. Defaults false,
+  // same "never automatic" rule as BrewingRecipe.isPublic.
+  is_public: boolean;
   created_at: string;
 };
 export type CheckinInsert = CheckinRow;
+
+// public.checkins_community_view — see
+// supabase/migrations/0026_checkins_community_sharing.sql. Anonymous by
+// construction: no owner_user_id, coffee_shop_id, roaster_id, barista_*,
+// sub_descriptors, defects, or drink/milk axes — only what's meaningful to
+// "how did the community perceive this coffee's taste," for rows the
+// guest who saved them explicitly opted into sharing.
+export type CheckinCommunityViewRow = {
+  id: string;
+  lot_id: string;
+  brewing_method: string;
+  rating: number;
+  acidity: number;
+  sweetness: number;
+  body: number;
+  bitterness: number;
+  liked: string;
+  disliked: string;
+  note: string;
+  created_at: string;
+};
 
 // Anonymous grain/extraction read for a roaster_admin — see
 // public.checkins_roaster_view in 0007_staff_profiles_rls.sql. Never
@@ -624,6 +649,7 @@ export type Database = {
     Views: {
       checkins_roaster_view: { Row: CheckinRoasterViewRow } & NoRelationships;
       checkins_cafe_benchmark_view: { Row: CheckinsCafeBenchmarkRow } & NoRelationships;
+      checkins_community_view: { Row: CheckinCommunityViewRow } & NoRelationships;
       cafe_menu_entries_roaster_status_view: { Row: CafeMenuEntryRoasterStatusViewRow } & NoRelationships;
     };
     Functions: {

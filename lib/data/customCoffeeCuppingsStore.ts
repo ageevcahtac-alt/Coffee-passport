@@ -74,3 +74,15 @@ export function deleteCuppingsForCoffee(customCoffeeId: string): void {
 export function purgeCustomCoffeeCuppingsForUser(userId: string): void {
   write(read().filter((cupping) => cupping.userId !== userId));
 }
+
+// ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — see
+// kitchenRecipesStore's claimKitchenRecipesForUser for the general shape.
+// A cupping's own userId is independent of its parent UserCustomCoffee's
+// userId (no derived/joined field), so it needs this same direct re-tag
+// even though the parent coffee is claimed separately by
+// customCoffeeStore's claimCustomCoffeeForUser.
+export async function claimCustomCoffeeCuppingsForUser(anonUserId: string, realUserId: string): Promise<void> {
+  const existing = read();
+  if (!existing.some((cupping) => cupping.userId === anonUserId)) return;
+  write(existing.map((cupping) => (cupping.userId === anonUserId ? { ...cupping, userId: realUserId } : cupping)));
+}

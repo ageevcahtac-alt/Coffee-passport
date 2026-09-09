@@ -253,3 +253,41 @@ export async function deleteBrewingRecipe(id: string): Promise<{ error: string |
 export function purgeEnthusiastRecipesForUser(userId: string): void {
   write(read().filter((recipe) => !(recipe.authorType === 'enthusiast' && recipe.authorId === userId)));
 }
+
+// ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — an anonymous
+// guest's own recipes are real per-account content in intent (the same
+// "Мои рецепты" history claimAnonymousTastings already preserves), but
+// `owner_user_id` is a uuid FK to auth.users and RLS requires
+// `auth.uid() = owner_user_id`, so an anonymous authorId (never a valid
+// uuid, never an authenticated session) can satisfy neither — every
+// enthusiast recipe saved while anonymous stays 100% local, tagged under
+// this device's anon id, and would otherwise sit there invisible forever
+// once authorId stops matching the signed-in account's real id. Mirrors
+// claimAnonymousTastings' own contract exactly: local re-tag first
+// (idempotent — nothing is left under anonUserId for a second call to
+// find), then a best-effort Supabase insert of the now-correctly-owned
+// rows (never attempted while anonymous, so there is nothing server-side
+// to collide with).
+export async function claimEnthusiastRecipesForUser(anonUserId: string, realUserId: string): Promise<void> {
+  const existing = read();
+  const claimed = existing.filter((recipe) => recipe.authorType === 'enthusiast' && recipe.authorId === anonUserId);
+  if (claimed.length === 0) return;
+
+  const reowned = claimed.map((recipe) => ({ ...recipe, authorId: realUserId }));
+  write(
+    existing.map((recipe) =>
+      recipe.authorType === 'enthusiast' && recipe.authorId === anonUserId
+        ? { ...recipe, authorId: realUserId }
+        : recipe
+    )
+  );
+
+  try {
+    const { error } = await getBrowserSupabaseClient().from('recipes').insert(reowned.map(recipeToRow));
+    if (error) {
+      console.warn('[recipes] Failed to sync claimed anonymous recipes, kept local-only:', error.message);
+    }
+  } catch (err) {
+    console.warn('[recipes] Claiming anonymous recipes threw, kept local-only:', err);
+  }
+}

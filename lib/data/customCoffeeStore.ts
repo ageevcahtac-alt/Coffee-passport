@@ -87,3 +87,13 @@ export function deleteCustomCoffee(id: string): void {
 export function purgeCustomCoffeeForUser(userId: string): void {
   write(read().filter((coffee) => coffee.userId !== userId));
 }
+
+// ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — see
+// kitchenRecipesStore's claimKitchenRecipesForUser for the general shape:
+// no backend table, pure local re-tag, each entry's own generated id
+// prevents any collision, idempotent by construction.
+export async function claimCustomCoffeeForUser(anonUserId: string, realUserId: string): Promise<void> {
+  const existing = read();
+  if (!existing.some((coffee) => coffee.userId === anonUserId)) return;
+  write(existing.map((coffee) => (coffee.userId === anonUserId ? { ...coffee, userId: realUserId } : coffee)));
+}

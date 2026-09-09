@@ -93,3 +93,27 @@ export function getUserVote(recipeId: string, userId: string, votes: RecipeVote[
 export function purgeVotesForUser(userId: string): void {
   write(read().filter((vote) => vote.userId !== userId));
 }
+
+// ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — no backend
+// table, so this is a local re-tag like the other Coffee Kitchen stores,
+// but castVote() enforces "at most one vote per (recipeId, userId)" as an
+// invariant, which a naive re-tag could violate: if this account already
+// cast its own vote on a recipe the anonymous session also voted on (e.g.
+// voted once anonymously, signed in, then voted again on the same recipe
+// before this claim ran), retagging both would leave two rows for the same
+// (recipe, account) pair. So any anonymous vote whose recipe the account
+// already voted on is dropped rather than retagged — the account's own,
+// already-authenticated vote always wins, never silently duplicated.
+export async function claimVotesForUser(anonUserId: string, realUserId: string): Promise<void> {
+  const existing = read();
+  const anonVotes = existing.filter((vote) => vote.userId === anonUserId);
+  if (anonVotes.length === 0) return;
+
+  const realRecipeIds = new Set(existing.filter((vote) => vote.userId === realUserId).map((vote) => vote.recipeId));
+
+  write(
+    existing
+      .filter((vote) => !(vote.userId === anonUserId && realRecipeIds.has(vote.recipeId)))
+      .map((vote) => (vote.userId === anonUserId ? { ...vote, userId: realUserId } : vote))
+  );
+}

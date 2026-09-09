@@ -473,6 +473,12 @@ export interface TastingRecord {
   coffeeReadability: number | null;
   creaminess: number | null;
   aftertaste: number | null;
+  // Explicit opt-in consent to list this tasting (anonymously, no owner
+  // identity) in Community Tastings — see COMMUNITY_LAYER_PRODUCT_AUDIT.md.
+  // Same "never automatic" rule as BrewingRecipe.isPublic. Only ever has an
+  // effect for a signed-in guest — an anonymous checkin never reaches
+  // Supabase at all, so there is nothing to share regardless of this flag.
+  isPublic: boolean;
   createdAt: string; // ISO timestamp
   // The exact reference_taste_profiles version active for this lot at the
   // moment this tasting was recorded, once known — see
@@ -529,6 +535,11 @@ export interface RoastProfile {
   sourceFileName: string | null;
   notes: string;
   createdAt: string; // ISO timestamp — internal record-keeping only; never shown on the guest-facing roast profile card (no roast dates/batch numbers there, by design)
+  // The exact reference_roast_profiles version this batch followed, once
+  // known — see ROAST_BATCH_REFERENCE_LINK.md. Optional: a locally-saved
+  // profile doesn't have it until the next Supabase sync overlays the real
+  // roast_batches row, and batches predating that link never will.
+  referenceRoastProfileId?: string | null;
 }
 
 // =========================================================

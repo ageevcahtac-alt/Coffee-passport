@@ -6,11 +6,12 @@ import { useLots } from '@/lib/data/useLots';
 import { getRoasterById } from '@/lib/data/roasters';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { useBrewingRecipes } from '@/lib/data/useBrewingRecipes';
-import { addBrewingRecipe } from '@/lib/data/brewingRecipesStore';
+import { addBrewingRecipe, updateBrewingRecipe, deleteBrewingRecipe } from '@/lib/data/brewingRecipesStore';
 import { LotBuilderForm } from '@/components/roaster/LotBuilderForm';
 import { SignatureRecipeForm } from '@/components/cafe/SignatureRecipeForm';
+import { RecipeCard } from '@/components/coffee/RecipeCard';
 import { useStaffSession } from '@/lib/auth/staffSession';
-import { BREWING_METHODS } from '@/lib/types/coffee';
+import type { BrewingRecipe } from '@/lib/types/coffee';
 
 // CAFE_LOT_EDIT_OWNERSHIP_IMPLEMENTATION.md — café does not own Canonical
 // Lot identity, origin, or Taste Intent (CAFE_LOT_EDIT_OWNERSHIP_AUDIT.md).
@@ -42,6 +43,50 @@ export default function CafeEditLotPage({ params }: { params: { lotId: string } 
     (recipe) => lot && recipe.lotId === lot.id && recipe.authorType === 'coffee_shop' && recipe.authorId === cafeId
   );
   const [addingRecipe, setAddingRecipe] = useState(false);
+  const [editingRecipe, setEditingRecipe] = useState<BrewingRecipe | null>(null);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [recipeActionError, setRecipeActionError] = useState<string | null>(null);
+
+  // Mirrors the barista dashboard's own handleSave (app/dashboard/barista/
+  // page.tsx) — RLS already scopes both insert and update to this café's
+  // own coffee_shop-authored rows (0005/0007), only the app-level UI to
+  // reach updateBrewingRecipe was missing until this task.
+  async function handleSaveRecipe(input: Parameters<typeof addBrewingRecipe>[0]) {
+    setRecipeActionError(null);
+    if (editingRecipe) {
+      const { error } = await updateBrewingRecipe({ ...editingRecipe, ...input });
+      if (error) {
+        setRecipeActionError(error);
+        return;
+      }
+      setEditingRecipe(null);
+      return;
+    }
+    addBrewingRecipe(input);
+    setAddingRecipe(false);
+  }
+
+  // Deleting is a real Supabase delete (RLS-scoped to this café's own
+  // rows) — safe by schema, not just by convention: recipes.parent_recipe_id
+  // is `references public.recipes(id) on delete set null`
+  // (0005_recipes_equipment_checkins.sql), so an enthusiast who previously
+  // adapted this signature recipe for themselves keeps their own copy
+  // intact, just with parentRecipeId cleared, never cascaded away. A
+  // second click within the same render is required (confirmingDeleteId)
+  // so a stray tap can't remove a published recipe by accident.
+  async function handleDeleteRecipe(recipe: BrewingRecipe) {
+    if (confirmingDeleteId !== recipe.id) {
+      setConfirmingDeleteId(recipe.id);
+      return;
+    }
+    setRecipeActionError(null);
+    setDeletingId(recipe.id);
+    const { error } = await deleteBrewingRecipe(recipe.id);
+    setDeletingId(null);
+    setConfirmingDeleteId(null);
+    if (error) setRecipeActionError(error);
+  }
 
   if (!lot || !roaster || !shop) {
     if (!mounted) return null;
@@ -70,14 +115,21 @@ export default function CafeEditLotPage({ params }: { params: { lotId: string } 
 
         <div className="mt-14">
           <p className="section-label mb-4">Фирменный рецепт кофейни</p>
-          {addingRecipe ? (
+          {recipeActionError && <p className="text-sm text-red-600 mb-4">{recipeActionError}</p>}
+
+          {editingRecipe ? (
             <SignatureRecipeForm
               lot={lot}
               shop={shop}
-              onSave={(recipe) => {
-                addBrewingRecipe(recipe);
-                setAddingRecipe(false);
-              }}
+              initialRecipe={editingRecipe}
+              onSave={handleSaveRecipe}
+              onCancel={() => setEditingRecipe(null)}
+            />
+          ) : addingRecipe ? (
+            <SignatureRecipeForm
+              lot={lot}
+              shop={shop}
+              onSave={handleSaveRecipe}
               onCancel={() => setAddingRecipe(false)}
             />
           ) : (
@@ -85,15 +137,31 @@ export default function CafeEditLotPage({ params }: { params: { lotId: string } 
               {signatureRecipes.length === 0 ? (
                 <p className="text-sm text-ink-400 mb-4">Кофейня ещё не опубликовала свою адаптацию рецепта.</p>
               ) : (
-                <div className="flex flex-col gap-2 mb-4">
-                  {signatureRecipes.map((recipe) => {
-                    const methodLabel = BREWING_METHODS.find((method) => method.id === recipe.brewingMethodId)?.label ?? recipe.brewingMethodId;
-                    return (
-                      <div key={recipe.id} className="rounded-md border border-ink-200 bg-parchment-100 p-4">
-                        <p className="text-sm text-ink-900">{methodLabel} · {recipe.doseG}г → {recipe.yieldG}г</p>
-                      </div>
-                    );
-                  })}
+                <div className="flex flex-col gap-3 mb-4">
+                  {signatureRecipes.map((recipe) => (
+                    <div key={recipe.id}>
+                      <RecipeCard
+                        recipe={recipe}
+                        currentUserId={cafeId ?? ''}
+                        isOwnBarista
+                        onEdit={setEditingRecipe}
+                        onDelete={handleDeleteRecipe}
+                        deleting={deletingId === recipe.id}
+                      />
+                      {confirmingDeleteId === recipe.id && deletingId !== recipe.id && (
+                        <p className="text-xs text-rating mt-2">
+                          Нажмите «Удалить» ещё раз, чтобы подтвердить удаление рецепта.{' '}
+                          <button
+                            type="button"
+                            onClick={() => setConfirmingDeleteId(null)}
+                            className="underline underline-offset-2"
+                          >
+                            Отмена
+                          </button>
+                        </p>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
               <button type="button" onClick={() => setAddingRecipe(true)}

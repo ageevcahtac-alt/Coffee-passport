@@ -91,3 +91,19 @@ export function deleteKitchenRecipe(id: string): void {
 export function purgeKitchenRecipesForUser(userId: string): void {
   write(read().filter((recipe) => recipe.userId !== userId));
 }
+
+// ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — no backend table
+// at all, so unlike the Supabase-backed stores this is a pure local re-tag:
+// each entry already has its own generated id, so no two entries can ever
+// collide, and nothing here needs a merge/dedupe step. Idempotent for the
+// same reason as claimAnonymousTastings: once retagged, nothing is left
+// under anonUserId for a second call to find. Declared async (despite no
+// await) so a throw here becomes a rejected promise rather than a
+// synchronous one — required for the orchestrator's Promise.allSettled
+// (lib/journey/claimAnonymousData.ts) to isolate a failure in one store
+// from every other store's own claim.
+export async function claimKitchenRecipesForUser(anonUserId: string, realUserId: string): Promise<void> {
+  const existing = read();
+  if (!existing.some((recipe) => recipe.userId === anonUserId)) return;
+  write(existing.map((recipe) => (recipe.userId === anonUserId ? { ...recipe, userId: realUserId } : recipe)));
+}

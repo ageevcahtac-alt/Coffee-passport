@@ -145,3 +145,38 @@ export function saveEquipment(setup: Omit<EquipmentSetup, 'updatedAt'>): Equipme
 export function purgeEquipmentForUser(userId: string): void {
   write(read().filter((setup) => setup.userId !== userId));
 }
+
+// ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — same gap as
+// brewingRecipesStore's claimEnthusiastRecipesForUser (anon writes can
+// never satisfy equipment_garage's owner_user_id uuid/RLS, so an
+// anonymous Garage stays local-only forever). Equipment is a SINGLETON per
+// owner (one row per userId — see saveEquipment's findIndex-by-userId
+// replace), so unlike the array-shaped stores this can collide: if the
+// authenticated account already has its own Garage entry on this device
+// (e.g. synced down from Supabase, or saved earlier this session), blindly
+// retagging the anonymous entry on top of it would silently overwrite
+// already-owned authenticated data with a possibly-stale anonymous one —
+// exactly the destructive-overwrite this task's own spec warns against.
+// So this only claims when the account doesn't already have a setup;
+// otherwise it leaves the anonymous entry exactly where it is, unclaimed,
+// rather than guess which one should win.
+export async function claimEquipmentForUser(anonUserId: string, realUserId: string): Promise<void> {
+  const existing = read();
+  const anonSetup = existing.find((setup) => setup.userId === anonUserId);
+  if (!anonSetup) return;
+  if (existing.some((setup) => setup.userId === realUserId)) return;
+
+  const claimed: EquipmentSetup = { ...anonSetup, userId: realUserId };
+  write(existing.map((setup) => (setup.userId === anonUserId ? claimed : setup)));
+
+  try {
+    const { error } = await getBrowserSupabaseClient()
+      .from('equipment_garage')
+      .upsert(setupToRow(claimed), { onConflict: 'owner_kind,owner_id' });
+    if (error) {
+      console.warn('[equipment_garage] Failed to sync claimed anonymous equipment, kept local-only:', error.message);
+    }
+  } catch (err) {
+    console.warn('[equipment_garage] Claiming anonymous equipment threw, kept local-only:', err);
+  }
+}
