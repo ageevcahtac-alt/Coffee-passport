@@ -7,10 +7,16 @@ export function FlavorSlider({
   label,
   value,
   onChange,
+  disabled = false,
 }: {
   label: string;
   value: number;
   onChange: (value: number) => void;
+  // CAFE_LOT_EDIT_OWNERSHIP_IMPLEMENTATION.md — lets a caller render the
+  // roaster's Taste Intent as view-only (café's Lot-edit screen) without a
+  // second slider component. Unused by every other existing caller
+  // (defaults to false, unchanged behavior).
+  disabled?: boolean;
 }) {
   return (
     <div>
@@ -25,7 +31,8 @@ export function FlavorSlider({
         step={1}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full"
+        disabled={disabled}
+        className="w-full disabled:opacity-50"
         style={{ accentColor: 'var(--color-gold-500)' }}
       />
     </div>

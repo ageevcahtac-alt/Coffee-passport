@@ -98,12 +98,24 @@ export function LotBuilderForm({
   // (app/dashboard/cafe/[lotId]/edit), which must not be able to touch it,
   // per the task's roaster/cafe separation-of-responsibility rule.
   canEditCatalogFlag = true,
+  // CAFE_LOT_EDIT_OWNERSHIP_IMPLEMENTATION.md — café does not own Canonical
+  // Lot identity, origin, or Taste Intent (CAFE_LOT_EDIT_OWNERSHIP_AUDIT.md).
+  // readOnly renders every one of those fields as plain, disabled/view-only
+  // content and drops the <form>/submit entirely, so there is no code path
+  // left that can call onSave — not "disabled but still wired," genuinely
+  // unreachable. Defaults to false: the roaster's own usage of this form
+  // (creation wizard + edit page) is completely unaffected by this prop's
+  // existence.
+  readOnly = false,
 }: {
   roaster: Roaster;
   initialLot?: Lot;
-  onSave: (lot: Lot) => void;
+  // Optional because a readOnly render never calls it — there is no
+  // submit path in that mode for any caller to wire up.
+  onSave?: (lot: Lot) => void;
   onCancel?: () => void;
   canEditCatalogFlag?: boolean;
+  readOnly?: boolean;
 }) {
   const isCreating = !initialLot;
   const [form, setForm] = useState<LotFormState>(() => toFormState(initialLot));
@@ -130,7 +142,7 @@ export function LotBuilderForm({
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!lotId) return;
+    if (readOnly || !lotId) return;
 
     const lot: Lot = {
       id: lotId,
@@ -163,7 +175,7 @@ export function LotBuilderForm({
       inRoasterCatalog: form.inRoasterCatalog,
     };
 
-    onSave(lot);
+    onSave?.(lot);
   }
 
   const showOrigin = !isCreating || step === 0;
@@ -173,6 +185,12 @@ export function LotBuilderForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-10">
+      {readOnly && (
+        <p className="rounded-md border border-ink-200 bg-parchment-200 px-4 py-3 text-xs text-ink-500">
+          Эти данные принадлежат обжарщику — кофейня видит их только для
+          справки и не может их изменить.
+        </p>
+      )}
       {isCreating && (
         <div className="flex items-center gap-2" role="tablist" aria-label="Шаги создания лота">
           {STEPS.map((label, i) => (
@@ -207,7 +225,8 @@ export function LotBuilderForm({
                   onChange={(e) => update('country', e.target.value)}
                   placeholder="Ethiopia"
                   required
-                  className={fieldClasses}
+                  disabled={readOnly}
+                  className={`${fieldClasses} disabled:opacity-60`}
                 />
               </div>
               <div>
@@ -219,7 +238,8 @@ export function LotBuilderForm({
                   value={form.region}
                   onChange={(e) => update('region', e.target.value)}
                   placeholder="Guji"
-                  className={fieldClasses}
+                  disabled={readOnly}
+                  className={`${fieldClasses} disabled:opacity-60`}
                 />
               </div>
             </div>
@@ -233,7 +253,8 @@ export function LotBuilderForm({
                 onChange={(e) => update('farmerName', e.target.value)}
                 placeholder="Kochere Cooperative"
                 required={isCreating}
-                className={fieldClasses}
+                disabled={readOnly}
+                className={`${fieldClasses} disabled:opacity-60`}
               />
             </div>
             <div>
@@ -246,7 +267,8 @@ export function LotBuilderForm({
                 onChange={(e) => update('farmName', e.target.value)}
                 placeholder="Guji Hambela Washing Station"
                 required={isCreating}
-                className={fieldClasses}
+                disabled={readOnly}
+                className={`${fieldClasses} disabled:opacity-60`}
               />
             </div>
             <div>
@@ -258,7 +280,8 @@ export function LotBuilderForm({
                 value={form.altitude}
                 onChange={(e) => update('altitude', e.target.value)}
                 placeholder="1900–2100 м"
-                className={fieldClasses}
+                disabled={readOnly}
+                className={`${fieldClasses} disabled:opacity-60`}
               />
             </div>
           </div>
@@ -279,7 +302,8 @@ export function LotBuilderForm({
                 onChange={(e) => update('name', e.target.value)}
                 placeholder="Ethiopia Guji"
                 required
-                className={fieldClasses}
+                disabled={readOnly}
+                className={`${fieldClasses} disabled:opacity-60`}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -292,7 +316,8 @@ export function LotBuilderForm({
                   value={form.variety}
                   onChange={(e) => update('variety', e.target.value)}
                   placeholder="Heirloom"
-                  className={fieldClasses}
+                  disabled={readOnly}
+                  className={`${fieldClasses} disabled:opacity-60`}
                 />
               </div>
               <div>
@@ -304,7 +329,8 @@ export function LotBuilderForm({
                   value={form.process}
                   onChange={(e) => update('process', e.target.value)}
                   placeholder="Washed"
-                  className={fieldClasses}
+                  disabled={readOnly}
+                  className={`${fieldClasses} disabled:opacity-60`}
                 />
               </div>
             </div>
@@ -317,7 +343,8 @@ export function LotBuilderForm({
                 value={form.cropYear}
                 onChange={(e) => update('cropYear', e.target.value)}
                 placeholder="2025/2026"
-                className={fieldClasses}
+                disabled={readOnly}
+                className={`${fieldClasses} disabled:opacity-60`}
               />
             </div>
             <div>
@@ -329,7 +356,8 @@ export function LotBuilderForm({
                 value={form.descriptors}
                 onChange={(e) => update('descriptors', e.target.value)}
                 placeholder="Peach, Jasmine, Citrus, Honey"
-                className={fieldClasses}
+                disabled={readOnly}
+                className={`${fieldClasses} disabled:opacity-60`}
               />
             </div>
             <div>
@@ -341,10 +369,12 @@ export function LotBuilderForm({
                     <label
                       key={type}
                       className={`flex items-center justify-center text-center rounded-md border
-                                  px-2 py-3 text-xs cursor-pointer transition-colors
+                                  px-2 py-3 text-xs transition-colors
+                                  ${readOnly ? 'cursor-default' : 'cursor-pointer'}
                                   ${checked
                                     ? 'border-gold-400 bg-gold-400/10 text-ink-900 font-medium'
-                                    : 'border-ink-200 bg-parchment-100 text-ink-700'}`}
+                                    : 'border-ink-200 bg-parchment-100 text-ink-700'}
+                                  ${readOnly && !checked ? 'opacity-50' : ''}`}
                     >
                       <input
                         type="radio"
@@ -352,6 +382,7 @@ export function LotBuilderForm({
                         value={type}
                         checked={checked}
                         onChange={() => update('roastType', type)}
+                        disabled={readOnly}
                         className="sr-only"
                       />
                       {ROAST_TYPE_LABELS[type]}
@@ -382,7 +413,8 @@ export function LotBuilderForm({
                 onChange={(e) => update('qGrade', e.target.value)}
                 placeholder="87.0"
                 required
-                className={fieldClasses}
+                disabled={readOnly}
+                className={`${fieldClasses} disabled:opacity-60`}
               />
             </div>
             {lotId && (
@@ -396,10 +428,10 @@ export function LotBuilderForm({
 
           <p className="section-label mt-8 mb-4">Профиль вкуса от обжарщика</p>
           <div className="flex flex-col gap-5">
-            <FlavorSlider label="Кислотность" value={form.acidity} onChange={(v) => update('acidity', v)} />
-            <FlavorSlider label="Сладость" value={form.sweetness} onChange={(v) => update('sweetness', v)} />
-            <FlavorSlider label="Плотность" value={form.body} onChange={(v) => update('body', v)} />
-            <FlavorSlider label="Горечь" value={form.bitterness} onChange={(v) => update('bitterness', v)} />
+            <FlavorSlider label="Кислотность" value={form.acidity} onChange={(v) => update('acidity', v)} disabled={readOnly} />
+            <FlavorSlider label="Сладость" value={form.sweetness} onChange={(v) => update('sweetness', v)} disabled={readOnly} />
+            <FlavorSlider label="Плотность" value={form.body} onChange={(v) => update('body', v)} disabled={readOnly} />
+            <FlavorSlider label="Горечь" value={form.bitterness} onChange={(v) => update('bitterness', v)} disabled={readOnly} />
           </div>
         </div>
       )}
@@ -415,7 +447,8 @@ export function LotBuilderForm({
             value={form.story}
             onChange={(e) => update('story', e.target.value)}
             placeholder="Расскажите о терруаре, фермере и тонкостях обжарки…"
-            className={fieldClasses}
+            disabled={readOnly}
+            className={`${fieldClasses} disabled:opacity-60`}
           />
         </div>
       )}
@@ -437,8 +470,9 @@ export function LotBuilderForm({
               aria-checked={form.inRoasterCatalog}
               aria-label="Доступен для заказа кофейнями"
               onClick={() => update('inRoasterCatalog', !form.inRoasterCatalog)}
+              disabled={readOnly}
               className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full
-                          transition-colors ${form.inRoasterCatalog ? 'bg-ink-900' : 'bg-ink-200'}`}
+                          transition-colors disabled:opacity-50 ${form.inRoasterCatalog ? 'bg-ink-900' : 'bg-ink-200'}`}
             >
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-parchment-100
@@ -484,7 +518,7 @@ export function LotBuilderForm({
           </button>
         )}
 
-        {isCreating && step < STEPS.length - 1 ? (
+        {readOnly ? null : isCreating && step < STEPS.length - 1 ? (
           <button
             type="button"
             onClick={() => setStep((prev) => prev + 1)}
