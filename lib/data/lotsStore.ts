@@ -1,7 +1,7 @@
 'use client';
 
 import type { Lot, Roaster } from '@/lib/types/coffee';
-import type { LotRow, ReferenceTasteProfileRow, RoasterOrgRow } from '@/lib/types/database';
+import type { CoffeeRow, LotRow, ReferenceTasteProfileRow, RoasterOrgRow } from '@/lib/types/database';
 import { getBrowserSupabaseClient } from '@/lib/supabase/browserClient';
 import { LOTS as SEED_LOTS } from './lots';
 
@@ -84,31 +84,57 @@ export function getMergedLotById(id: string): Lot | undefined {
   return read().find((lot) => lot.id === id);
 }
 
+// COFFEE_GREEN_LOT_PROVENANCE_SYNC_IMPLEMENTATION.md — the join that used
+// to be missing here. `lots.green_lot_id` -> `green_lots.id` (many-to-one,
+// so PostgREST returns a single object) -> `green_lots.coffee_id` ->
+// `coffees.id` (same, single object). Nested the same way `roasters(slug)`
+// already is on the query below.
 type LotWithRefs = LotRow & {
   roasters: Pick<RoasterOrgRow, 'slug'> | null;
   reference_taste_profiles: Pick<ReferenceTasteProfileRow, 'status' | 'acidity' | 'sweetness' | 'body' | 'bitterness'>[];
+  green_lots: {
+    coffees: Pick<
+      CoffeeRow,
+      'country' | 'region' | 'farm' | 'producer' | 'variety' | 'altitude' | 'processing' | 'harvest_year'
+    > | null;
+  } | null;
 };
 
-// Maps one canonical `lots` row (joined with its roaster slug and taste
-// profile versions) back onto the existing client-facing Lot shape, so
-// every current consumer of useLots()/getMergedLotById() keeps working
-// unmodified. Fields the canonical schema doesn't carry yet (variety,
-// process, cropYear, producer story, descriptors sub-shape) fall back to
-// whatever a same-public_id seed/localStorage entry already has, since this
-// migration's own scope (Stage 3 §01/§C) never asked those fields to move
-// off Coffee/Green Lot in a way this mapper would need to reconstruct here.
-function rowToLot(row: LotWithRefs, fallback: Lot | undefined): Lot {
+// Maps one canonical `lots` row (joined with its roaster slug, taste
+// profile versions, and — via green_lots — its Coffee's origin/provenance)
+// back onto the existing client-facing Lot shape, so every current
+// consumer of useLots()/getMergedLotById() keeps working unmodified.
+//
+// COFFEE_GREEN_LOT_PROVENANCE_SYNC_IMPLEMENTATION.md — origin fields used
+// to come from `fallback` only (COFFEE_GREEN_LOT_OWNERSHIP_AUDIT.md's
+// Category B finding: any device without a pre-existing local cache entry
+// for a given Lot saw blank country/region/variety/process/cropYear/
+// producer.* for every real, non-seed Lot, since this function never read
+// `coffees`/`green_lots` at all — only app/(site)/passport/[lotId]/page.tsx's
+// own separate withCanonicalCoffeeOverlay() did). Same "canonical wins when
+// present, fall back to the local Lot's value only where Coffee has
+// nothing recorded" convention that overlay already uses correctly,
+// applied here instead so every consumer of useLots() benefits at once,
+// not just the one page that hand-rolled its own fetch. `producer.story`
+// has no Coffee equivalent (the roaster's own narrative text) and is
+// therefore always the local Lot's value, unchanged — same as the
+// Passport's own overlay.
+// Exported for lib/data/lotsStore.test.ts's direct mapping assertions —
+// otherwise module-private, same convention as lib/journey/store.ts's
+// recordToRow.
+export function rowToLot(row: LotWithRefs, fallback: Lot | undefined): Lot {
   const activeTaste = row.reference_taste_profiles.find((p) => p.status === 'active') ?? null;
+  const coffee = row.green_lots?.coffees ?? null;
 
   return {
     id: row.public_id,
     roasterId: row.roasters?.slug ?? fallback?.roasterId ?? '',
     name: row.name,
-    country: fallback?.country ?? '',
-    region: fallback?.region ?? '',
-    variety: fallback?.variety ?? '',
-    process: fallback?.process ?? '',
-    cropYear: fallback?.cropYear ?? '',
+    country: coffee?.country || fallback?.country || '',
+    region: coffee?.region || fallback?.region || '',
+    variety: coffee?.variety || fallback?.variety || '',
+    process: coffee?.processing || fallback?.process || '',
+    cropYear: coffee?.harvest_year || fallback?.cropYear || '',
     qGrade: row.q_grade ?? fallback?.qGrade ?? 0,
     roastProfile: row.roast_profile_label || fallback?.roastProfile || '',
     roastType: (row.roast_type || fallback?.roastType || 'filter') as Lot['roastType'],
@@ -122,7 +148,12 @@ function rowToLot(row: LotWithRefs, fallback: Lot | undefined): Lot {
         }
       : fallback?.roasterFlavorProfile ?? { acidity: 0, sweetness: 0, body: 0, bitterness: 0 },
     inRoasterCatalog: row.in_roaster_catalog,
-    producer: fallback?.producer ?? { farmerName: '', farmName: '', altitude: '', story: '' },
+    producer: {
+      farmerName: coffee?.producer || fallback?.producer?.farmerName || '',
+      farmName: coffee?.farm || fallback?.producer?.farmName || '',
+      altitude: coffee?.altitude || fallback?.producer?.altitude || '',
+      story: fallback?.producer?.story ?? '',
+    },
   };
 }
 
@@ -140,7 +171,10 @@ export async function syncLotsFromSupabase(): Promise<void> {
     const supabase = getBrowserSupabaseClient();
     const { data, error } = await supabase
       .from('lots')
-      .select('*, roasters(slug), reference_taste_profiles(status, acidity, sweetness, body, bitterness)');
+      .select(
+        '*, roasters(slug), reference_taste_profiles(status, acidity, sweetness, body, bitterness), ' +
+          'green_lots(coffees(country, region, farm, producer, variety, altitude, processing, harvest_year))'
+      );
     if (error || !data) return;
 
     const current = computeAll();
