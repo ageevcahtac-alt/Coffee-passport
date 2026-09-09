@@ -213,5 +213,26 @@ describe('lib/data/lotsStore — Coffee/Green Lot provenance sync', () => {
       expect(lot?.name).toBe('Legacy Lot');
       expect(lot?.country).toBe('');
     });
+
+    it('COFFEE_GREEN_LOT_EDIT_PATHS_IMPLEMENTATION.md: a Coffee edit is reflected on the very next sync for a device with no override', async () => {
+      const { syncLotsFromSupabase, getMergedLotById } = await import('./lotsStore');
+
+      nextSelectResult = {
+        data: [baseRow({ public_id: 'LOT-XO-EDITED-001', green_lots: { coffees: fullCoffee } })],
+        error: null,
+      };
+      await syncLotsFromSupabase();
+      expect(getMergedLotById('LOT-XO-EDITED-001')?.region).toBe('Guji');
+
+      // Simulates a roaster correcting the Coffee row via updateCoffee() —
+      // this store never calls that function directly, only re-syncing
+      // afterward, exactly as the real app does after a successful edit.
+      nextSelectResult = {
+        data: [baseRow({ public_id: 'LOT-XO-EDITED-001', green_lots: { coffees: { ...fullCoffee, region: 'Hambela' } } })],
+        error: null,
+      };
+      await syncLotsFromSupabase();
+      expect(getMergedLotById('LOT-XO-EDITED-001')?.region).toBe('Hambela');
+    });
   });
 });

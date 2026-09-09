@@ -162,6 +162,40 @@ export async function createCoffee(input: CreateCoffeeInput): Promise<CanonicalC
   return rowToCoffee(data as CoffeeRow);
 }
 
+// COFFEE_GREEN_LOT_EDIT_PATHS_IMPLEMENTATION.md — closes the "no edit path
+// exists for Coffee, for anyone" gap (NEXT_ARCHITECTURE_AUDIT.md §3.1,
+// COFFEE_GREEN_LOT_OWNERSHIP_AUDIT.md, COFFEE_PASSPORT_END_TO_END_ARCHITECTURE_AUDIT.md
+// finding #2). Mirrors updateCanonicalLotFields's own shape exactly: a
+// partial patch, RLS-gated by the same "roaster staff manage own coffees"
+// policy createCoffee already runs under (`is_roaster_staff_for(roaster_id)`)
+// — no RLS change was needed or made. Never touches `id`/`roaster_id`
+// (Coffee's own identity/ownership), and has no parameter that could touch
+// `green_lots`/`lots` — editing a Coffee can only ever change Coffee's own
+// row, never cascade into any Green Lot or Canonical Lot built on it.
+export type MutableCoffeeFields = Partial<
+  Pick<CanonicalCoffee, 'country' | 'region' | 'farm' | 'producer' | 'variety' | 'altitude' | 'processing' | 'harvestYear'>
+>;
+
+export async function updateCoffee(coffeeId: string, fields: MutableCoffeeFields): Promise<void> {
+  const patch: Partial<
+    Pick<CoffeeRow, 'country' | 'region' | 'farm' | 'producer' | 'variety' | 'altitude' | 'processing' | 'harvest_year'>
+  > = {
+    ...(fields.country !== undefined ? { country: fields.country } : {}),
+    ...(fields.region !== undefined ? { region: fields.region } : {}),
+    ...(fields.farm !== undefined ? { farm: fields.farm } : {}),
+    ...(fields.producer !== undefined ? { producer: fields.producer } : {}),
+    ...(fields.variety !== undefined ? { variety: fields.variety } : {}),
+    ...(fields.altitude !== undefined ? { altitude: fields.altitude } : {}),
+    ...(fields.processing !== undefined ? { processing: fields.processing } : {}),
+    ...(fields.harvestYear !== undefined ? { harvest_year: fields.harvestYear } : {}),
+  };
+  if (Object.keys(patch).length === 0) return;
+
+  const supabase = getBrowserSupabaseClient();
+  const { error } = await supabase.from('coffees').update(patch).eq('id', coffeeId);
+  if (error) throw new Error(`Failed to update coffee: ${error.message}`);
+}
+
 // For the "use existing Green Lot" step (Scenario B — one physical batch
 // producing several commercial Lots). Every Green Lot under this Coffee,
 // newest first; the roaster picks one, or Phase 4.5.2 offers "new Green
@@ -205,6 +239,33 @@ export async function createGreenLot(input: CreateGreenLotInput): Promise<Canoni
     .single();
   if (error || !data) throw new Error(`Failed to create green lot: ${error?.message ?? 'unknown error'}`);
   return rowToGreenLot(data as GreenLotRow);
+}
+
+// COFFEE_GREEN_LOT_EDIT_PATHS_IMPLEMENTATION.md — closes the "no edit path
+// exists for Green Lot, for anyone" gap (same citations as updateCoffee
+// above). Same shape, same RLS policy already in force
+// ("roaster staff manage own green lots", is_roaster_staff_for(roaster_id)).
+// Deliberately excludes `coffee_id`/`roaster_id` — a Green Lot's parent
+// Coffee is immutable by construction, exactly like a Canonical Lot's
+// parent Green Lot (MutableCanonicalLotFields's own comment) — editing a
+// Green Lot's own purchase/notes fields can never re-parent it to a
+// different Coffee, and never touches `lots` at all.
+export type MutableGreenLotFields = Partial<
+  Pick<CanonicalGreenLot, 'purchasedKg' | 'purchaseDate' | 'contractReference' | 'notes'>
+>;
+
+export async function updateGreenLot(greenLotId: string, fields: MutableGreenLotFields): Promise<void> {
+  const patch: Partial<Pick<GreenLotRow, 'purchased_kg' | 'purchase_date' | 'contract_reference' | 'notes'>> = {
+    ...(fields.purchasedKg !== undefined ? { purchased_kg: fields.purchasedKg } : {}),
+    ...(fields.purchaseDate !== undefined ? { purchase_date: fields.purchaseDate } : {}),
+    ...(fields.contractReference !== undefined ? { contract_reference: fields.contractReference } : {}),
+    ...(fields.notes !== undefined ? { notes: fields.notes } : {}),
+  };
+  if (Object.keys(patch).length === 0) return;
+
+  const supabase = getBrowserSupabaseClient();
+  const { error } = await supabase.from('green_lots').update(patch).eq('id', greenLotId);
+  if (error) throw new Error(`Failed to update green lot: ${error.message}`);
 }
 
 export interface CreateCanonicalLotInput {
