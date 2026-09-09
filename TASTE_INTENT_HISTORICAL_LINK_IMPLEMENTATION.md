@@ -202,4 +202,8 @@ other part of the Canonical Lot Architecture.
 ---
 
 **STATUS: PASS**
-**GIT: COMMITTED AND PUSHED** — see commit hash and push confirmation below (added after the commit/push actually completed).
+**GIT: COMMITTED AND PUSHED**
+- Branch: `main`
+- Commit: `99e2e307a692a964e78fd1dcbacb206487d82639` — "feat: preserve taste intent history for tastings"
+- Push verified independently: `git fetch origin main` then `git rev-parse HEAD` / `git rev-parse origin/main` both resolve to `99e2e307a692a964e78fd1dcbacb206487d82639`.
+- Only this block's 9 files were committed (surgically staged out of several other files this repo already had unrelated uncommitted changes in, from earlier session blocks the user never asked to commit) — confirmed via `git show --stat` on the commit and a post-commit `git status` showing every other pre-existing modified/untracked file untouched.
