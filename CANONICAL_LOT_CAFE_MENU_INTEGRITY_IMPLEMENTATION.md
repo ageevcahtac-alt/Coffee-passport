@@ -223,11 +223,9 @@ remains in the working tree, untouched, for its own separate commit(s).
 Commit created on branch `main`, containing only the files listed in §6.
 
 - **Commit message**: `feat: link cafe menu entries to canonical lot lifecycle`
-- **Commit hash**: see below (filled in after the commit command ran)
-- **Push**: `origin/main`, verified via `git status`/`git log` after pushing
-
-(Exact hash and push confirmation recorded at the end of this document,
-after the commands were run — see the final status block.)
+- **Commit hash**: `a4fe0e36c82dd881a2c022674319768445637e20` (`a4fe0e3`)
+- **Branch**: `main`
+- **Push**: `git push origin main` → `ed6327e..a4fe0e3  main -> main`. Verified independently afterward via `git fetch origin main` + `git rev-parse HEAD` / `git rev-parse origin/main` — both resolved to the identical hash above, confirming the push landed on the remote, not just that the push command exited without error.
 
 ---
 
