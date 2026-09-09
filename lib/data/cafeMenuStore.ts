@@ -1,8 +1,9 @@
 'use client';
 
-import type { LotMenuStatus } from '@/lib/types/coffee';
-import type { CafeMenuEntryRow } from '@/lib/types/database';
+import type { Lot, LotMenuStatus } from '@/lib/types/coffee';
+import type { CafeMenuEntryRoasterStatusViewRow, CafeMenuEntryRow, LotStatus } from '@/lib/types/database';
 import { getBrowserSupabaseClient } from '@/lib/supabase/browserClient';
+import { findCanonicalLotByPublicId } from '@/lib/data/canonicalLotStore';
 import { generateId } from '@/lib/utils/id';
 
 // Which lots a coffee shop is currently serving, kept separate from the lot
@@ -38,6 +39,17 @@ export interface CafeMenuEntry {
   // this back to null for every other status, so callers never need to
   // remember to clear it themselves.
   scheduledRemovalAt: string | null;
+  // Read-only signal derived from the Canonical Lot's own live status —
+  // see cafe_menu_entries_roaster_status_view and
+  // CANONICAL_LOT_CAFE_MENU_INTEGRITY_DESIGN.md. Never set by
+  // addLotToMenu/setMenuLotActive/setMenuLotStatus below — only ever
+  // populated by syncCafeMenuFromSupabase reading the view. Undefined
+  // until that sync has run at least once for this shop; treat
+  // "undefined/unknown" the same as "no warning", never the same as
+  // "archived" — only an explicit 'archived' value means the roaster
+  // actually archived it.
+  roasterLotStatus?: LotStatus | null;
+  roasterInCatalog?: boolean | null;
 }
 
 type ShopMenuEntries = Record<string, CafeMenuEntry>; // lotId -> entry
@@ -152,41 +164,77 @@ export function getServerMenuLotIds(shopId: string): string[] {
   return DEFAULT_MENU[shopId] ?? EMPTY_IDS;
 }
 
-function rowToEntry(row: CafeMenuEntryRow): CafeMenuEntry {
+function rowToEntry(row: CafeMenuEntryRow, roasterStatus?: { status: LotStatus | null; inCatalog: boolean | null }): CafeMenuEntry {
   return {
     isActive: row.is_active,
     status: row.status,
     statusChangedAt: row.status_changed_at,
     scheduledRemovalAt: row.scheduled_removal_at,
+    roasterLotStatus: roasterStatus?.status,
+    roasterInCatalog: roasterStatus?.inCatalog,
   };
 }
 
-// Pulls every entry for this shop from Supabase (public read, no auth
-// needed — see the migration) and overlays it onto the local cache. Safe
+// Pulls every entry for this shop from Supabase, preferring the read-only
+// view that additionally joins in the Canonical Lot's own live status
+// (see supabase/migrations/0027_cafe_menu_entries_roaster_status_view.sql)
+// — public read, no auth needed, same as the base table before it. Safe
 // to call from any surface that reads this shop's menu: the cafe's own
 // dashboard, the guest-facing catalog, the map panel, the supply widget.
+// This only ever reads; it never writes cafe_menu_entries.is_active/
+// status/scheduled_removal_at based on what it finds.
+//
+// Falls back to the plain base table if the view isn't live yet on this
+// Supabase project (migration 0027 not applied there yet) — deliberately
+// so the café's own already-working lifecycle sync (is_active/status/
+// scheduled_removal_at) can never regress just because the new derived
+// signal isn't available yet; roasterLotStatus/roasterInCatalog simply
+// stay undefined in that case, which CafeMenuEntry's own contract already
+// treats as "no warning", never "archived".
 export async function syncCafeMenuFromSupabase(shopId: string): Promise<void> {
   if (!shopId) return;
   try {
     const supabase = getBrowserSupabaseClient();
-    const { data, error } = await supabase.from('cafe_menu_entries').select('*').eq('coffee_shop_id', shopId);
-    if (error || !data) return;
     const overrides = readOverrides();
     const shopEntries = { ...(overrides[shopId] ?? defaultEntries(shopId)) };
+
+    const viewResult = await supabase
+      .from('cafe_menu_entries_roaster_status_view')
+      .select('*')
+      .eq('coffee_shop_id', shopId);
+
+    if (!viewResult.error && viewResult.data) {
+      for (const row of viewResult.data as CafeMenuEntryRoasterStatusViewRow[]) {
+        shopEntries[row.lot_id] = rowToEntry(row, { status: row.roaster_lot_status, inCatalog: row.roaster_in_catalog });
+      }
+      write({ ...overrides, [shopId]: shopEntries });
+      return;
+    }
+
+    const { data, error } = await supabase.from('cafe_menu_entries').select('*').eq('coffee_shop_id', shopId);
+    if (error || !data) return;
     for (const row of data as CafeMenuEntryRow[]) {
       shopEntries[row.lot_id] = rowToEntry(row);
     }
     write({ ...overrides, [shopId]: shopEntries });
   } catch {
-    // Offline / table not migrated yet — local cache stands.
+    // Offline / neither table nor view reachable — local cache stands.
   }
 }
 
-function writeThroughEntry(shopId: string, lotId: string, entry: CafeMenuEntry): void {
+// `lotRef` is deliberately optional and, when omitted, left OUT of the
+// row object entirely (not set to `null`) — see the call sites below.
+// Supabase's upsert only touches columns present in the payload, so
+// omitting the key means an update-only call (setMenuLotActive/
+// setMenuLotStatus, neither of which ever knows the Canonical Lot's uuid)
+// can never clobber a lot_ref a prior addLotToMenu call already resolved
+// and wrote for this same entry.
+function writeThroughEntry(shopId: string, lotId: string, entry: CafeMenuEntry, lotRef?: string | null): void {
   const row: CafeMenuEntryRow = {
     id: `menu-${generateId()}`,
     coffee_shop_id: shopId,
     lot_id: lotId,
+    ...(lotRef !== undefined ? { lot_ref: lotRef } : {}),
     is_active: entry.isActive,
     status: entry.status,
     status_changed_at: entry.statusChangedAt,
@@ -215,7 +263,16 @@ export function addLotToMenu(shopId: string, lotId: string): void {
     scheduledRemovalAt: null,
   };
   write({ ...readOverrides(), [shopId]: { ...current, [lotId]: entry } });
-  writeThroughEntry(shopId, lotId, entry);
+  // Resolves the Canonical Lot's real uuid so this brand-new entry can
+  // carry a real lot_ref from creation on — see
+  // CANONICAL_LOT_CAFE_MENU_INTEGRITY_DESIGN.md §3. Best-effort and
+  // non-blocking: the local entry (and the base write-through below) are
+  // already committed regardless of whether this resolves; a Lot with no
+  // canonical row yet (or an offline lookup) just leaves lot_ref null,
+  // identical to every entry created before this existed.
+  void findCanonicalLotByPublicId(lotId)
+    .then((canonicalLot) => writeThroughEntry(shopId, lotId, entry, canonicalLot?.id ?? null))
+    .catch(() => writeThroughEntry(shopId, lotId, entry, null));
 }
 
 // The coffee shop's own "В меню кофейни" toggle — independent of whatever
@@ -254,4 +311,18 @@ export function setMenuLotStatus(
   };
   write({ ...readOverrides(), [shopId]: { ...current, [lotId]: entry } });
   writeThroughEntry(shopId, lotId, entry);
+}
+
+// Shared "is this menu entry's underlying Lot no longer offered by the
+// roaster" signal — CANONICAL_LOT_CAFE_MENU_INTEGRITY_DESIGN.md. Used by
+// both the café's own dashboard (the existing "Снято с производства
+// обжарщиком" badge, previously blind to an outright archived Lot) and
+// the café's public guest-facing menu. Purely a read-only label: it never
+// changes `entry.isActive`/`entry.status`/`entry.scheduledRemovalAt`, and
+// callers must never do so either just because this returns true — the
+// café's own menu-entry lifecycle stays entirely under its own control.
+// `entry` being undefined/not-yet-synced is deliberately treated the same
+// as "no warning", never as "archived".
+export function isDiscontinuedByRoaster(lot: Lot, entry: CafeMenuEntry | undefined): boolean {
+  return !lot.inRoasterCatalog || entry?.roasterLotStatus === 'archived';
 }

@@ -383,6 +383,19 @@ export type CafeMenuEntryRow = {
 };
 export type CafeMenuEntryInsert = CafeMenuEntryRow;
 
+// public.cafe_menu_entries_roaster_status_view — see
+// supabase/migrations/0027_cafe_menu_entries_roaster_status_view.sql and
+// CANONICAL_LOT_CAFE_MENU_INTEGRITY_DESIGN.md. Every CafeMenuEntryRow
+// column, plus two read-only fields derived from the joined Canonical Lot
+// (null if the Lot can't be resolved at all — never happens in practice,
+// since Lots are never deleted, but the join is a LEFT JOIN so it's
+// possible in principle). Never written to; not a Row/Insert/Update
+// table entry, a Views entry only.
+export type CafeMenuEntryRoasterStatusViewRow = CafeMenuEntryRow & {
+  roaster_lot_status: LotStatus | null;
+  roaster_in_catalog: boolean | null;
+};
+
 // =========================================================
 // Shop mute preferences — see supabase/migrations/0019_shop_mute_preferences.sql.
 // =========================================================
@@ -611,6 +624,7 @@ export type Database = {
     Views: {
       checkins_roaster_view: { Row: CheckinRoasterViewRow } & NoRelationships;
       checkins_cafe_benchmark_view: { Row: CheckinsCafeBenchmarkRow } & NoRelationships;
+      cafe_menu_entries_roaster_status_view: { Row: CafeMenuEntryRoasterStatusViewRow } & NoRelationships;
     };
     Functions: {
       // See supabase/migrations/0008_dev_seed_staff_profile.sql — dev-only,

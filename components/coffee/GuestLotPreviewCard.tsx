@@ -11,7 +11,24 @@ const STATUS_ACCENT_CLASSES: Record<LotMenuStatus, string> = {
 // (components/coffee/CatalogHierarchy.tsx) — the one card in this feature
 // that follows the literal title standard from the product spec:
 // "[Страна] [Регион / Ферма / Название]".
-export function GuestLotPreviewCard({ lot, status }: { lot: Lot; status: LotMenuStatus }) {
+//
+// `roasterDiscontinued` (CANONICAL_LOT_CAFE_MENU_INTEGRITY_DESIGN.md) is a
+// separate, read-only signal from `status`: `status` is the café's own
+// menu-lifecycle label (new/active/discontinuing); `roasterDiscontinued`
+// reflects the Canonical Lot's own live status/catalog flag at the
+// roaster. Both can be true independently (a café may not have gotten
+// around to discontinuing its own listing yet even though the roaster
+// already archived the Lot) — shown as two separate badges, never merged
+// into one, and never a reason to change `status`/`is_active` here.
+export function GuestLotPreviewCard({
+  lot,
+  status,
+  roasterDiscontinued = false,
+}: {
+  lot: Lot;
+  status: LotMenuStatus;
+  roasterDiscontinued?: boolean;
+}) {
   const title = [lot.country, lot.region || lot.name].filter(Boolean).join(' ');
 
   return (
@@ -36,6 +53,14 @@ export function GuestLotPreviewCard({ lot, status }: { lot: Lot; status: LotMenu
             className={`rounded-full border text-[11px] uppercase tracking-widest2 px-2.5 py-1 ${STATUS_ACCENT_CLASSES[status]}`}
           >
             {LOT_MENU_STATUS_LABELS[status]}
+          </span>
+        )}
+        {roasterDiscontinued && (
+          <span
+            className="rounded-full border border-dashed border-ink-300 bg-parchment-200
+                       text-ink-500 text-[11px] px-2.5 py-1"
+          >
+            Снято с производства обжарщиком
           </span>
         )}
       </div>

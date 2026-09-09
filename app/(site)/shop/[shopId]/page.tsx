@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { useLots } from '@/lib/data/useLots';
 import { useCafeMenuLotIds, useCafeMenuEntries } from '@/lib/data/useCafeMenu';
-import { syncCafeMenuFromSupabase } from '@/lib/data/cafeMenuStore';
+import { isDiscontinuedByRoaster, syncCafeMenuFromSupabase } from '@/lib/data/cafeMenuStore';
 import { CatalogHierarchy } from '@/components/coffee/CatalogHierarchy';
 import { GuestLotPreviewCard } from '@/components/coffee/GuestLotPreviewCard';
 import { ShopMuteToggle } from '@/components/coffee/ShopMuteToggle';
@@ -68,7 +68,11 @@ export default function ShopMenuPage({ params }: { params: { shopId: string } })
             initialCountry={initialCountry}
             initialRoastType={initialRoastType}
             renderLot={(lot) => (
-              <GuestLotPreviewCard lot={lot} status={entries[lot.id]?.status ?? 'active'} />
+              <GuestLotPreviewCard
+                lot={lot}
+                status={entries[lot.id]?.status ?? 'active'}
+                roasterDiscontinued={isDiscontinuedByRoaster(lot, entries[lot.id])}
+              />
             )}
           />
         )}

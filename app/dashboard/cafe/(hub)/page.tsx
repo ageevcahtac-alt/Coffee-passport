@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useLots } from '@/lib/data/useLots';
 import { useCafeMenuEntries } from '@/lib/data/useCafeMenu';
-import { setMenuLotActive, setMenuLotStatus, syncCafeMenuFromSupabase } from '@/lib/data/cafeMenuStore';
+import { isDiscontinuedByRoaster, setMenuLotActive, setMenuLotStatus, syncCafeMenuFromSupabase } from '@/lib/data/cafeMenuStore';
 import { useCafeLotBenchmarks } from '@/lib/data/useCafeLotBenchmarks';
 import { useShopCheckins } from '@/lib/data/useShopCheckins';
 import { LotMenuCard } from '@/components/cafe/LotMenuCard';
@@ -58,7 +58,7 @@ export default function CafeMenuPage() {
               scheduledRemovalAt={menuEntries[lot.id]?.scheduledRemovalAt ?? null}
               onToggleActive={(next) => setMenuLotActive(activeShopId, lot.id, next)}
               onChangeStatus={(status, scheduledRemovalAt) => setMenuLotStatus(activeShopId, lot.id, status, scheduledRemovalAt)}
-              discontinuedByRoaster={!lot.inRoasterCatalog}
+              discontinuedByRoaster={isDiscontinuedByRoaster(lot, menuEntries[lot.id])}
               onOpenDetail={() => setOpenLotId(lot.id)}
             />
           )}
@@ -78,7 +78,7 @@ export default function CafeMenuPage() {
           scheduledRemovalAt={menuEntries[openLot.id]?.scheduledRemovalAt ?? null}
           onToggleActive={(next) => setMenuLotActive(activeShopId, openLot.id, next)}
           onChangeStatus={(status, scheduledRemovalAt) => setMenuLotStatus(activeShopId, openLot.id, status, scheduledRemovalAt)}
-          discontinuedByRoaster={!openLot.inRoasterCatalog}
+          discontinuedByRoaster={isDiscontinuedByRoaster(openLot, menuEntries[openLot.id])}
           onClose={() => setOpenLotId(null)}
         />
       )}
