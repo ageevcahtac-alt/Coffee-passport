@@ -4,6 +4,7 @@ import type { TastingRecord } from '@/lib/types/coffee';
 import type { CheckinRow } from '@/lib/types/database';
 import { getBrowserSupabaseClient } from '@/lib/supabase/browserClient';
 import { generateId } from '@/lib/utils/id';
+import { findCanonicalLotByPublicId, getActiveReferenceTasteProfile } from '@/lib/data/canonicalLotStore';
 
 // localStorage is now a read cache, not the source of truth: syncCheckins-
 // ForUser() below pulls the signed-in user's own rows from Supabase's
@@ -50,6 +51,7 @@ function normalizeRecord(record: TastingRecord): TastingRecord {
     coffeeReadability: record.coffeeReadability ?? null,
     creaminess: record.creaminess ?? null,
     aftertaste: record.aftertaste ?? null,
+    referenceTasteProfileId: record.referenceTasteProfileId ?? null,
   };
 }
 
@@ -131,10 +133,13 @@ export function rowToRecord(row: CheckinRow): TastingRecord {
     creaminess: row.creaminess ?? null,
     aftertaste: row.aftertaste ?? null,
     createdAt: row.created_at,
+    referenceTasteProfileId: row.reference_taste_profile_ref ?? null,
   };
 }
 
-function recordToRow(record: TastingRecord): CheckinRow {
+// Exported for lib/journey/store.test.ts's direct mapping assertions —
+// otherwise module-private, same convention as rowToRecord above.
+export function recordToRow(record: TastingRecord): CheckinRow {
   return {
     id: record.id,
     owner_user_id: record.userId,
@@ -170,6 +175,7 @@ function recordToRow(record: TastingRecord): CheckinRow {
     creaminess: record.creaminess,
     aftertaste: record.aftertaste,
     created_at: record.createdAt,
+    reference_taste_profile_ref: record.referenceTasteProfileId ?? null,
   };
 }
 
@@ -206,6 +212,28 @@ export async function syncCheckinsForUser(userId: string, isAuthenticated: boole
   }
 }
 
+// TASTE_INTENT_HISTORICAL_LINK_IMPLEMENTATION.md — resolves whichever
+// reference_taste_profiles row is `active` for this lot AT THIS EXACT
+// MOMENT, so it can be captured once on the tasting and never
+// recomputed later. `record.lotId` is the same public_id every other
+// canonical lookup on a local Lot uses (see findCanonicalLotByPublicId's
+// other call sites) — not the canonical lots.id uuid — so resolving the
+// canonical row is the required first step, exactly as
+// lib/data/cafeMenuStore.ts's addLotToMenu already does for lot_ref.
+// Best-effort and non-blocking by design: a Lot with no canonical row yet,
+// no active taste profile yet, or an offline lookup, simply leaves the
+// reference null — identical to every tasting recorded before this existed.
+async function resolveActiveTasteProfileId(lotId: string): Promise<string | null> {
+  try {
+    const canonicalLot = await findCanonicalLotByPublicId(lotId);
+    if (!canonicalLot) return null;
+    const profile = await getActiveReferenceTasteProfile(canonicalLot.id);
+    return profile?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export function addTastingRecord(
   input: Omit<TastingRecord, 'id' | 'userId' | 'createdAt'>,
   userId: string
@@ -218,12 +246,31 @@ export function addTastingRecord(
   };
   write([record, ...read()]);
 
-  void getBrowserSupabaseClient()
-    .from('checkins')
-    .insert(recordToRow(record))
-    .then(({ error }) => {
-      if (error) {
-        console.warn('[checkins] Supabase write failed, kept local-only:', error.message);
+  // The reference lookup runs before the Supabase insert (not after, and
+  // not as a separate update) so the checkin never exists server-side even
+  // momentarily without its historical link — see Step 1 of
+  // TASTE_INTENT_HISTORICAL_LINK_IMPLEMENTATION.md. This only delays the
+  // best-effort remote write by one extra round trip; the local save above
+  // already completed synchronously and is what the UI actually waits on.
+  void resolveActiveTasteProfileId(record.lotId)
+    .then((referenceTasteProfileId) => {
+      // Merge into whatever the CURRENT local record looks like (not the
+      // `record` snapshot closed over above) — a fast anonymous-to-signup
+      // claim can re-tag this same id's userId before this lookup resolves,
+      // and reference lookup must never clobber that re-tagging.
+      let withReference: TastingRecord = { ...record, referenceTasteProfileId };
+      write(
+        read().map((r) => {
+          if (r.id !== record.id) return r;
+          withReference = { ...r, referenceTasteProfileId };
+          return withReference;
+        })
+      );
+      return getBrowserSupabaseClient().from('checkins').insert(recordToRow(withReference));
+    })
+    .then((result) => {
+      if (result?.error) {
+        console.warn('[checkins] Supabase write failed, kept local-only:', result.error.message);
       }
     });
 

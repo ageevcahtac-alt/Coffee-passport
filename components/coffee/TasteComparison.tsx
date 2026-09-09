@@ -1,6 +1,31 @@
-import { FLAVOR_AXES, type Lot, type TastingRecord } from '@/lib/types/coffee';
+'use client';
+
+import { useEffect, useState } from 'react';
+import { FLAVOR_AXES, type Lot, type RoasterFlavorProfile, type TastingRecord } from '@/lib/types/coffee';
+import { getReferenceTasteProfileById } from '@/lib/data/canonicalLotStore';
 import { StarRating } from './StarRating';
 import { FlavorRadar } from './FlavorRadar';
+
+// TASTE_INTENT_HISTORICAL_LINK_IMPLEMENTATION.md — mirrors the Public
+// Passport's own roast-intent pattern (app/(site)/passport/[lotId]/page.tsx):
+// prefer the EXACT version this tasting was recorded against, over
+// "whatever is active now." Pulled out as its own function (rather than
+// inlined in the effect below) so the version-selection rule itself — not
+// React's effect plumbing — is what gets unit tested. A tasting with no
+// linked reference yet (recorded before this shipped, or claimed before its
+// own async lookup resolved), or whose linked version fails to resolve,
+// falls through to `fallback` (the lot's current active profile) exactly as
+// every tasting behaved before this existed.
+export async function resolveComparisonRoasterProfile(
+  tasting: Pick<TastingRecord, 'referenceTasteProfileId'>,
+  fallback: RoasterFlavorProfile,
+  fetchById: (id: string) => Promise<RoasterFlavorProfile | null> = getReferenceTasteProfileById
+): Promise<RoasterFlavorProfile> {
+  const linkedId = tasting.referenceTasteProfileId ?? null;
+  if (!linkedId) return fallback;
+  const profile = await fetchById(linkedId);
+  return profile ?? fallback;
+}
 
 export function TasteComparison({
   lot,
@@ -11,8 +36,20 @@ export function TasteComparison({
   tasting: TastingRecord;
   animate?: boolean;
 }) {
+  const [roasterProfile, setRoasterProfile] = useState<RoasterFlavorProfile>(lot.roasterFlavorProfile);
+
+  useEffect(() => {
+    let cancelled = false;
+    resolveComparisonRoasterProfile(tasting, lot.roasterFlavorProfile).then((profile) => {
+      if (!cancelled) setRoasterProfile(profile);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tasting.referenceTasteProfileId, lot.roasterFlavorProfile]);
+
   const guestValues = FLAVOR_AXES.map(({ key }) => tasting.guestFlavorProfile[key]);
-  const roasterValues = FLAVOR_AXES.map(({ key }) => lot.roasterFlavorProfile[key]);
+  const roasterValues = FLAVOR_AXES.map(({ key }) => roasterProfile[key]);
 
   return (
     <div

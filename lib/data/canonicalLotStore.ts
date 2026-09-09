@@ -290,3 +290,62 @@ export async function findCanonicalLotByPublicId(publicId: string): Promise<Cano
   if (error || !data) return null;
   return rowToCanonicalLot(data as LotRow);
 }
+
+// TASTE_INTENT_HISTORICAL_LINK_IMPLEMENTATION.md — the write path that needs
+// "whatever reference_taste_profiles row is active for this lot right now"
+// (checkins.reference_taste_profile_ref, stamped at tasting creation time in
+// lib/journey/store.ts) runs on a totally different timeline than the
+// roaster's own taste-profile activation flow — a guest's tasting is never
+// preceded by the roaster activating a profile in the same flow — so there
+// is no id to thread through a reordered pair of writes here. The active
+// version simply has to be looked up independently, by lot, at the moment
+// a tasting is recorded.
+export interface ActiveReferenceTasteProfile {
+  id: string;
+  acidity: number;
+  sweetness: number;
+  body: number;
+  bitterness: number;
+}
+
+export async function getActiveReferenceTasteProfile(lotUuid: string): Promise<ActiveReferenceTasteProfile | null> {
+  const supabase = getBrowserSupabaseClient();
+  const { data, error } = await supabase
+    .from('reference_taste_profiles')
+    .select('id, acidity, sweetness, body, bitterness')
+    .eq('lot_id', lotUuid)
+    .eq('status', 'active')
+    .maybeSingle();
+  if (error || !data) return null;
+  return {
+    id: data.id,
+    acidity: data.acidity,
+    sweetness: data.sweetness,
+    body: data.body,
+    bitterness: data.bitterness,
+  };
+}
+
+// For TasteComparison's historically-exact pairing: the specific
+// reference_taste_profiles version a given checkin's reference_taste_profile_ref
+// points to — which may be `superseded` by the time it's read, unlike
+// getActiveReferenceTasteProfile above, which only ever finds the current
+// one. Same not-found-returns-null contract, same fields, by id instead of
+// by (lot_id, status = 'active').
+export async function getReferenceTasteProfileById(
+  id: string
+): Promise<Omit<ActiveReferenceTasteProfile, 'id'> | null> {
+  const supabase = getBrowserSupabaseClient();
+  const { data, error } = await supabase
+    .from('reference_taste_profiles')
+    .select('acidity, sweetness, body, bitterness')
+    .eq('id', id)
+    .maybeSingle();
+  if (error || !data) return null;
+  return {
+    acidity: data.acidity,
+    sweetness: data.sweetness,
+    body: data.body,
+    bitterness: data.bitterness,
+  };
+}

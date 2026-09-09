@@ -474,6 +474,15 @@ export interface TastingRecord {
   creaminess: number | null;
   aftertaste: number | null;
   createdAt: string; // ISO timestamp
+  // The exact reference_taste_profiles version active for this lot at the
+  // moment this tasting was recorded, once known — see
+  // TASTE_INTENT_HISTORICAL_LINK_IMPLEMENTATION.md. Optional: resolved
+  // asynchronously right after the tasting is created (never blocks the
+  // local save), so it's briefly absent on a record that was just created
+  // in this same tick, and permanently absent on every tasting recorded
+  // before this field existed — both cases fall back to the lot's current
+  // active profile, identical to today's behavior.
+  referenceTasteProfileId?: string | null;
 }
 
 // =========================================================
