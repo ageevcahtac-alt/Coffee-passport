@@ -69,3 +69,17 @@ export function addCuppingRecord(
 export function deleteCuppingRecord(id: string): void {
   write(read().filter((record) => record.id !== id));
 }
+
+// Final release audit (COFFEE_PASSPORT_FINAL_RELEASE_AUDIT.md) — this store
+// shares one localStorage key across every user on the browser (see the
+// header comment above) but was missing from lib/journey/userScope.ts's
+// reconcileUserScope purge list, unlike every sibling personal store
+// (journey, recipes, equipment, votes, kitchen recipes, custom coffee,
+// custom coffee cuppings, muted shops). Not exploitable today — the one
+// current reader (app/(site)/journey/cuppings/page.tsx) already filters by
+// userId — but it's inconsistent with the pattern and would silently leak
+// the moment a future unfiltered consumer is added. Same shape as
+// purgeCustomCoffeeCuppingsForUser.
+export function purgeCuppingsForUser(userId: string): void {
+  write(read().filter((record) => record.userId !== userId));
+}
