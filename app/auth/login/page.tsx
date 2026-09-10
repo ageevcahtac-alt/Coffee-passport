@@ -1,11 +1,24 @@
-import { signInWithPassword } from '../actions';
+import { EnthusiastAuthForm } from '@/components/site/EnthusiastAuthForm';
 
+// GAP 1 (IDENTITY_SESSION_CONTINUITY_IMPLEMENTATION.md) — this page used to
+// render its own login-only form, with no path to create an account at
+// all. The Navbar's "Log in" link (visible on every (site) page, including
+// the Public Passport) pointed here, so a brand-new guest clicking it hit
+// a dead end unless they already knew to go back to the homepage for
+// EnthusiastAuthForm's signup tab. Reusing that exact component here
+// —no new auth form — gives every "Log in" link a real signup path too,
+// and `next` (now also read here) lets a signed-up/logged-in guest return
+// to wherever they actually came from (e.g. the Lot's own Passport)
+// instead of always landing on /journey.
 export default function LoginPage({
   searchParams,
 }: {
-  searchParams: { next?: string; sent?: string; error?: string };
+  searchParams: { next?: string; error?: string };
 }) {
   const next = searchParams.next ?? '/';
+  // Preserve `next` across a failed attempt too, so retrying after a typo
+  // doesn't lose the original return context.
+  const errorRedirect = next === '/' ? '/auth/login' : `/auth/login?next=${encodeURIComponent(next)}`;
 
   return (
     <main className="min-h-dvh flex flex-col justify-center px-6 bg-parchment-200">
@@ -13,53 +26,12 @@ export default function LoginPage({
         <span className="text-xs uppercase tracking-widest2 text-ink-400 font-body">
           Coffee Passport
         </span>
-        <h1 className="font-display text-3xl text-ink-900 mt-3 mb-2">Log in</h1>
+        <h1 className="font-display text-3xl text-ink-900 mt-3 mb-2">Войти или создать аккаунт</h1>
         <p className="text-ink-500 text-sm mb-8">
-          Enter your email and password to sign in.
+          Одна и та же форма для входа в уже существующий аккаунт или для регистрации нового.
         </p>
 
-        <form action={signInWithPassword} className="flex flex-col gap-3">
-          <input type="hidden" name="next" value={next} />
-          
-          <label htmlFor="email" className="text-xs uppercase tracking-widest2 text-ink-400">
-            Email
-          </label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            required
-            placeholder="you@example.com"
-            className="rounded-md border border-ink-200 bg-parchment-100 px-4 py-3 text-sm
-                       text-ink-900 placeholder:text-ink-300 focus:border-gold-400"
-          />
-
-          <label htmlFor="password" className="text-xs uppercase tracking-widest2 text-ink-400 mt-2">
-            Password
-          </label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            required
-            placeholder="••••••••"
-            className="rounded-md border border-ink-200 bg-parchment-100 px-4 py-3 text-sm
-                       text-ink-900 placeholder:text-ink-300 focus:border-gold-400"
-          />
-
-          {searchParams.error && (
-            <p className="text-sm text-rating">{searchParams.error}</p>
-          )}
-
-          <button
-            type="submit"
-            className="mt-4 inline-flex items-center justify-center rounded-md bg-ink-900
-                       text-parchment-100 font-body font-medium text-sm px-6 py-4
-                       hover:bg-ink-800 transition-colors"
-          >
-            Log in
-          </button>
-        </form>
+        <EnthusiastAuthForm error={searchParams.error} next={next} errorRedirect={errorRedirect} />
       </div>
     </main>
   );

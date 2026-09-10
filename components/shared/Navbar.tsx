@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { signOut } from '@/app/auth/actions';
 import { EnthusiastFeedbackWidget } from './EnthusiastFeedbackWidget';
 
@@ -9,6 +10,16 @@ const NAV_LINK_CLASSES = 'hover:text-ink-900';
 
 export function Navbar({ userEmail }: { userEmail: string | null }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  // GAP 1 (IDENTITY_SESSION_CONTINUITY_IMPLEMENTATION.md) — "Log in" is
+  // reachable from every (site) page, including the Public Passport, but
+  // used to always drop the guest's return context (no `next`). A guest
+  // signing up from /passport/[lotId] now lands back on that exact Lot's
+  // Passport instead of always /journey.
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const search = searchParams.toString();
+  const currentPath = `${pathname}${search ? `?${search}` : ''}`;
+  const loginHref = `/auth/login?next=${encodeURIComponent(currentPath)}`;
 
   return (
     <header className="relative px-4 sm:px-6 py-4 border-b border-ink-100/0">
@@ -36,7 +47,7 @@ export function Navbar({ userEmail }: { userEmail: string | null }) {
                 </form>
               </>
             ) : (
-              <Link href="/auth/login" className={NAV_LINK_CLASSES}>Log in</Link>
+              <Link href={loginHref} className={NAV_LINK_CLASSES}>Log in</Link>
             )}
           </nav>
           {/* Right under Log in/Sign out — reachable from every guest-facing
@@ -128,7 +139,7 @@ export function Navbar({ userEmail }: { userEmail: string | null }) {
                 </>
               ) : (
                 <Link
-                  href="/auth/login"
+                  href={loginHref}
                   onClick={() => setMenuOpen(false)}
                   className="py-3 border-b border-ink-100 hover:text-ink-900"
                 >

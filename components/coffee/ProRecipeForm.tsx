@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import type { BrewingMethodId, BrewingRecipe, Lot, RecipeAuthorType } from '@/lib/types/coffee';
 import { ESPRESSO_MACHINE_MODELS } from '@/lib/types/coffee';
 import { useEquipment } from '@/lib/data/useEquipment';
@@ -166,9 +166,19 @@ export function ProRecipeForm({
     !isBarista || isEditing || !form.brewingMethodId || canCreateDraft(allRecipes, 'barista', authorId, form.brewingMethodId);
   const canSave = Boolean(form.brewingMethodId && form.doseG && form.yieldG) && draftSlotAvailable;
 
+  // Production readiness hardening (COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
+  // onSave is a plain, synchronous, non-deduplicated insert (addBrewingRecipe
+  // generates a fresh id per call) — a double-click on submit before React
+  // re-renders/disables the button used to create two distinct recipe rows
+  // for one save, for both café Signature Recipes and roaster Benchmark
+  // Recipes (both go through this form). Ref guard, not state, so it takes
+  // effect synchronously within the same tick as the first click.
+  const submitted = useRef(false);
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (submitted.current) return;
     if (!form.brewingMethodId || !canSave) return;
+    submitted.current = true;
 
     const recipe: RecipeInput = {
       lotId: lot.id,

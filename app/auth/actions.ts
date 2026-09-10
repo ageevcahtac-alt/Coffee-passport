@@ -4,13 +4,14 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { PILOT_STAFF_PASSWORD, PILOT_STAFF_ROLES, type PilotStaffRole } from '@/lib/auth/pilotStaff'
+import { safeNextPath } from '@/lib/auth/safeRedirect'
 
 export async function signInWithPassword(formData: FormData) {
   const supabase = await createClient()
 
   const email = String(formData.get('email') || '')
   const password = String(formData.get('password') || '')
-  const next = String(formData.get('next') || '/')
+  const next = safeNextPath(String(formData.get('next') || '/'))
   // Which page's form submitted this — /auth/login's standalone form vs the
   // enthusiast form embedded on the landing page — so a failed attempt
   // bounces back to where the guest actually was, not always /auth/login.
@@ -34,7 +35,7 @@ export async function signUpWithPassword(formData: FormData) {
 
   const email = String(formData.get('email') || '')
   const password = String(formData.get('password') || '')
-  const next = String(formData.get('next') || '/')
+  const next = safeNextPath(String(formData.get('next') || '/'))
   const errorRedirect = String(formData.get('errorRedirect') || '/auth/login')
 
   const { error } = await supabase.auth.signUp({
@@ -76,6 +77,16 @@ export async function signOut() {
 // the case here, disable it once for this project — everything else is
 // already zero-touch.
 export async function signInAsPilotStaff(formData: FormData) {
+  // Server-side re-check of the same gate DevRoleSwitcher hides its
+  // buttons behind — a crafted direct POST to this action must not be
+  // able to skip the client-side gate. See
+  // COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md and
+  // 0029_pilot_demo_kill_switch.sql for the DB-level gate on the RPC
+  // this action calls next.
+  if (process.env.NEXT_PUBLIC_PILOT_DEMO_ENABLED !== 'true') {
+    redirect('/')
+  }
+
   const role = String(formData.get('role') || '') as PilotStaffRole
   const target = PILOT_STAFF_ROLES.find((candidate) => candidate.role === role)
 

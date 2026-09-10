@@ -15,20 +15,26 @@ export function RoastCurveChart({
   points,
   chargeTemp,
   dropTemp,
-  firstCrackTimeSec,
-  totalTimeSec,
+  firstCrackTimeSec = null,
+  totalTimeSec = 0,
 }: {
   points: RoastCurvePoint[];
-  chargeTemp: number;
-  dropTemp: number;
-  firstCrackTimeSec: number | null;
-  totalTimeSec: number;
+  // Optional — a real logged event (RoastingTab) always has these; a
+  // declared target curve (RoastIntentCard) has none of them as columns at
+  // all (see REFERENCE_ROAST_PROFILE_IMPLEMENTATION.md), so this chart
+  // simply omits the two endpoint dots / DTR shading when they're absent,
+  // rather than a caller inventing values the data doesn't have.
+  chargeTemp?: number;
+  dropTemp?: number;
+  firstCrackTimeSec?: number | null;
+  totalTimeSec?: number;
 }) {
   if (points.length === 0) return null;
 
   const maxTime = Math.max(totalTimeSec, ...points.map((p) => p.timeSec), 1);
   const temps = points.flatMap((p) => [p.bt, p.et]).filter((v): v is number => v !== null);
-  temps.push(chargeTemp, dropTemp);
+  if (chargeTemp !== undefined) temps.push(chargeTemp);
+  if (dropTemp !== undefined) temps.push(dropTemp);
   const minTemp = Math.min(...temps) - 10;
   const maxTemp = Math.max(Math.max(...temps) + 10, minTemp + 1);
 
@@ -91,8 +97,10 @@ export function RoastCurveChart({
         {rorPath && <path d={rorPath} fill="none" stroke="#5C6B4F" strokeWidth={1} strokeDasharray="4 3" opacity={0.8} />}
         {btPath && <path d={btPath} fill="none" stroke="#B8863B" strokeWidth={2} />}
 
-        <circle cx={x(points[0]?.timeSec ?? 0)} cy={yTemp(chargeTemp)} r={3} fill="#1C1410" />
-        <circle cx={x(maxTime)} cy={yTemp(dropTemp)} r={3} fill="#1C1410" />
+        {chargeTemp !== undefined && (
+          <circle cx={x(points[0]?.timeSec ?? 0)} cy={yTemp(chargeTemp)} r={3} fill="#1C1410" />
+        )}
+        {dropTemp !== undefined && <circle cx={x(maxTime)} cy={yTemp(dropTemp)} r={3} fill="#1C1410" />}
       </svg>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[11px] text-ink-400">
         <LegendDot color="#B8863B" label="BT" />

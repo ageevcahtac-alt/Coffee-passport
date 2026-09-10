@@ -83,6 +83,7 @@ function rowToRoastProfile(row: RoastBatchWithLot, roasterId: string): RoastProf
     sourceFileName: null,
     notes: row.notes,
     createdAt: row.roasted_at,
+    referenceRoastProfileId: row.reference_roast_profile_id,
   };
 }
 

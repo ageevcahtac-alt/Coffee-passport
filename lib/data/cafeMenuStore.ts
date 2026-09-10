@@ -222,6 +222,55 @@ export async function syncCafeMenuFromSupabase(shopId: string): Promise<void> {
   }
 }
 
+// Production readiness hardening (COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
+// RoasterSupplyMapWidget used to mount one row per coffee shop and have
+// each row call syncCafeMenuFromSupabase(shop.id) independently — a real
+// N+1 (one round trip per shop in the whole system, on every roaster
+// dashboard load, regardless of whether that shop carries any of this
+// roaster's lots). This is the same read, scoped the other way around:
+// every menu-entry row across every shop for a given SET of lot ids, in
+// one request, grouped back into each shop's own cache bucket. Same
+// view-then-base-table fallback as syncCafeMenuFromSupabase.
+//
+// A shop with zero matching rows never appears in the result and is left
+// untouched here — its cache entry stays whatever it already was (default
+// "no menu data synced yet"), exactly as if its own per-shop sync simply
+// hadn't run yet. That's correct: this function only ever tells you about
+// shops that DO carry at least one of these lots.
+export async function syncCafeMenuEntriesForLots(lotIds: string[]): Promise<void> {
+  if (lotIds.length === 0) return;
+  try {
+    const supabase = getBrowserSupabaseClient();
+    const overrides = { ...readOverrides() };
+
+    const viewResult = await supabase
+      .from('cafe_menu_entries_roaster_status_view')
+      .select('*')
+      .in('lot_id', lotIds);
+
+    if (!viewResult.error && viewResult.data) {
+      for (const row of viewResult.data as CafeMenuEntryRoasterStatusViewRow[]) {
+        const shopEntries = { ...(overrides[row.coffee_shop_id] ?? defaultEntries(row.coffee_shop_id)) };
+        shopEntries[row.lot_id] = rowToEntry(row, { status: row.roaster_lot_status, inCatalog: row.roaster_in_catalog });
+        overrides[row.coffee_shop_id] = shopEntries;
+      }
+      write(overrides);
+      return;
+    }
+
+    const { data, error } = await supabase.from('cafe_menu_entries').select('*').in('lot_id', lotIds);
+    if (error || !data) return;
+    for (const row of data as CafeMenuEntryRow[]) {
+      const shopEntries = { ...(overrides[row.coffee_shop_id] ?? defaultEntries(row.coffee_shop_id)) };
+      shopEntries[row.lot_id] = rowToEntry(row);
+      overrides[row.coffee_shop_id] = shopEntries;
+    }
+    write(overrides);
+  } catch {
+    // Offline / neither table nor view reachable — local cache stands.
+  }
+}
+
 // `lotRef` is deliberately optional and, when omitted, left OUT of the
 // row object entirely (not set to `null`) — see the call sites below.
 // Supabase's upsert only touches columns present in the payload, so
@@ -229,6 +278,40 @@ export async function syncCafeMenuFromSupabase(shopId: string): Promise<void> {
 // setMenuLotStatus, neither of which ever knows the Canonical Lot's uuid)
 // can never clobber a lot_ref a prior addLotToMenu call already resolved
 // and wrote for this same entry.
+// Production readiness hardening (COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
+// addLotToMenu/setMenuLotActive/setMenuLotStatus are synchronous, fire an
+// unguarded upsert each, and are called straight from onClick handlers
+// with no in-flight tracking anywhere up the call chain — rapidly
+// toggling one entry (e.g. new -> active -> discontinuing) used to issue
+// concurrent upserts for the same (coffee_shop_id, lot_id) row with no
+// ordering guarantee, so an out-of-order response could leave Supabase on
+// an intermediate status rather than the barista's actual final choice,
+// with no error surfaced (each individual upsert "succeeds"). Requests
+// for the same entry are now serialized here, coalescing anything that
+// arrives while one is already in flight down to just the latest row —
+// so the entry's Supabase state always converges on the last call made,
+// in order, regardless of network response timing.
+const pendingWrites = new Map<string, { inFlight: boolean; nextRow: CafeMenuEntryRow | null }>();
+
+function sendRow(key: string, row: CafeMenuEntryRow): void {
+  void getBrowserSupabaseClient()
+    .from('cafe_menu_entries')
+    .upsert(row, { onConflict: 'coffee_shop_id,lot_id' })
+    .then(({ error }) => {
+      if (error) {
+        console.warn('[cafe_menu_entries] Supabase write failed, kept local-only:', error.message);
+      }
+      const state = pendingWrites.get(key);
+      if (state?.nextRow) {
+        const next = state.nextRow;
+        state.nextRow = null;
+        sendRow(key, next);
+      } else if (state) {
+        state.inFlight = false;
+      }
+    });
+}
+
 function writeThroughEntry(shopId: string, lotId: string, entry: CafeMenuEntry, lotRef?: string | null): void {
   const row: CafeMenuEntryRow = {
     id: `menu-${generateId()}`,
@@ -243,14 +326,14 @@ function writeThroughEntry(shopId: string, lotId: string, entry: CafeMenuEntry, 
     updated_at: new Date().toISOString(),
   };
 
-  void getBrowserSupabaseClient()
-    .from('cafe_menu_entries')
-    .upsert(row, { onConflict: 'coffee_shop_id,lot_id' })
-    .then(({ error }) => {
-      if (error) {
-        console.warn('[cafe_menu_entries] Supabase write failed, kept local-only:', error.message);
-      }
-    });
+  const key = `${shopId}:${lotId}`;
+  const state = pendingWrites.get(key);
+  if (state?.inFlight) {
+    state.nextRow = row;
+    return;
+  }
+  pendingWrites.set(key, { inFlight: true, nextRow: null });
+  sendRow(key, row);
 }
 
 export function addLotToMenu(shopId: string, lotId: string): void {

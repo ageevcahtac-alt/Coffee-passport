@@ -67,9 +67,20 @@ export default function EditLotPage({ params }: { params: { lotId: string } }) {
   // immutable roast_batches row is created, so that row can record the
   // EXACT version it followed (reference_roast_profile_id) rather than
   // leaving that FK permanently null.
+  // Production readiness hardening (COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
+  // this used to write the local cache and close the form FIRST, before
+  // the canonical Supabase writes even started — so a failed
+  // activateReferenceRoastProfile/createRoastBatch left this roaster's own
+  // browser showing the edit as saved (profile list updated, form closed)
+  // while every other reader (a different browser, the guest Public
+  // Passport, a café) never received it, with only a below-the-fold error
+  // string as any sign something went wrong. The canonical write must
+  // succeed FIRST; the local cache/form-closed state now only reflects
+  // reality after that's confirmed.
+  const [roastProfileSaving, setRoastProfileSaving] = useState(false);
   async function handleRoastProfileSave(profile: Parameters<typeof saveRoastProfile>[0]) {
-    saveRoastProfile(profile);
-    setEditingProfile(undefined);
+    if (roastProfileSaving) return;
+    setRoastProfileSaving(true);
     setRoastProfileSaveError(null);
     try {
       const canonicalLot = await findCanonicalLotByPublicId(profile.lotId);
@@ -93,10 +104,14 @@ export default function EditLotPage({ params }: { params: { lotId: string } }) {
           referenceRoastProfileId,
         });
       }
+      saveRoastProfile(profile);
+      setEditingProfile(undefined);
     } catch (err) {
       setRoastProfileSaveError(
         err instanceof Error ? err.message : 'Не удалось опубликовать профиль обжарки в каноническом каталоге.'
       );
+    } finally {
+      setRoastProfileSaving(false);
     }
   }
   // Bumped after the status control writes directly to Supabase, to force
@@ -128,8 +143,10 @@ export default function EditLotPage({ params }: { params: { lotId: string } }) {
   // TasteComparison) current instead of permanently frozen at whatever the
   // one-time backfill script set (or, for any Lot created since, nothing at
   // all — see PUBLIC_PASSPORT_NEXT_BLOCK_AUDIT.md).
+  const [lotSaving, setLotSaving] = useState(false);
   async function handleSave(updated: Lot) {
-    saveLot(updated);
+    if (lotSaving) return;
+    setLotSaving(true);
     setCanonicalSaveError(null);
     try {
       const canonicalLot = await findCanonicalLotByPublicId(updated.id);
@@ -144,15 +161,33 @@ export default function EditLotPage({ params }: { params: { lotId: string } }) {
         });
         await activateTasteProfile(canonicalLot.id, updated.roasterFlavorProfile);
       }
+      // Local cache write and navigation only happen once the canonical
+      // write is confirmed — see the hardening note above
+      // handleRoastProfileSave for why order matters here.
+      saveLot(updated);
       router.push('/dashboard/roaster');
     } catch (err) {
       setCanonicalSaveError(
         err instanceof Error ? err.message : 'Не удалось сохранить изменения в каноническом каталоге.'
       );
+    } finally {
+      setLotSaving(false);
     }
   }
 
-  if (!roaster) return null;
+  // Production readiness hardening — same gap and same fix as
+  // app/dashboard/roaster/new/page.tsx: getRoasterById can legitimately
+  // find nothing for a real (non-seed) roaster account.
+  if (!roaster) {
+    return (
+      <main className="min-h-dvh flex flex-col items-center justify-center px-6 text-center">
+        <h1 className="font-display text-2xl text-ink-900 mb-2">Обжарщик не настроен</h1>
+        <p className="text-ink-500 text-sm">
+          Для вашего аккаунта не найден профиль обжарщика. Обратитесь к администратору.
+        </p>
+      </main>
+    );
+  }
 
   if (!lot) {
     if (!mounted) return null;

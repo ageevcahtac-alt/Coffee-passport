@@ -124,9 +124,20 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
     setStep('barista');
   }
 
+  // Production readiness hardening (COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
+  // handleFinish was synchronous with no in-flight guard at all — a rapid
+  // double-click (or Enter+click) on "Сохранить дегустацию" could invoke
+  // it twice before React re-renders/disables the button, creating two
+  // distinct checkin records for one blind tasting. A ref (not state)
+  // guard is checked synchronously on the very first line, before any
+  // other work, so the second call in the same tick is a no-op even
+  // though nothing has re-rendered yet.
+  const finishSubmitted = useRef(false);
   function handleFinish() {
+    if (finishSubmitted.current) return;
     if (!coffeeShopId || !baristaId || !brewingMethod || !pendingTasteValues || !userId) return;
     if (!isDrinkSelectionComplete(drinkSelection)) return;
+    finishSubmitted.current = true;
 
     // Checked before the save so the just-added record doesn't count as
     // "already had this pin" — drives the pin-drop animation on the Coffee

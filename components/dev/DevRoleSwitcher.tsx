@@ -30,6 +30,17 @@ const buttonClasses = (active: boolean) =>
    font-body font-medium text-center transition-colors
    ${active ? 'bg-ink-900 text-parchment-100' : 'text-ink-700 hover:bg-parchment-300'}`;
 
+// Production readiness hardening (COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
+// the sign-in-as-pilot-staff buttons are a real privilege-escalation
+// vector for any site visitor once this deployment carries real
+// roaster/café accounts alongside the demo ones — gate them behind an
+// explicit opt-in env var (server-checked again in signInAsPilotStaff,
+// and at the DB layer in 0029_pilot_demo_kill_switch.sql) rather than
+// showing them unconditionally. Энтузиаст/Админ stay unconditional: they
+// are plain navigation to routes gated by their own auth (none, and HTTP
+// Basic Auth respectively), not a role grant.
+const PILOT_DEMO_ENABLED = process.env.NEXT_PUBLIC_PILOT_DEMO_ENABLED === 'true';
+
 export function DevRoleSwitcher() {
   const router = useRouter();
   const pathname = usePathname();
@@ -87,19 +98,20 @@ export function DevRoleSwitcher() {
                 </button>
               );
             })}
-            {PILOT_STAFF_ROLES.map((role) => {
-              const active =
-                pathname === role.dashboardPath || pathname?.startsWith(`${role.dashboardPath}/`);
-              return (
-                <form key={role.role} action={signInAsPilotStaff} className="contents">
-                  <input type="hidden" name="role" value={role.role} />
-                  <button type="submit" className={buttonClasses(active)}>
-                    <span aria-hidden="true">{role.icon}</span>
-                    {role.label}
-                  </button>
-                </form>
-              );
-            })}
+            {PILOT_DEMO_ENABLED &&
+              PILOT_STAFF_ROLES.map((role) => {
+                const active =
+                  pathname === role.dashboardPath || pathname?.startsWith(`${role.dashboardPath}/`);
+                return (
+                  <form key={role.role} action={signInAsPilotStaff} className="contents">
+                    <input type="hidden" name="role" value={role.role} />
+                    <button type="submit" className={buttonClasses(active)}>
+                      <span aria-hidden="true">{role.icon}</span>
+                      {role.label}
+                    </button>
+                  </form>
+                );
+              })}
           </div>
 
           <button

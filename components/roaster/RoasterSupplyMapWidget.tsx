@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { useCoffeeShops } from '@/lib/data/useCoffeeShops';
 import { useCafeMenuEntries } from '@/lib/data/useCafeMenu';
-import { syncCafeMenuFromSupabase } from '@/lib/data/cafeMenuStore';
+import { syncCafeMenuEntriesForLots } from '@/lib/data/cafeMenuStore';
 import type { CoffeeShop, Lot } from '@/lib/types/coffee';
 
 // "Карта поставок" — every accredited coffee shop currently listing at
@@ -12,9 +12,20 @@ import type { CoffeeShop, Lot } from '@/lib/types/coffee';
 // lib/data/cafeMenuStore.ts's is_active_in_cafe). One row per shop, via
 // useCafeMenuEntries(shop.id) — a per-shop hook, so this has to render one
 // child per shop rather than looping the hook inside a single component.
+//
+// The Supabase read itself, though, is ONE bulk call for every shop at
+// once (syncCafeMenuEntriesForLots), not one per shop — see
+// COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md: this used to be a real
+// N+1 (one round trip per coffee shop in the entire system on every
+// roaster dashboard load).
 export function RoasterSupplyMapWidget({ myLots }: { myLots: Lot[] }) {
   const shops = useCoffeeShops();
   const myLotIds = new Set(myLots.map((lot) => lot.id));
+
+  useEffect(() => {
+    if (myLotIds.size > 0) void syncCafeMenuEntriesForLots(Array.from(myLotIds));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-fetch only when the roaster's own lot set changes
+  }, [myLots.map((lot) => lot.id).join(',')]);
 
   if (myLotIds.size === 0) return null;
 
@@ -44,10 +55,6 @@ function ShopSupplyRow({
   myLots: Lot[];
   myLotIds: Set<string>;
 }) {
-  useEffect(() => {
-    void syncCafeMenuFromSupabase(shop.id);
-  }, [shop.id]);
-
   const entries = useCafeMenuEntries(shop.id);
   const activeLotNames = myLots
     .filter((lot) => myLotIds.has(lot.id) && entries[lot.id]?.isActive)

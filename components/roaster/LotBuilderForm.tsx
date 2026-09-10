@@ -33,25 +33,47 @@ interface LotFormState {
   inRoasterCatalog: boolean;
 }
 
-function toFormState(lot?: Lot): LotFormState {
+// Coffee-level identity/provenance fields (Phase 4.5.9) — the subset of
+// LotFormState that also exists on the canonical Coffee entity
+// (lib/data/canonicalLotStore.ts's CanonicalCoffee). Used only to seed a
+// brand-new Lot's blank Origin step from the Coffee the roaster already
+// picked or created earlier in the same wizard (see
+// app/dashboard/roaster/new/page.tsx) — never applied when editing an
+// existing Lot (toFormState(lot, ...) below ignores this entirely once a
+// real `lot` exists). Every field here remains a normal, editable input:
+// this only changes the starting value, never locks it — the roaster can
+// still consciously diverge a specific Lot's text from its Coffee, same as
+// today.
+export interface LotOriginDefaults {
+  country?: string;
+  region?: string;
+  variety?: string;
+  process?: string;
+  cropYear?: string;
+  farmerName?: string;
+  farmName?: string;
+  altitude?: string;
+}
+
+function toFormState(lot?: Lot, originDefaults?: LotOriginDefaults): LotFormState {
   if (!lot) {
     return {
       name: '',
-      country: '',
-      region: '',
-      variety: '',
-      process: '',
+      country: originDefaults?.country ?? '',
+      region: originDefaults?.region ?? '',
+      variety: originDefaults?.variety ?? '',
+      process: originDefaults?.process ?? '',
       roastType: 'filter',
       qGrade: '',
-      cropYear: '',
+      cropYear: originDefaults?.cropYear ?? '',
       descriptors: '',
       acidity: 3,
       sweetness: 3,
       body: 3,
       bitterness: 3,
-      farmerName: '',
-      farmName: '',
-      altitude: '',
+      farmerName: originDefaults?.farmerName ?? '',
+      farmName: originDefaults?.farmName ?? '',
+      altitude: originDefaults?.altitude ?? '',
       story: '',
       inRoasterCatalog: true,
     };
@@ -90,6 +112,7 @@ const STEPS = ['Происхождение', 'О лоте', 'Метрики и �
 export function LotBuilderForm({
   roaster,
   initialLot,
+  initialOrigin,
   onSave,
   onCancel,
   // The "доступен для заказа кофейнями" flag is the roaster's own catalog
@@ -110,6 +133,9 @@ export function LotBuilderForm({
 }: {
   roaster: Roaster;
   initialLot?: Lot;
+  // Only consulted when creating (initialLot is undefined) — see
+  // LotOriginDefaults' own comment above.
+  initialOrigin?: LotOriginDefaults;
   // Optional because a readOnly render never calls it — there is no
   // submit path in that mode for any caller to wire up.
   onSave?: (lot: Lot) => void;
@@ -118,7 +144,7 @@ export function LotBuilderForm({
   readOnly?: boolean;
 }) {
   const isCreating = !initialLot;
-  const [form, setForm] = useState<LotFormState>(() => toFormState(initialLot));
+  const [form, setForm] = useState<LotFormState>(() => toFormState(initialLot, initialOrigin));
   const [step, setStep] = useState(0);
 
   // New lots get a live-generated id as soon as a country is entered;

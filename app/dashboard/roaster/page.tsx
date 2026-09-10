@@ -15,8 +15,25 @@ import { CommunityHighlights } from '@/components/coffee/CommunityHighlights';
 import { RoasterSupplyMapWidget } from '@/components/roaster/RoasterSupplyMapWidget';
 import { CatalogHierarchy } from '@/components/coffee/CatalogHierarchy';
 import { useStaffSession } from '@/lib/auth/staffSession';
+import {
+  resolveRoasterUuid,
+  listCanonicalLotsForRoaster,
+  findCanonicalLotByPublicId,
+  updateCanonicalLotFields,
+} from '@/lib/data/canonicalLotStore';
+import type { LotStatus } from '@/lib/types/database';
 
 type CatalogTab = 'active' | 'archived';
+
+// Small, local duplicate of CanonicalLotChain's/CanonicalLotStatusControl's
+// own status labels (Phase 4.5.3/4.5.4) rather than a shared export — four
+// literal strings aren't worth coupling this file to those.
+const STATUS_LABELS: Record<LotStatus, string> = {
+  draft: 'Черновик',
+  testing: 'Тестируется',
+  active: 'Активен',
+  archived: 'В архиве',
+};
 
 export default function RoasterDashboardPage() {
   const { roasterId } = useStaffSession();
@@ -31,6 +48,32 @@ export default function RoasterDashboardPage() {
   const roaster = roasterId ? getRoasterById(roasterId) : undefined;
   const myLots = lots.filter((lot) => lot.roasterId === roasterId);
 
+  // Phase 4.5.5 — the local Lot type (and this list's Active/Archived tabs)
+  // has no `status` concept at all; it only tracks inRoasterCatalog. Loaded
+  // separately, read-only, purely for display — never merged into useLots()'s
+  // cache, never affects which tab a Lot appears in or any café/passport
+  // gating (that remains inRoasterCatalog-only, unchanged by this phase).
+  const [canonicalStatuses, setCanonicalStatuses] = useState<Map<string, LotStatus>>(new Map());
+  useEffect(() => {
+    if (!roasterId) return;
+    let cancelled = false;
+    resolveRoasterUuid(roasterId).then((uuid) => {
+      if (cancelled || !uuid) return;
+      listCanonicalLotsForRoaster(uuid)
+        .then((canonicalLots) => {
+          if (cancelled) return;
+          setCanonicalStatuses(new Map(canonicalLots.map((lot) => [lot.publicId, lot.status])));
+        })
+        .catch(() => {
+          // Migrations not applied / offline — dashboard still works with no
+          // status badges shown, same tolerance as syncLotsFromSupabase above.
+        });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [roasterId]);
+
   const [tab, setTab] = useState<CatalogTab>('active');
 
   // "Снять с обжарки" only flips Lot.inRoasterCatalog — it never touches
@@ -41,8 +84,25 @@ export default function RoasterDashboardPage() {
   const archivedLots = myLots.filter((lot) => !lot.inRoasterCatalog);
   const shownLots = tab === 'active' ? activeLots : archivedLots;
 
-  function toggleCatalog(lot: Lot) {
-    saveLot({ ...lot, inRoasterCatalog: !lot.inRoasterCatalog });
+  // Phase 4.5.11 — this used to only call saveLot(), which writes the
+  // local override cache and nothing else: the actual canonical
+  // `lots.in_roaster_catalog` column never changed, unlike the full edit-page
+  // save (Phase 4.5.4's handleSave, which already syncs this same field).
+  // That meant this quick toggle silently diverged from Supabase the moment
+  // a second device/browser read the canonical row directly (e.g. this same
+  // dashboard's own canonicalStatuses fetch, or a future canonical-only
+  // reader) — exactly the "legacy cache as source of truth" risk this phase
+  // was asked to check for. saveLot still runs first and unconditionally, so
+  // the toggle's local-first UX is unchanged even if the Supabase write
+  // below fails; LotRow surfaces that failure inline (see its own
+  // handleToggle) rather than silently losing it.
+  async function toggleCatalog(lot: Lot) {
+    const nextValue = !lot.inRoasterCatalog;
+    saveLot({ ...lot, inRoasterCatalog: nextValue });
+    const canonicalLot = await findCanonicalLotByPublicId(lot.id);
+    if (canonicalLot) {
+      await updateCanonicalLotFields(canonicalLot.id, { inRoasterCatalog: nextValue });
+    }
   }
 
   return (
@@ -113,6 +173,7 @@ export default function RoasterDashboardPage() {
                 checkins={checkins}
                 loading={checkinsLoading}
                 onToggleCatalog={() => toggleCatalog(lot)}
+                canonicalStatus={canonicalStatuses.get(lot.id) ?? null}
               />
             )}
           />
@@ -142,16 +203,41 @@ function LotRow({
   checkins,
   loading,
   onToggleCatalog,
+  canonicalStatus,
 }: {
   lot: Lot;
   checkins: AnonymizedCheckin[];
   loading: boolean;
-  onToggleCatalog: () => void;
+  onToggleCatalog: () => Promise<void>;
+  // null: no canonical row for this Lot yet (or still loading) — no badge.
+  canonicalStatus: LotStatus | null;
 }) {
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [catalogSyncError, setCatalogSyncError] = useState<string | null>(null);
+  // Production readiness hardening (COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
+  // there was no in-flight guard here at all — rapidly clicking the switch
+  // fires overlapping updateCanonicalLotFields requests for the same Lot,
+  // and whichever response happens to arrive last (not whichever click was
+  // last) silently decides the final in_roaster_catalog value in Supabase,
+  // with no error shown since each individual request "succeeds" on its
+  // own. This gates the switch itself while a request is outstanding.
+  const [togglingCatalog, setTogglingCatalog] = useState(false);
   const roaster = getRoasterById(lot.roasterId);
+
+  async function handleToggleCatalog() {
+    if (togglingCatalog) return;
+    setTogglingCatalog(true);
+    setCatalogSyncError(null);
+    try {
+      await onToggleCatalog();
+    } catch {
+      setCatalogSyncError('Не удалось сохранить в каноническом каталоге — попробуйте ещё раз.');
+    } finally {
+      setTogglingCatalog(false);
+    }
+  }
 
   async function handleDownloadPdf() {
     setDownloadingPdf(true);
@@ -218,33 +304,45 @@ function LotRow({
             В архиве
           </span>
         )}
+        {canonicalStatus && canonicalStatus !== 'active' && (
+          <span
+            className="rounded-full border border-ink-300 bg-parchment-100
+                       text-ink-500 text-[11px] px-2.5 py-1"
+          >
+            Статус: {STATUS_LABELS[canonicalStatus]}
+          </span>
+        )}
       </div>
 
-      <div className="flex items-center justify-between gap-4 rounded-md border border-ink-200 bg-parchment-100 px-4 py-3 mb-4">
-        <div>
-          <p className="text-sm text-ink-900">
-            {lot.inRoasterCatalog ? 'В каталоге обжарщика' : 'Снят с обжарки'}
-          </p>
-          <p className="text-xs text-ink-400">
-            {lot.inRoasterCatalog
-              ? 'Кофейни могут заказать этот лот в меню.'
-              : 'Кофейни не смогут заказать этот лот заново — уже добавленные меню не затронуты.'}
-          </p>
+      <div className="rounded-md border border-ink-200 bg-parchment-100 px-4 py-3 mb-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-ink-900">
+              {lot.inRoasterCatalog ? 'В каталоге обжарщика' : 'Снят с обжарки'}
+            </p>
+            <p className="text-xs text-ink-400">
+              {lot.inRoasterCatalog
+                ? 'Кофейни могут заказать этот лот в меню.'
+                : 'Кофейни не смогут заказать этот лот заново — уже добавленные меню не затронуты.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={lot.inRoasterCatalog}
+            aria-label="Снять с обжарки"
+            onClick={handleToggleCatalog}
+            disabled={togglingCatalog}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full
+                        transition-colors disabled:opacity-60 ${lot.inRoasterCatalog ? 'bg-ink-900' : 'bg-ink-200'}`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-parchment-100
+                          transition-transform ${lot.inRoasterCatalog ? 'translate-x-6' : 'translate-x-1'}`}
+            />
+          </button>
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={lot.inRoasterCatalog}
-          aria-label="Снять с обжарки"
-          onClick={onToggleCatalog}
-          className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full
-                      transition-colors ${lot.inRoasterCatalog ? 'bg-ink-900' : 'bg-ink-200'}`}
-        >
-          <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-parchment-100
-                        transition-transform ${lot.inRoasterCatalog ? 'translate-x-6' : 'translate-x-1'}`}
-          />
-        </button>
+        {catalogSyncError && <p className="text-xs text-red-600 mt-2">{catalogSyncError}</p>}
       </div>
 
       <div className="flex flex-wrap gap-x-4 gap-y-2">

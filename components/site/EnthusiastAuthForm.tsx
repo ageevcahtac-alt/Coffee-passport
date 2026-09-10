@@ -11,7 +11,24 @@ const fieldClasses =
 // app/(site)/page.tsx). Coffee shop / roaster accounts are onboarded
 // through BecomePartnerSection's lead form below this, not through
 // self-serve signup.
-export function EnthusiastAuthForm({ error }: { error?: string }) {
+//
+// Also reused, unchanged in behavior for the homepage, by /auth/login (see
+// IDENTITY_SESSION_CONTINUITY_IMPLEMENTATION.md) — the only previously-
+// missing signup path reachable from a guest already on the Public
+// Passport. `next`/`errorRedirect` default to this component's original
+// hardcoded values, so the homepage call site (which passes neither) is
+// byte-for-byte unaffected; /auth/login passes both so a successful
+// login/signup returns the guest to wherever they came from instead of
+// always landing on /journey.
+export function EnthusiastAuthForm({
+  error,
+  next = '/journey',
+  errorRedirect = '/',
+}: {
+  error?: string;
+  next?: string;
+  errorRedirect?: string;
+}) {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
 
   return (
@@ -39,8 +56,8 @@ export function EnthusiastAuthForm({ error }: { error?: string }) {
         action={mode === 'login' ? signInWithPassword : signUpWithPassword}
         className="flex flex-col gap-3"
       >
-        <input type="hidden" name="next" value="/journey" />
-        <input type="hidden" name="errorRedirect" value="/" />
+        <input type="hidden" name="next" value={next} />
+        <input type="hidden" name="errorRedirect" value={errorRedirect} />
 
         <label htmlFor="enthusiast-email" className="text-xs uppercase tracking-widest2 text-ink-400">
           Email

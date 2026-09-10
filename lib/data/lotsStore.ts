@@ -166,15 +166,25 @@ export function rowToLot(row: LotWithRefs, fallback: Lot | undefined): Lot {
 // the intended source of truth going forward (Stage 3 §11) — but until the
 // migration script has actually populated it for a given lot, that lot's
 // seed/localStorage version is untouched.
-export async function syncLotsFromSupabase(): Promise<void> {
+// `publicId` scopes the query to exactly one Lot — added for the
+// highest-traffic guest path (/passport/[lotId], reached directly from a
+// printed QR code) which only ever needs one row, not the whole catalog
+// (see COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md: this previously
+// fetched every Lot, with three joins, on every single guest scan).
+// Omitted (as every other caller — dashboards, /scan's arbitrary-code
+// validation — still does) it fetches and overlays the full catalog,
+// unchanged from before.
+export async function syncLotsFromSupabase(publicId?: string): Promise<void> {
   try {
     const supabase = getBrowserSupabaseClient();
-    const { data, error } = await supabase
+    let query = supabase
       .from('lots')
       .select(
         '*, roasters(slug), reference_taste_profiles(status, acidity, sweetness, body, bitterness), ' +
           'green_lots(coffees(country, region, farm, producer, variety, altitude, processing, harvest_year))'
       );
+    if (publicId) query = query.eq('public_id', publicId);
+    const { data, error } = await query;
     if (error || !data) return;
 
     const current = computeAll();

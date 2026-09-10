@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useLots } from '@/lib/data/useLots';
+import { syncLotsFromSupabase } from '@/lib/data/lotsStore';
 import { getRoasterById } from '@/lib/data/roasters';
 import { extractLotId } from '@/lib/utils/lotId';
 import { QrScanner } from '@/components/coffee/QrScanner';
@@ -18,6 +19,20 @@ export default function ScanPage() {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [scannerFailed, setScannerFailed] = useState(false);
+
+  // End-to-end audit (PUBLIC_COFFEE_PASSPORT_END_TO_END_AUDIT.md, §IDENTITY):
+  // this page used to validate a scanned/typed code against `useLots()`
+  // without ever syncing the canonical catalog first — the same overlay
+  // /dashboard/roaster, /dashboard/cafe/add-lot, and /passport/[lotId]
+  // already fetch on mount. Every real Canonical Lot lives only in
+  // Supabase, not in the hardcoded seed demo lots, so a guest using this
+  // in-app scanner (rather than their phone's own camera, which decodes the
+  // QR straight to /passport/[lotId] without passing through this page at
+  // all) got a hard "не найден" for any real lot, with no retry — worse
+  // than a transient flash, since resolveAndNavigate never re-checks.
+  useEffect(() => {
+    void syncLotsFromSupabase();
+  }, []);
 
   function resolveAndNavigate(raw: string) {
     const lotId = extractLotId(raw);

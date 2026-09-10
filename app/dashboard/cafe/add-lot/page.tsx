@@ -10,6 +10,19 @@ import { getRoasterById } from '@/lib/data/roasters';
 import { extractLotId } from '@/lib/utils/lotId';
 import { useStaffSession } from '@/lib/auth/staffSession';
 import type { Lot } from '@/lib/types/coffee';
+import { listAllCanonicalLotStatuses } from '@/lib/data/canonicalLotStore';
+import type { LotStatus } from '@/lib/types/database';
+
+// Small, local duplicate of the same 4-entry status label map already
+// repeated in components/roaster/CanonicalLotChain.tsx,
+// CanonicalLotStatusControl.tsx and app/dashboard/roaster/page.tsx (Phase
+// 4.5.3-4.5.5) — not worth a shared export for four literal strings.
+const STATUS_LABELS: Record<LotStatus, string> = {
+  draft: 'черновик',
+  testing: 'тестируется',
+  active: 'активен',
+  archived: 'в архиве',
+};
 
 export default function AddLotPage() {
   const { cafeId } = useStaffSession();
@@ -26,14 +39,43 @@ export default function AddLotPage() {
   const [error, setError] = useState('');
   const [justAdded, setJustAdded] = useState<Lot | null>(null);
 
+  // Phase 4.5.6 — a Canonical Lot's lifecycle status, loaded once alongside
+  // (not merged into) useLots()'s cache, purely to gate discovery here. A
+  // Lot absent from this map (no canonical row at all — a purely local/seed
+  // Lot that predates the canonical schema) is treated as if it had no
+  // status gate at all, same as before this phase: only inRoasterCatalog
+  // decides for it.
+  const [canonicalStatuses, setCanonicalStatuses] = useState<Map<string, LotStatus>>(new Map());
+  useEffect(() => {
+    listAllCanonicalLotStatuses()
+      .then(setCanonicalStatuses)
+      .catch(() => {
+        // Migrations not applied / offline — falls back to the pre-4.5.6
+        // inRoasterCatalog-only gate below, same tolerance as
+        // syncLotsFromSupabase above.
+      });
+  }, []);
+
+  // Published for café ordering means: still in the roaster's own catalog
+  // (inRoasterCatalog — unchanged, pre-existing rule) AND, as of Phase
+  // 4.5.6, its lifecycle status is 'active' — a fresh Lot defaults to
+  // 'draft' (see createCanonicalLot's own comment: "no finalized profile
+  // yet"), so it must not be orderable the moment it's created. This check
+  // only ever narrows the previous inRoasterCatalog-only gate: every lot
+  // that already existed before this phase (all four seed/backfilled Lots)
+  // already has status 'active', so nothing already relied upon by a real
+  // café changes.
+  function isPublishedForOrdering(lot: Lot): boolean {
+    if (!lot.inRoasterCatalog) return false;
+    const status = canonicalStatuses.get(lot.id);
+    return status === undefined || status === 'active';
+  }
+
   // A lot already on the shop's roster (active or toggled off) never shows
   // here again — re-adding it belongs on the menu screen's own toggle, not
-  // this "bring in something new" flow. A lot the roaster pulled from their
-  // catalog (inRoasterCatalog false) can't be freshly ordered either, per
-  // the "снят с производства" rule — but that never affects lots already on
-  // a menu, only new additions.
+  // this "bring in something new" flow.
   const available = lots
-    .filter((lot) => !(lot.id in menuEntries) && lot.inRoasterCatalog)
+    .filter((lot) => !(lot.id in menuEntries) && isPublishedForOrdering(lot))
     .sort((a, b) => a.country.localeCompare(b.country) || a.name.localeCompare(b.name));
 
   function addLot(lot: Lot) {
@@ -64,6 +106,12 @@ export default function AddLotPage() {
     if (!found.inRoasterCatalog) {
       setJustAdded(null);
       setError(`${found.name} снят с производства обжарщиком — новые партии заказать нельзя.`);
+      return;
+    }
+    const status = canonicalStatuses.get(found.id);
+    if (status !== undefined && status !== 'active') {
+      setJustAdded(null);
+      setError(`${found.name} ещё не опубликован обжарщиком (статус: ${STATUS_LABELS[status]}).`);
       return;
     }
     addLot(found);
