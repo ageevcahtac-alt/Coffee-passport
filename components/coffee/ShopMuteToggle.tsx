@@ -5,10 +5,14 @@ import { useMutedShops } from '@/lib/data/useMutedShops';
 import { muteShop, unmuteShop } from '@/lib/data/shopMutePreferencesStore';
 
 // "Получать обновления о новых лотах" — default on (per spec). Lives on
-// the shop's own page (see app/(site)/shop/[shopId]/page.tsx); flipping it
-// off is the same "Отписаться от обновлений этой кофейни" action as the
-// quick-hide × on a BarUpdatesPanel announcement card, both routed through
-// the same store so either surface immediately reflects the other.
+// the shop's own page (see app/(site)/shop/[shopId]/page.tsx) and is now
+// the ONLY place that mutes a shop's announcements entirely — Unified
+// Notification/Event Center pass: a BarUpdatesPanel card's × used to call
+// this same muteShop() (closing one card silently muted the whole shop,
+// hiding every other announcement from it too), which is exactly the bug
+// that pass fixed. That × now dismisses just the one card via
+// lib/data/lotNotificationReadsStore.ts instead — a lighter, per-occurrence
+// action, deliberately decoupled from this heavier per-shop toggle.
 export function ShopMuteToggle({ shopId }: { shopId: string }) {
   const { userId, isAuthenticated, ready } = useCurrentUser();
   const muted = useMutedShops().some((record) => record.userId === userId && record.shopId === shopId);

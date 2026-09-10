@@ -87,6 +87,18 @@ let cache: Record<string, ShopMenuEntries> | null = null;
 let activeIdsCache = new Map<string, string[]>();
 const listeners = new Set<() => void>();
 
+// Notification Center (0032_notification_center.sql) — a plain monotonic
+// counter, not a derived object, so it's trivially a referentially-stable
+// primitive for useSyncExternalStore (see lib/notifications/useLotAnnouncements.ts).
+// Bumped once per write(), i.e. once per entry change across every shop —
+// callers that only care about "did something change" (not which shop)
+// subscribe to this instead of re-deriving a fresh combined object of
+// every shop's entries on every render.
+let version = 0;
+export function getVersion(): number {
+  return version;
+}
+
 // Back-fills the old plain-boolean shape (lotId -> isActiveInCafe) that may
 // still be sitting in a browser's localStorage from before `status`
 // existed — same defensive normalize-on-read idiom as lotsStore.ts's
@@ -125,6 +137,7 @@ function readOverrides(): Record<string, ShopMenuEntries> {
 function write(next: Record<string, ShopMenuEntries>) {
   cache = next;
   activeIdsCache = new Map();
+  version += 1;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   } catch {
@@ -268,6 +281,92 @@ export async function syncCafeMenuEntriesForLots(lotIds: string[]): Promise<void
     write(overrides);
   } catch {
     // Offline / neither table nor view reachable — local cache stands.
+  }
+}
+
+// Notification Center (0032_notification_center.sql) — the NEW_CAFE_LOT
+// source read. Same shape as syncCafeMenuEntriesForLots above (batch by
+// `.in(...)`, view-then-base-table fallback) but grouped by shop id
+// instead of lot id: "Обновления на баре" (components/coffee/
+// BarUpdatesPanel.tsx) and the Notification Center both need every entry
+// across every one of a guest's VISITED shops, which used to mean one
+// syncCafeMenuFromSupabase(shopId) round trip per shop (a real N+1 once a
+// guest has visited more than a couple of cafes) — this is that same read
+// in one request. A shop with zero rows (nothing on its menu yet) is left
+// untouched, same "no data synced yet, not the same as empty" contract as
+// syncCafeMenuEntriesForLots.
+export async function syncCafeMenuFromSupabaseForShops(shopIds: string[]): Promise<void> {
+  if (shopIds.length === 0) return;
+  try {
+    const supabase = getBrowserSupabaseClient();
+    const overrides = { ...readOverrides() };
+
+    const viewResult = await supabase
+      .from('cafe_menu_entries_roaster_status_view')
+      .select('*')
+      .in('coffee_shop_id', shopIds);
+
+    if (!viewResult.error && viewResult.data) {
+      for (const row of viewResult.data as CafeMenuEntryRoasterStatusViewRow[]) {
+        const shopEntries = { ...(overrides[row.coffee_shop_id] ?? defaultEntries(row.coffee_shop_id)) };
+        shopEntries[row.lot_id] = rowToEntry(row, { status: row.roaster_lot_status, inCatalog: row.roaster_in_catalog });
+        overrides[row.coffee_shop_id] = shopEntries;
+      }
+      write(overrides);
+      return;
+    }
+
+    const { data, error } = await supabase.from('cafe_menu_entries').select('*').in('coffee_shop_id', shopIds);
+    if (error || !data) return;
+    for (const row of data as CafeMenuEntryRow[]) {
+      const shopEntries = { ...(overrides[row.coffee_shop_id] ?? defaultEntries(row.coffee_shop_id)) };
+      shopEntries[row.lot_id] = rowToEntry(row);
+      overrides[row.coffee_shop_id] = shopEntries;
+    }
+    write(overrides);
+  } catch {
+    // Offline / neither table nor view reachable — local cache stands.
+  }
+}
+
+// Notification Center realtime — one shared channel for the whole app
+// (subscribed lazily, at most once per browser tab), not one channel per
+// hook instance. cafe_menu_entries is fully public-read (0017's own "public
+// reads cafe menu entries" policy grants select to anon/authenticated with
+// no restriction), so broadcasting every insert/update to every subscriber
+// leaks nothing a plain SELECT couldn't already return — no per-shop
+// filtered channel needed, and no security boundary to worry about here.
+//
+// On any change, this only ever re-runs the existing single-shop sync for
+// the row's own shop — never appends/mutates the cache directly from the
+// realtime payload itself. That's the actual duplicate-safety mechanism:
+// syncCafeMenuFromSupabase(shopId) always overwrites that shop's entries
+// object wholesale (keyed by lotId), so an event firing twice (e.g. one
+// INSERT followed by Supabase's own realtime resend on reconnect) just
+// re-runs the same idempotent read twice — there is no code path that
+// pushes/appends a notification, so nothing can double up.
+let realtimeSubscribed = false;
+export function ensureCafeMenuRealtimeSubscribed(): void {
+  if (realtimeSubscribed || typeof window === 'undefined') return;
+  realtimeSubscribed = true;
+  try {
+    const supabase = getBrowserSupabaseClient();
+    supabase
+      .channel('cafe-menu-entries-notifications')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'cafe_menu_entries' },
+        (payload) => {
+          const shopId = (payload.new as CafeMenuEntryRow | undefined)?.coffee_shop_id;
+          if (shopId) void syncCafeMenuFromSupabaseForShops([shopId]);
+        }
+      )
+      .subscribe();
+  } catch {
+    // Realtime unavailable (offline, project not configured for it yet) —
+    // the existing per-shop/batch fetch paths above still work, guests just
+    // need to revisit the page to see a change instead of it appearing live.
+    realtimeSubscribed = false;
   }
 }
 

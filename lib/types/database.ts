@@ -442,6 +442,34 @@ export type ShopMutePreferenceRow = {
 export type ShopMutePreferenceInsert = ShopMutePreferenceRow;
 
 // =========================================================
+// Notification Center — see supabase/migrations/0032_notification_center.sql.
+// =========================================================
+
+export type NotificationPreferenceRow = {
+  user_id: string;
+  notify_new_lots: boolean;
+  updated_at: string;
+};
+export type NotificationPreferenceInsert = NotificationPreferenceRow;
+
+// One row per (user, occurrence) — an occurrence is a specific
+// (coffee_shop_id, lot_id, status_changed_at) triple, matching
+// lib/utils/shopAnnouncements.ts's "statusChangedAt resets the clock" rule.
+// read_at/dismissed_at are independent: dismissing hides it from the
+// dashboard preview only, reading marks it seen in the full center — see
+// lib/data/lotNotificationReadsStore.ts.
+export type LotNotificationReadRow = {
+  user_id: string;
+  coffee_shop_id: string;
+  lot_id: string;
+  status_changed_at: string;
+  read_at: string | null;
+  dismissed_at: string | null;
+  created_at: string;
+};
+export type LotNotificationReadInsert = LotNotificationReadRow;
+
+// =========================================================
 // Canonical Lot — see supabase/migrations/0022_canonical_lot_core.sql,
 // 0023_canonical_lot_profiles.sql. Stage 3 Canonical Lot Architecture /
 // Stage 4 implementation. `roasters`/`coffee_shops` here are thin identity
@@ -578,6 +606,16 @@ export type Database = {
         Row: ShopMutePreferenceRow;
         Insert: ShopMutePreferenceInsert;
         Update: Partial<ShopMutePreferenceInsert>;
+      } & NoRelationships;
+      notification_preferences: {
+        Row: NotificationPreferenceRow;
+        Insert: NotificationPreferenceInsert;
+        Update: Partial<NotificationPreferenceInsert>;
+      } & NoRelationships;
+      lot_notification_reads: {
+        Row: LotNotificationReadRow;
+        Insert: LotNotificationReadInsert;
+        Update: Partial<LotNotificationReadInsert>;
       } & NoRelationships;
       cafe_menu_entries: {
         Row: CafeMenuEntryRow;

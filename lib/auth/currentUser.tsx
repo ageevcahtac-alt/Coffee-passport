@@ -7,6 +7,8 @@ import { claimAnonymousUserData } from '@/lib/journey/claimAnonymousData';
 import { syncRecipesFromSupabase } from '@/lib/data/brewingRecipesStore';
 import { syncBaristaProfilesFromSupabase } from '@/lib/data/baristaProfileStore';
 import { syncMutedShopsFromSupabase } from '@/lib/data/shopMutePreferencesStore';
+import { syncNotificationPreferencesFromSupabase } from '@/lib/data/notificationPreferencesStore';
+import { syncLotNotificationReadsFromSupabase } from '@/lib/data/lotNotificationReadsStore';
 
 const ANON_ID_KEY = 'coffee-passport:anon-id';
 
@@ -118,6 +120,8 @@ export function CurrentUserProvider({
       syncRecipesFromSupabase(resolvedId, isAuthenticated),
       syncBaristaProfilesFromSupabase(),
       syncMutedShopsFromSupabase(resolvedId, isAuthenticated),
+      syncNotificationPreferencesFromSupabase(resolvedId, isAuthenticated),
+      syncLotNotificationReadsFromSupabase(resolvedId, isAuthenticated),
     ]);
   }, [authUserId]);
 

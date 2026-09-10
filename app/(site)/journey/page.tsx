@@ -91,11 +91,9 @@ export default function JourneyPage() {
   // localStorage-backed reads elsewhere in this app.
   if (!ready || !userId) return null;
 
-  const visitedShopIds = Array.from(new Set(records.map((record) => record.coffeeShopId)));
-
   return (
     <main className="min-h-dvh flex flex-col px-6 py-16">
-      <BarUpdatesPanel visitedShopIds={visitedShopIds} />
+      <BarUpdatesPanel />
 
       <div className="max-w-md mx-auto w-full mb-6">
         <h1 className="font-display text-3xl leading-[1.1] text-ink-900 mb-2">

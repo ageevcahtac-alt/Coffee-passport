@@ -138,7 +138,7 @@ export default function MapPage() {
 
       <div className="flex-1 relative">
         {view === 'events' ? (
-          <EventsBoard />
+          <EventsBoard mode="full" />
         ) : (
           <ErrorBoundary
             fallback={

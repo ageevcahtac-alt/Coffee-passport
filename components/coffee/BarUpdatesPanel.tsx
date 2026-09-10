@@ -1,101 +1,79 @@
 'use client';
 
-import { useEffect } from 'react';
 import Link from 'next/link';
-import { getCoffeeShopById } from '@/lib/data/coffeeShops';
-import { useLots } from '@/lib/data/useLots';
-import { useCafeMenuLotIds, useCafeMenuEntries } from '@/lib/data/useCafeMenu';
-import { syncCafeMenuFromSupabase } from '@/lib/data/cafeMenuStore';
-import { useCurrentUser } from '@/lib/auth/currentUser';
-import { useMutedShops } from '@/lib/data/useMutedShops';
-import { muteShop } from '@/lib/data/shopMutePreferencesStore';
-import { getShopAnnouncements, type ShopAnnouncement } from '@/lib/utils/shopAnnouncements';
-import { ROAST_TYPE_LABELS } from '@/lib/types/coffee';
+import {
+  useVisitedShopIds,
+  useLotNotifications,
+  useLotNotificationActions,
+  describeLotNotification,
+  lotNotificationHref,
+  type LotNotificationItem,
+} from '@/lib/notifications/useLotNotifications';
+import { openNotificationCenter } from '@/lib/notifications/centerControl';
 import { LotRemovalCountdown } from './LotRemovalCountdown';
 
-// "Обновления на баре" — the guest-facing side of a cafe's lot lifecycle
-// status (see components/cafe/LotStatusControl.tsx). Scoped to shops the
-// guest has actually visited (their own TastingRecord history — same
-// source CoffeeShopProfileCard's caller already derives) AND hasn't muted
-// (see ShopMuteToggle / lib/data/shopMutePreferencesStore.ts) — no
-// "follow a shop" concept exists beyond that, so every other shop's status
-// changes would just be noise. useCafeMenuLotIds is a per-shop hook, so —
-// same as RoasterSupplyMapWidget — this renders one child per shop rather
-// than looping the hook inside a single component.
-export function BarUpdatesPanel({ visitedShopIds }: { visitedShopIds: string[] }) {
-  const { userId, isAuthenticated } = useCurrentUser();
-  const mutedShopIds = new Set(
-    useMutedShops()
-      .filter((record) => record.userId === userId)
-      .map((record) => record.shopId)
-  );
-  const shownShopIds = visitedShopIds.filter((shopId) => !mutedShopIds.has(shopId));
+const PREVIEW_LIMIT = 3;
 
-  if (shownShopIds.length === 0) return null;
+// "Обновления на баре" — the guest-facing side of a cafe's lot lifecycle
+// status (see components/cafe/LotStatusControl.tsx). Unified Notification/
+// Event Center pass: this is now a PREVIEW only — see lib/notifications/
+// useLotNotifications.ts for the shared derivation both this card and the
+// full center read from, so they can never disagree about what exists.
+//
+// Previously this rendered every announcement with no cap at all (the
+// opposite scaling problem from "only 4 preview cards" — a guest who'd
+// checked into 20 cafes got 20 permanently-stacked cards), and its × button
+// called muteShop(), which silences that shop's announcements FOREVER —
+// so closing one card for a shop with two announcements closed both, and
+// there was no way to dismiss just one occurrence without losing all
+// future ones too. Now × calls dismiss() (lib/data/lotNotificationReadsStore.ts),
+// which hides exactly this one occurrence from THIS preview only — it
+// never touches the persistent record in the full center, and never mutes
+// the shop. Muting a whole shop's announcements is still available from
+// its own page ("Отписаться от обновлений этой кофейни", per
+// lib/data/shopMutePreferencesStore.ts) — a separate, heavier action from
+// dismissing one card.
+export function BarUpdatesPanel() {
+  const visitedShopIds = useVisitedShopIds();
+  const actions = useLotNotificationActions();
+  const items = useLotNotifications(visitedShopIds).filter((item) => !item.dismissed);
+
+  if (items.length === 0) return null;
+
+  const visible = items.slice(0, PREVIEW_LIMIT);
+  const remaining = items.length - visible.length;
 
   return (
     <div className="max-w-md mx-auto w-full mb-6">
       <p className="section-label mb-4">Обновления на баре</p>
       <div className="flex flex-col gap-3">
-        {shownShopIds.map((shopId) => (
-          <ShopAnnouncements key={shopId} shopId={shopId} userId={userId ?? ''} isAuthenticated={isAuthenticated} />
+        {visible.map((item) => (
+          <AnnouncementCard key={item.key} item={item} onOpen={actions.markRead} onDismiss={actions.dismiss} />
         ))}
       </div>
+      {(remaining > 0 || items.length > 0) && (
+        <button
+          type="button"
+          onClick={() => openNotificationCenter('lots')}
+          className="mt-3 text-xs text-ink-700 underline underline-offset-2 hover:text-ink-900"
+        >
+          {remaining > 0 ? `Ещё ${remaining} в центре уведомлений →` : 'Все уведомления →'}
+        </button>
+      )}
     </div>
   );
 }
 
-function ShopAnnouncements({
-  shopId,
-  userId,
-  isAuthenticated,
-}: {
-  shopId: string;
-  userId: string;
-  isAuthenticated: boolean;
-}) {
-  useEffect(() => {
-    void syncCafeMenuFromSupabase(shopId);
-  }, [shopId]);
-
-  const shop = getCoffeeShopById(shopId);
-  const lots = useLots();
-  const menuLotIds = useCafeMenuLotIds(shopId);
-  const entries = useCafeMenuEntries(shopId);
-  const menuLots = lots.filter((lot) => menuLotIds.includes(lot.id));
-  const announcements = getShopAnnouncements(menuLots, entries);
-
-  if (!shop || announcements.length === 0) return null;
-
-  return (
-    <>
-      {announcements.map((announcement) => (
-        <AnnouncementCard
-          key={`${shopId}-${announcement.lot.id}`}
-          shopName={shop.name}
-          shopId={shopId}
-          userId={userId}
-          isAuthenticated={isAuthenticated}
-          {...announcement}
-        />
-      ))}
-    </>
-  );
-}
-
 function AnnouncementCard({
-  shopName,
-  shopId,
-  userId,
-  isAuthenticated,
-  lot,
-  status,
-}: ShopAnnouncement & { shopName: string; shopId: string; userId: string; isAuthenticated: boolean }) {
-  const isNew = status === 'new';
-  const roastLabel = ROAST_TYPE_LABELS[lot.roastType];
-  const text = isNew
-    ? `${shopName} добавила новый лот: ${lot.country} ${lot.region || lot.name} (${roastLabel})`
-    : `${shopName} скоро выводит лот ${lot.country} ${lot.region || lot.name}. Успейте попробовать!`;
+  item,
+  onOpen,
+  onDismiss,
+}: {
+  item: LotNotificationItem;
+  onOpen: (item: LotNotificationItem) => void;
+  onDismiss: (item: LotNotificationItem) => void;
+}) {
+  const isNew = item.status === 'new';
 
   return (
     <div
@@ -105,23 +83,20 @@ function AnnouncementCard({
     >
       <button
         type="button"
-        onClick={() => userId && muteShop(userId, shopId, isAuthenticated)}
-        aria-label={`Не показывать новости от ${shopName}`}
-        title="Не показывать новости от этой кофейни"
-        className="absolute top-2.5 right-2.5 text-current opacity-60 hover:opacity-100 leading-none text-base px-1"
+        onClick={() => onDismiss(item)}
+        aria-label="Скрыть это уведомление"
+        title="Скрыть это уведомление"
+        className="absolute top-0.5 right-0.5 text-current opacity-60 hover:opacity-100 leading-none
+                   text-base w-9 h-9 flex items-center justify-center"
       >
         ×
       </button>
 
-      <Link
-        href={`/shop/${shopId}?country=${encodeURIComponent(lot.country)}&roastType=${lot.roastType}`}
-        className="block pr-5 hover:opacity-90 transition-opacity"
-      >
-        {isNew ? '✨ ' : '⚠ '}
-        {text}
+      <Link href={lotNotificationHref(item)} onClick={() => onOpen(item)} className="block pr-7 hover:opacity-90 transition-opacity">
+        {describeLotNotification(item)}
         {!isNew && (
           <div className="mt-1.5">
-            <LotRemovalCountdown shopId={shopId} lotId={lot.id} />
+            <LotRemovalCountdown shopId={item.shopId} lotId={item.lot.id} />
           </div>
         )}
       </Link>

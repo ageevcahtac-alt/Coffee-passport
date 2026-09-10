@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { signOut } from '@/app/auth/actions';
 import { EnthusiastFeedbackWidget } from './EnthusiastFeedbackWidget';
+import { NotificationBell, NotificationCenterPanel } from './NotificationCenter';
 
 const NAV_LINK_CLASSES = 'hover:text-ink-900';
 
@@ -42,6 +43,7 @@ export function Navbar({ userEmail }: { userEmail: string | null }) {
                 <Link href="/journey" className={NAV_LINK_CLASSES}>🧳 Journey</Link>
                 <Link href="/coffee-kitchen" className={NAV_LINK_CLASSES}>🍳 Coffee Kitchen</Link>
                 <Link href="/loyalty" className={NAV_LINK_CLASSES}>💳 Мои карты</Link>
+                <NotificationBell />
                 <form action={signOut}>
                   <button type="submit" className={NAV_LINK_CLASSES}>Sign out</button>
                 </form>
@@ -57,18 +59,24 @@ export function Navbar({ userEmail }: { userEmail: string | null }) {
 
         {/* Mobile hamburger — hidden from md up, where the full nav takes
             over. Sits on one row with the logo at every width, per the
-            task's "логотип и кнопка меню в одну строку" requirement. */}
-        <button
-          type="button"
-          onClick={() => setMenuOpen(true)}
-          aria-label="Открыть меню"
-          aria-expanded={menuOpen}
-          className="md:hidden shrink-0 flex flex-col justify-center gap-1.5 w-9 h-9 items-center"
-        >
-          <span className="block w-5 h-px bg-ink-700" />
-          <span className="block w-5 h-px bg-ink-700" />
-          <span className="block w-5 h-px bg-ink-700" />
-        </button>
+            task's "логотип и кнопка меню в одну строку" requirement. The
+            bell sits right beside it (same row, same tap-target size) since
+            the mobile drawer is a plain link list, not a good home for a
+            live popover. */}
+        <div className="md:hidden flex items-center gap-1 shrink-0">
+          <NotificationBell />
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            aria-label="Открыть меню"
+            aria-expanded={menuOpen}
+            className="flex flex-col justify-center gap-1.5 w-9 h-9 items-center"
+          >
+            <span className="block w-5 h-px bg-ink-700" />
+            <span className="block w-5 h-px bg-ink-700" />
+            <span className="block w-5 h-px bg-ink-700" />
+          </button>
+        </div>
       </div>
 
       {/* Mobile menu drawer */}
@@ -154,6 +162,8 @@ export function Navbar({ userEmail }: { userEmail: string | null }) {
           </div>
         </div>
       )}
+
+      <NotificationCenterPanel />
     </header>
   );
 }

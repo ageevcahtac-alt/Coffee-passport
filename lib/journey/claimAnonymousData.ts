@@ -8,6 +8,7 @@ import { claimCustomCoffeeForUser } from '@/lib/data/customCoffeeStore';
 import { claimCustomCoffeeCuppingsForUser } from '@/lib/data/customCoffeeCuppingsStore';
 import { claimVotesForUser } from '@/lib/data/recipeVotesStore';
 import { claimMutedShopsForUser } from '@/lib/data/shopMutePreferencesStore';
+import { claimNotificationPreferenceForUser } from '@/lib/data/notificationPreferencesStore';
 
 // ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — the full
 // application E2E audit found claimAnonymousTastings (lib/journey/store.ts)
@@ -53,5 +54,6 @@ export async function claimAnonymousUserData(anonUserId: string, realUserId: str
     claimCustomCoffeeCuppingsForUser(anonUserId, realUserId),
     claimVotesForUser(anonUserId, realUserId),
     claimMutedShopsForUser(anonUserId, realUserId),
+    claimNotificationPreferenceForUser(anonUserId, realUserId),
   ]);
 }
