@@ -23,6 +23,7 @@ class MemoryStorage {
 let viewRows: CafeMenuEntryRoasterStatusViewRow[] = [];
 let channelHandlers: Array<(payload: unknown) => void> = [];
 let subscribeCallCount = 0;
+let viewFetchCallCount = 0;
 
 vi.mock('@/lib/supabase/browserClient', () => ({
   getBrowserSupabaseClient: () => ({
@@ -30,11 +31,13 @@ vi.mock('@/lib/supabase/browserClient', () => ({
       if (table === 'cafe_menu_entries_roaster_status_view') {
         return {
           select: () => ({
-            in: (_col: string, shopIds: string[]) =>
-              Promise.resolve({
+            in: (_col: string, shopIds: string[]) => {
+              viewFetchCallCount += 1;
+              return Promise.resolve({
                 data: viewRows.filter((row) => shopIds.includes(row.coffee_shop_id)),
                 error: null,
-              }),
+              });
+            },
             eq: (_col: string, shopId: string) =>
               Promise.resolve({ data: viewRows.filter((row) => row.coffee_shop_id === shopId), error: null }),
           }),
@@ -84,6 +87,7 @@ describe('lib/data/cafeMenuStore — Notification Center additions', () => {
     viewRows = [];
     channelHandlers = [];
     subscribeCallCount = 0;
+    viewFetchCallCount = 0;
     (globalThis as unknown as { window: { localStorage: MemoryStorage } }).window = {
       localStorage: new MemoryStorage(),
     };
@@ -122,6 +126,29 @@ describe('lib/data/cafeMenuStore — Notification Center additions', () => {
     await syncCafeMenuFromSupabaseForShops(['shop-a', 'shop-b']);
 
     expect(getMenuEntries('shop-b')['lot-2']).toBeDefined();
+  });
+
+  it('concurrent calls for the same shop set (e.g. the desktop + mobile bell mounting at once) share one request', async () => {
+    viewRows = [viewRow('shop-a', 'lot-1')];
+    const { syncCafeMenuFromSupabaseForShops } = await import('./cafeMenuStore');
+
+    await Promise.all([
+      syncCafeMenuFromSupabaseForShops(['shop-a']),
+      syncCafeMenuFromSupabaseForShops(['shop-a']),
+      syncCafeMenuFromSupabaseForShops(['shop-a']),
+    ]);
+
+    expect(viewFetchCallCount).toBe(1);
+  });
+
+  it('a later, non-concurrent call still re-fetches (dedup only covers requests actually in flight together)', async () => {
+    viewRows = [viewRow('shop-a', 'lot-1')];
+    const { syncCafeMenuFromSupabaseForShops } = await import('./cafeMenuStore');
+
+    await syncCafeMenuFromSupabaseForShops(['shop-a']);
+    await syncCafeMenuFromSupabaseForShops(['shop-a']);
+
+    expect(viewFetchCallCount).toBe(2);
   });
 
   it('getVersion() increments on every write, and is a stable primitive between writes', async () => {

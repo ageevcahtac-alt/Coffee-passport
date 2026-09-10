@@ -295,8 +295,31 @@ export async function syncCafeMenuEntriesForLots(lotIds: string[]): Promise<void
 // in one request. A shop with zero rows (nothing on its menu yet) is left
 // untouched, same "no data synced yet, not the same as empty" contract as
 // syncCafeMenuEntriesForLots.
+//
+// In-flight dedup, keyed by the exact (sorted) shop-id set: the bell is
+// mounted twice (desktop nav + mobile top bar — Tailwind's responsive
+// classes hide one with CSS, they don't unmount it), and BarUpdatesPanel/
+// the Notification Center can each independently call this for the same
+// visited-shop set on the same page load. Without this, that was up to 4
+// simultaneous, identical requests for the same data. Callers racing in
+// while a fetch for the SAME shop set is already in flight just await
+// that one promise instead of starting a second request.
+const inFlightShopSync = new Map<string, Promise<void>>();
+
 export async function syncCafeMenuFromSupabaseForShops(shopIds: string[]): Promise<void> {
   if (shopIds.length === 0) return;
+  const key = shopIds.slice().sort().join(',');
+  const existing = inFlightShopSync.get(key);
+  if (existing) return existing;
+
+  const promise = doSyncCafeMenuFromSupabaseForShops(shopIds).finally(() => {
+    inFlightShopSync.delete(key);
+  });
+  inFlightShopSync.set(key, promise);
+  return promise;
+}
+
+async function doSyncCafeMenuFromSupabaseForShops(shopIds: string[]): Promise<void> {
   try {
     const supabase = getBrowserSupabaseClient();
     const overrides = { ...readOverrides() };
