@@ -27,6 +27,7 @@ import { RoastProfileSummaryCard } from '@/components/coffee/RoastProfileSummary
 import { RoasterCafeRecommendations } from '@/components/coffee/RoasterCafeRecommendations';
 import { BlindTastingLock } from '@/components/coffee/BlindTastingLock';
 import { FarmerRevealCard } from '@/components/coffee/FarmerRevealCard';
+import { LockIcon } from '@/components/coffee/LockIcon';
 import { TasteComparison } from '@/components/coffee/TasteComparison';
 import { RoastingTab } from '@/components/coffee/RoastingTab';
 import { ExtractionTab } from '@/components/coffee/ExtractionTab';
@@ -441,14 +442,25 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
     <main className="min-h-dvh flex flex-col px-6 py-16">
       {justRevealed && (
         <div className="reveal-pop text-center mb-8">
-          <span className="text-5xl" aria-hidden="true">
-            🔓
-          </span>
+          <LockIcon open className="w-10 h-10 mx-auto text-gold-500" />
           <p className="section-label justify-center mt-3">Профиль обжарщика открыт</p>
         </div>
       )}
 
       <FarmerRevealCard lot={displayLot} animate={justRevealed} />
+
+      {/* Contextual Taste visual polish pass: the guest's own perception
+          renders before the roaster's official Q-Score/profile reveal below
+          — previously LotPassport's Q-Score seal was the first thing shown
+          after unlock, which read as "the official grade" outranking the
+          guest's own read before they'd even seen it themselves. */}
+      <div className="max-w-md mx-auto w-full mt-10">
+        <TasteComparison lot={lot} tasting={latestTasting} animate={justRevealed} />
+      </div>
+
+      <div className="max-w-md mx-auto w-full mt-6">
+        <TastePhilosophyMoment />
+      </div>
 
       <div className={`max-w-md mx-auto w-full mt-10 ${justRevealed ? 'reveal-fade' : ''}`}>
         <LotPassport lot={displayLot} roaster={roaster} />
@@ -456,14 +468,6 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
 
       <div className="max-w-md mx-auto w-full mt-4">
         <LotRemovalCountdown shopId={selectedShopId} lotId={lot.id} variant="notice" />
-      </div>
-
-      <div className="max-w-md mx-auto w-full mt-10">
-        <TasteComparison lot={lot} tasting={latestTasting} animate={justRevealed} />
-      </div>
-
-      <div className="max-w-md mx-auto w-full mt-6">
-        <TastePhilosophyMoment />
       </div>
 
       {lotTastingHistory.length > 1 && (

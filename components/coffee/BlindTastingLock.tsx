@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Lot } from '@/lib/types/coffee';
+import { LockIcon } from './LockIcon';
 
 // Gates the roaster's detailed read of the lot (descriptors, flavor
 // diagram) behind the guest's own blind cupping — see app/(site)/passport/
@@ -18,9 +19,7 @@ export function BlindTastingLock({
     <div>
       <div className="rounded-md border border-gold-400 bg-gold-400/10 px-5 py-4 mb-8">
         <p className="text-sm text-ink-900 leading-relaxed">
-          <span className="mr-1.5" aria-hidden="true">
-            🔒
-          </span>
+          <LockIcon className="w-4 h-4 mr-1.5 inline-block align-[-3px] text-gold-500" />
           <strong className="font-medium">Доверьтесь своим рецепторам!</strong> Оцените
           кислотность, сладость, тело и горечь. После сохранения карточки откроется профиль от
           обжарщика.
@@ -56,9 +55,7 @@ export function BlindTastingLock({
       </div>
 
       <div className="relative rounded-md border border-dashed border-ink-300 bg-parchment-100 px-6 py-14 text-center mb-8">
-        <span className="text-4xl mb-4 inline-block" aria-hidden="true">
-          🔒
-        </span>
+        <LockIcon className="w-9 h-9 mb-4 inline-block text-ink-300" />
         <p className="font-display text-lg text-ink-900 mb-2">Вкусовые дескрипторы скрыты</p>
         <p className="text-ink-500 text-sm max-w-xs mx-auto">
           Диаграмма вкуса и заметки обжарщика откроются после вашей собственной слепой оценки.

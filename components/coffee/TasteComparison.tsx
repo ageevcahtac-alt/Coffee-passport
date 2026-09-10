@@ -7,6 +7,7 @@ import { compareDescriptors, getGuestDescriptorWords } from '@/lib/journey/taste
 import { StarRating } from './StarRating';
 import { FlavorRadar } from './FlavorRadar';
 import { PossibleInfluences } from './PossibleInfluences';
+import { DescriptorTags } from './DescriptorTags';
 
 // TASTE_INTENT_HISTORICAL_LINK_IMPLEMENTATION.md — mirrors the Public
 // Passport's own roast-intent pattern (app/(site)/passport/[lotId]/page.tsx):
@@ -88,19 +89,25 @@ export function TasteComparison({
 
       {hasAnyDescriptors ? (
         <div className="mb-2">
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <p className="text-xs text-ink-400 mb-1.5">Ты почувствовал</p>
-              <p className="text-sm text-ink-900 leading-relaxed">
-                {comparison.guestDescriptors.length > 0 ? comparison.guestDescriptors.join(' · ') : '—'}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-ink-400 mb-1.5">Профиль лота (текущий)</p>
-              <p className="text-sm text-ink-900 leading-relaxed">
-                {comparison.referenceDescriptors.length > 0 ? comparison.referenceDescriptors.join(' · ') : '—'}
-              </p>
-            </div>
+          {/* My perception comes first and reads more prominently than the
+              lot's declared profile below it — the guest's own read is the
+              headline, not a column beside the "official" one. */}
+          <div className="mb-5">
+            <p className="text-sm font-medium text-ink-900 mb-2">Вы почувствовали</p>
+            {comparison.guestDescriptors.length > 0 ? (
+              <DescriptorTags descriptors={comparison.guestDescriptors} />
+            ) : (
+              <p className="text-sm text-ink-400">—</p>
+            )}
+          </div>
+
+          <div className="mb-5">
+            <p className="text-xs text-ink-400 mb-2">Профиль лота (текущий)</p>
+            {comparison.referenceDescriptors.length > 0 ? (
+              <DescriptorTags descriptors={comparison.referenceDescriptors} />
+            ) : (
+              <p className="text-sm text-ink-400">—</p>
+            )}
           </div>
 
           {comparison.referenceDescriptors.length === 0 ? (
@@ -112,17 +119,28 @@ export function TasteComparison({
             <>
               {comparison.shared.length > 0 && (
                 <div className="mb-3">
-                  <p className="text-xs text-ink-400 mb-1">Совпало</p>
-                  <p className="text-sm text-ink-900">{comparison.shared.join(' · ')}</p>
+                  <p className="text-xs text-ink-400 mb-2">Совпало</p>
+                  <DescriptorTags descriptors={comparison.shared} />
                 </div>
               )}
 
               {hasDifference && (
                 <div className="mb-3">
-                  <p className="text-xs text-ink-400 mb-1">По-разному</p>
-                  <p className="text-sm text-ink-700">
-                    {[...comparison.guestOnly, ...comparison.referenceOnly].join(' · ')}
-                  </p>
+                  <p className="text-xs text-ink-400 mb-2">По-разному</p>
+                  <div className="flex flex-col gap-3">
+                    {comparison.guestOnly.length > 0 && (
+                      <div>
+                        <p className="text-[11px] text-ink-300 mb-1">У вас</p>
+                        <DescriptorTags descriptors={comparison.guestOnly} />
+                      </div>
+                    )}
+                    {comparison.referenceOnly.length > 0 && (
+                      <div>
+                        <p className="text-[11px] text-ink-300 mb-1">В профиле лота</p>
+                        <DescriptorTags descriptors={comparison.referenceOnly} />
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

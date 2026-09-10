@@ -70,8 +70,16 @@ export function CommunityTastingsCard({ tastings }: { tastings: CommunityTasting
               <p className="text-[11px] text-ink-500 mb-1.5">
                 {FLAVOR_AXES.map(({ key, label }) => `${label} ${tasting.guestFlavorProfile[key]}`).join(' · ')}
               </p>
-              {tasting.liked && <p className="text-xs text-ink-700">👍 {tasting.liked}</p>}
-              {tasting.disliked && <p className="text-xs text-ink-500">👎 {tasting.disliked}</p>}
+              {tasting.liked && (
+                <p className="text-xs text-ink-700">
+                  <span className="text-ink-400">Понравилось:</span> {tasting.liked}
+                </p>
+              )}
+              {tasting.disliked && (
+                <p className="text-xs text-ink-500">
+                  <span className="text-ink-400">Не понравилось:</span> {tasting.disliked}
+                </p>
+              )}
               {tasting.note && <p className="text-xs text-ink-500 mt-1">{tasting.note}</p>}
             </div>
           );
