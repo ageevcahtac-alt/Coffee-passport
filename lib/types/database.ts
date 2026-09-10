@@ -181,6 +181,15 @@ export type CheckinCommunityViewRow = {
   disliked: string;
   note: string;
   created_at: string;
+  // Contextual Taste (COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md) — added by
+  // 0031_checkins_community_sensory_tags.sql so "как его чувствовали
+  // другие" can aggregate real descriptor words, not just the four numeric
+  // axes. Same non-identifying category tags already exposed to staff via
+  // checkins_roaster_view/checkins_cafe_benchmark_view (0007/0021) — never
+  // sub_descriptors, which 0026's own comment deliberately keeps out of
+  // this anonymous view. Optional because a Supabase project that hasn't
+  // applied 0031 yet still returns valid rows shaped like before.
+  sensory_tags?: string[];
 };
 
 // Anonymous grain/extraction read for a roaster_admin — see

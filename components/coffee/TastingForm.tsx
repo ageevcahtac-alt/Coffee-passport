@@ -111,7 +111,10 @@ export function TastingForm({
       </div>
 
       <div>
-        <p className="section-label mb-4">Вкусовые впечатления</p>
+        <p className="section-label mb-1">Вкусовые впечатления</p>
+        <p className="text-xs text-ink-400 mb-4">
+          Опишите так, как чувствуете вы — здесь нет правильного ответа.
+        </p>
         <SensoryTagPicker
           sensoryTags={sensoryTags}
           onSensoryTagsChange={setSensoryTags}

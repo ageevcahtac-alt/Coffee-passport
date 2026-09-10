@@ -41,8 +41,10 @@ import {
 } from '@/lib/data/canonicalLotStore';
 import { RoastIntentCard } from '@/components/coffee/RoastIntentCard';
 import { CommunityTastingsCard } from '@/components/coffee/CommunityTastingsCard';
+import { TastePhilosophyMoment } from '@/components/coffee/TastePhilosophyMoment';
+import { TasteHistoryPreview } from '@/components/coffee/TasteHistoryPreview';
 import type { LotStatus } from '@/lib/types/database';
-import type { Lot } from '@/lib/types/coffee';
+import { BREWING_METHODS, type Lot } from '@/lib/types/coffee';
 import { hasRevealedTasting } from './blindTastingGate';
 
 // Phase 4.5.8 — Coffee is the identity/description of the coffee itself;
@@ -390,6 +392,15 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const latestTasting = shopTastings[0] ?? null;
 
+  // Contextual Taste (COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md, §8) — "One
+  // Lot — Many Cups": every one of THIS guest's own past tastings of this
+  // exact lot, across every shop/method/date, not scoped to the currently
+  // selected shop the way `shopTastings` above is. Built from the same
+  // already-loaded `journey` data — zero new Supabase calls.
+  const lotTastingHistory = journey.filter(
+    (record) => record.lotId === lot.id && record.userId === currentUserId
+  );
+
   if (!latestTasting) {
     if (canonicalStatus === 'draft') {
       return (
@@ -451,6 +462,16 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
         <TasteComparison lot={lot} tasting={latestTasting} animate={justRevealed} />
       </div>
 
+      <div className="max-w-md mx-auto w-full mt-6">
+        <TastePhilosophyMoment />
+      </div>
+
+      {lotTastingHistory.length > 1 && (
+        <div className="max-w-md mx-auto w-full mt-6">
+          <TasteHistoryPreview records={lotTastingHistory} />
+        </div>
+      )}
+
       {communityTastings.length > 0 && (
         <div className="max-w-md mx-auto w-full mt-6">
           <CommunityTastingsCard tastings={communityTastings} />
@@ -463,7 +484,11 @@ export default function LotPassportPage({ params }: { params: { lotId: string } 
           {shop?.name ?? selectedShopId}
           {shop?.city ? ` · ${shop.city}` : ''}
         </p>
-        <p className="text-xs text-ink-400 mt-1">Сохранённая карточка этого лота в этой кофейне</p>
+        <p className="text-xs text-ink-400 mt-1">
+          {BREWING_METHODS.find((method) => method.id === latestTasting.brewingMethod)?.label ?? 'Способ не указан'}
+          {' · '}
+          Сохранённая карточка этого лота в этой кофейне
+        </p>
       </div>
 
       <div className="max-w-md mx-auto w-full mt-8">

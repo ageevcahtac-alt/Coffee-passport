@@ -1,6 +1,6 @@
 'use client';
 
-import type { TastingRecord } from '@/lib/types/coffee';
+import type { SensoryTagId, TastingRecord } from '@/lib/types/coffee';
 import type { CheckinCommunityViewRow, CheckinRow } from '@/lib/types/database';
 import { getBrowserSupabaseClient } from '@/lib/supabase/browserClient';
 import { generateId } from '@/lib/utils/id';
@@ -36,6 +36,13 @@ function normalizeRecord(record: TastingRecord): TastingRecord {
   return {
     ...record,
     guestFlavorProfile: record.guestFlavorProfile ?? { acidity: 0, sweetness: 0, body: 0, bitterness: 0 },
+    // Contextual Taste (COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md) — this was
+    // missing from the backfill even though subDescriptors right below it
+    // already got one; a record saved before sensoryTags existed had
+    // `undefined` here, which getGuestDescriptorWords (a new consumer that
+    // iterates it directly) would throw on. Same fallback shape as every
+    // other array field in this function.
+    sensoryTags: record.sensoryTags ?? [],
     subDescriptors: record.subDescriptors ?? {},
     bodyTexture: record.bodyTexture ?? null,
     defects: record.defects ?? [],
@@ -353,6 +360,13 @@ export interface CommunityTasting {
   disliked: string;
   note: string;
   createdAt: string;
+  // Contextual Taste (COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md) — added
+  // alongside 0031_checkins_community_sensory_tags.sql so community
+  // aggregation can work with real descriptor words. Defaults to an empty
+  // array (not undefined) for a Supabase project that hasn't applied 0031
+  // yet, so every reader can treat "no tags" and "old view shape" the same
+  // way without a special case.
+  sensoryTags: SensoryTagId[];
 }
 
 function rowToCommunityTasting(row: CheckinCommunityViewRow): CommunityTasting {
@@ -369,6 +383,7 @@ function rowToCommunityTasting(row: CheckinCommunityViewRow): CommunityTasting {
     disliked: row.disliked,
     note: row.note,
     createdAt: row.created_at,
+    sensoryTags: (row.sensory_tags ?? []) as SensoryTagId[],
   };
 }
 
