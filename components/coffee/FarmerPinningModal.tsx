@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CoffeeShop, Lot } from '@/lib/types/coffee';
 import { useBaristaProfiles } from '@/lib/data/useBaristaProfiles';
 import { UNSPECIFIED_BARISTA_ID } from '@/lib/data/baristas';
+import { useCurrentUser } from '@/lib/auth/currentUser';
 import { BaristaProfileCard } from '@/components/barista/BaristaProfileCard';
 
 // Same teardrop marker silhouette as CoffeeBeltMap's real pins, reused here
@@ -38,6 +39,17 @@ export function FarmerPinningModal({
   const router = useRouter();
   const barista = useBaristaProfiles().find((candidate) => candidate.id === baristaId);
   const showBarista = Boolean(barista && barista.id !== UNSPECIFIED_BARISTA_ID);
+
+  // P16 — the tasting this ritual is celebrating was just saved locally
+  // (see addTastingRecord in taste/page.tsx): for a signed-in Guest that
+  // already reached Supabase, but for an anonymous guest it only lives in
+  // this browser's localStorage under their per-device anon id until they
+  // log in (claimAnonymousUserData in lib/auth/currentUser.tsx then
+  // re-owns it automatically — already wired, not touched here). Offering
+  // the save CTA only to !isAuthenticated is what keeps a signed-in Guest
+  // from ever seeing an irrelevant "create an account" prompt (§16).
+  const { isAuthenticated } = useCurrentUser();
+  const [saveDismissed, setSaveDismissed] = useState(false);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -110,6 +122,37 @@ export function FarmerPinningModal({
         {showBarista && barista && (
           <div className="reveal-fade mb-8" style={{ animationDelay: '1.7s' }}>
             <BaristaProfileCard barista={barista} />
+          </div>
+        )}
+
+        {/* Кадр 3.7 — "Сохранить в Coffee Passport" (P16) — offered only to
+            an anonymous guest, only once, right after they've already seen
+            their result: this is the value-first registration moment
+            §4/§5 of P16 require, never a gate the guest has to pass through
+            to get here. Dismissing it just hides this block; Кадр 4 below
+            (already the guest's existing "continue anonymously" path)
+            stays fully available either way — nothing here blocks it. */}
+        {!isAuthenticated && !saveDismissed && (
+          <div className="reveal-fade mb-6 rounded-md border border-gold-400 bg-gold-50 p-4" style={{ animationDelay: '1.85s' }}>
+            <p className="text-sm text-ink-900 leading-relaxed mb-3">
+              Сохрани эту дегустацию в своём Coffee Passport — и собирай свою историю кофе.
+            </p>
+            <button
+              type="button"
+              onClick={() => router.push(`/auth/login?next=${encodeURIComponent(`/passport/${lot.id}`)}`)}
+              className="inline-flex items-center justify-center w-full rounded-md bg-gold-500
+                         text-parchment-100 font-body font-semibold text-sm px-6 py-4
+                         hover:bg-gold-400 transition-colors"
+            >
+              Сохранить в Coffee Passport
+            </button>
+            <button
+              type="button"
+              onClick={() => setSaveDismissed(true)}
+              className="mt-3 text-xs text-ink-400 underline underline-offset-2 hover:text-ink-700"
+            >
+              Не сейчас
+            </button>
           </div>
         )}
 
