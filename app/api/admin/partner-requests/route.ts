@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/adminClient';
 
+// A no-argument GET is otherwise statically prerendered at build time, which
+// would call createAdminSupabaseClient() without runtime secrets.
+export const dynamic = 'force-dynamic';
+
 // Protected by middleware.ts (HTTP Basic Auth on /api/admin/**) — lists
 // every partner request, newest first, for the CRM tab.
 export async function GET() {
