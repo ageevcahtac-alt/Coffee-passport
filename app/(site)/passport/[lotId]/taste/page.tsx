@@ -170,6 +170,9 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
         isLactoseFree: drinkSelection.isLactoseFree,
         fatContentPercent: drinkSelection.fatContentPercent,
         plantMilkType: drinkSelection.plantMilkType,
+        // Sharing is explicit opt-in only ("never automatic", same rule as
+        // BrewingRecipe.isPublic); this form has no consent control.
+        isPublic: false,
         ...pendingTasteValues,
       },
       userId
