@@ -43,6 +43,7 @@ import {
 import { RoastIntentCard } from '@/components/coffee/RoastIntentCard';
 import { CommunityTastingsCard } from '@/components/coffee/CommunityTastingsCard';
 import { TastePhilosophyMoment } from '@/components/coffee/TastePhilosophyMoment';
+import { XoStoreImportNotice } from '@/components/coffee/XoStoreImportNotice';
 import { TasteHistoryPreview } from '@/components/coffee/TasteHistoryPreview';
 import type { LotStatus } from '@/lib/types/database';
 import { BREWING_METHODS, type Lot } from '@/lib/types/coffee';
@@ -80,6 +81,15 @@ function withCanonicalCoffeeOverlay(lot: Lot, coffee: CanonicalCoffee | null): L
 }
 
 export default function LotPassportPage({ params }: { params: { lotId: string } }) {
+  return (
+    <>
+      <XoStoreImportNotice lotId={params.lotId} />
+      <LotPassportView params={params} />
+    </>
+  );
+}
+
+function LotPassportView({ params }: { params: { lotId: string } }) {
   const lots = useLots();
   const journey = useJourney();
   const coffeeShops = useCoffeeShops();
