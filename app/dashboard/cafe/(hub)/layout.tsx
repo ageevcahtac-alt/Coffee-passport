@@ -7,6 +7,7 @@ import { useStaffSession } from '@/lib/auth/staffSession';
 
 const TABS = [
   { href: '/dashboard/cafe', label: 'Меню зерна' },
+  { href: '/dashboard/cafe/orders', label: 'Заказы в ростерию' },
   { href: '/dashboard/cafe/analytics', label: 'Отзывы гостей' },
   { href: '/dashboard/cafe/team', label: 'Команда / Персонал' },
   { href: '/dashboard/cafe/loyalty', label: 'Лояльность' },
@@ -39,7 +40,10 @@ export default function CafeHubLayout({ children }: { children: React.ReactNode 
 
         <nav className="flex gap-1 border-b border-ink-200 mb-10 overflow-x-auto">
           {TABS.map((tab) => {
-            const active = tab.href === pathname;
+            // Exact match for the root tab; nested pages (e.g. /orders/new)
+            // keep their parent tab highlighted.
+            const active =
+              tab.href === pathname || (tab.href !== '/dashboard/cafe' && pathname.startsWith(`${tab.href}/`));
             return (
               <Link
                 key={tab.href}

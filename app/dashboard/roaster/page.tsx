@@ -114,7 +114,13 @@ export default function RoasterDashboardPage() {
               {roaster?.name ?? 'Обжарщик'}
             </p>
             <h1 className="font-display text-3xl text-ink-900">Лоты</h1>
-            <div className="flex items-center gap-4 mt-2">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
+              <Link
+                href="/dashboard/roaster/production"
+                className="text-xs text-ink-500 underline underline-offset-2 hover:text-ink-900"
+              >
+                🏭 Производство и отгрузка
+              </Link>
               <Link
                 href="/dashboard/roaster/equipment"
                 className="text-xs text-ink-500 underline underline-offset-2 hover:text-ink-900"

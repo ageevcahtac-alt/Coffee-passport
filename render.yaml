@@ -29,3 +29,7 @@ services:
         sync: false
       - key: PARTNER_NOTIFY_FROM
         sync: false
+      - key: XO_ADMIN_INTEGRATION_URL
+        sync: false
+      - key: XO_ADMIN_INTEGRATION_SECRET
+        sync: false
