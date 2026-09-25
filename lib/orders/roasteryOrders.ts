@@ -215,6 +215,21 @@ export function productionTone(status: ProductionStatus): StageTone {
   return 'active';
 }
 
+/**
+ * A production job that still needs the roastery's attention: accepted by
+ * XO COFFEE, queued, and not yet started. Anything further along
+ * (in_production and later) or cancelled — including a queued job whose
+ * order was cancelled — is not "new". Drives the new-order badge only; no
+ * state is kept, so a job stops counting once production starts.
+ */
+export function isNewProductionJob(job: Pick<ProductionJob, 'status' | 'order'>): boolean {
+  return job.status === 'queued' && job.order?.status !== 'cancelled';
+}
+
+export function countNewProductionJobs(jobs: Pick<ProductionJob, 'status' | 'order'>[]): number {
+  return jobs.filter(isNewProductionJob).length;
+}
+
 export type SourceFilter = 'all' | 'xo_store' | 'coffee_shop';
 export const SOURCE_FILTERS: { id: SourceFilter; label: string }[] = [
   { id: 'all', label: 'Все' },

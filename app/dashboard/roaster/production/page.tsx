@@ -8,10 +8,12 @@ import { useStaffApi } from '@/lib/orders/useStaffApi';
 import {
   PRODUCTION_STATUS_LABELS,
   SOURCE_FILTERS,
+  countNewProductionJobs,
   describeDestination,
   describeSource,
   filterBySource,
   formatWeight,
+  isNewProductionJob,
   productionTone,
   sumUnits,
   type ProductionJob,
@@ -38,6 +40,7 @@ export default function RoasterProductionPage() {
   const filtered = useMemo(() => (jobs.status === 'ready' ? filterBySource(jobs.data, filter) : []), [jobs, filter]);
   const active = filtered.filter((job) => ACTIVE.includes(job.status));
   const closed = filtered.filter((job) => !ACTIVE.includes(job.status));
+  const newCount = jobs.status === 'ready' ? countNewProductionJobs(jobs.data) : 0;
 
   async function settled(message: string | null) {
     setNotice(message);
@@ -102,6 +105,13 @@ export default function RoasterProductionPage() {
 
         {jobs.status === 'ready' ? (
           <>
+            {newCount > 0 ? (
+              <p role="status" className="rounded-md border border-gold-300 bg-gold-50 px-4 py-3 text-sm text-gold-600 mb-4">
+                Новых заказов в очереди: <span className="data-value font-medium">{newCount}</span> — ожидают начала
+                производства.
+              </p>
+            ) : null}
+
             <p className="section-label mb-4">В работе</p>
             {active.length === 0 ? (
               <p className="text-sm text-ink-500 mb-8">
@@ -159,7 +169,14 @@ function JobCard({ job, onSettled }: { job: ProductionJob; onSettled: (message: 
             {formatDateTime(job.order?.accepted_at ?? job.created_at)}
           </p>
         </div>
-        <StatusPill label={PRODUCTION_STATUS_LABELS[job.status]} tone={productionTone(job.status)} />
+        <div className="flex items-center gap-1.5">
+          {isNewProductionJob(job) ? (
+            <span className="inline-flex items-center rounded-full bg-ink-900 px-2 py-0.5 text-[10px] font-medium text-parchment-100">
+              Новый
+            </span>
+          ) : null}
+          <StatusPill label={PRODUCTION_STATUS_LABELS[job.status]} tone={productionTone(job.status)} />
+        </div>
       </div>
 
       <p className="text-sm text-ink-900 font-medium mb-1">{describeSource(job)}</p>

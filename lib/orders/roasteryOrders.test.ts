@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   NEXT_STEP,
+  countNewProductionJobs,
   describeDestination,
   describeSource,
   destinationLabel,
   filterBySource,
+  isNewProductionJob,
   parseCafeOrderRequest,
   parseTransitionRequest,
   resolveShopIdentity,
@@ -138,5 +140,44 @@ describe('labels and views', () => {
       fromStock: 3,
       toProduce: 3,
     });
+  });
+});
+
+describe('new production job indicator', () => {
+  const order = (status: NonNullable<ProductionJob['order']>['status']): ProductionJob['order'] => ({
+    id: 'o',
+    number: 'XO-000004',
+    status,
+    source: 'coffee_shop',
+    source_ref: null,
+    source_name: 'XO Coffee',
+    destination_type: 'coffee_shop',
+    destination_label: null,
+    destination_address: null,
+    accepted_at: 't',
+  });
+
+  it('counts only queued jobs, from both Store and coffee shop', () => {
+    expect(isNewProductionJob(job({ status: 'queued', source: 'xo_store' }))).toBe(true);
+    expect(isNewProductionJob(job({ status: 'queued', source: 'coffee_shop', order: order('accepted') }))).toBe(true);
+  });
+
+  it('never treats started, finished or cancelled jobs as new', () => {
+    for (const status of ['in_production', 'produced', 'ready_for_shipping', 'shipped', 'cancelled'] as const) {
+      expect(isNewProductionJob(job({ status }))).toBe(false);
+    }
+    expect(isNewProductionJob(job({ status: 'queued', order: order('cancelled') }))).toBe(false);
+  });
+
+  it('counts a mixed queue', () => {
+    const jobs = [
+      job({ id: 'a', status: 'queued' }),
+      job({ id: 'b', status: 'queued', source: 'coffee_shop', order: order('accepted') }),
+      job({ id: 'c', status: 'in_production' }),
+      job({ id: 'd', status: 'shipped' }),
+      job({ id: 'e', status: 'cancelled' }),
+    ];
+    expect(countNewProductionJobs(jobs)).toBe(2);
+    expect(countNewProductionJobs([])).toBe(0);
   });
 });
