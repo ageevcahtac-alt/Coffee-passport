@@ -15,6 +15,8 @@ import { findCanonicalLotByPublicId, getActiveReferenceTasteProfile } from '@/li
 // another device until the account is signed in and reachable again.
 
 const STORAGE_KEY = 'coffee-passport:journey';
+const PARKED_STORAGE_PREFIX = 'coffee-passport:journey:user:';
+const ACTIVE_USER_KEY = 'coffee-passport:active-user';
 export const DEMO_USER_ID = 'demo-user';
 
 // useSyncExternalStore requires getServerSnapshot to return a referentially
@@ -24,7 +26,12 @@ export const DEMO_USER_ID = 'demo-user';
 const EMPTY_RECORDS: TastingRecord[] = [];
 
 let cache: TastingRecord[] | null = null;
+let resolvedScopeUserId: string | null = null;
 const listeners = new Set<() => void>();
+
+export function setJourneyUserScope(userId: string): void {
+  resolvedScopeUserId = userId;
+}
 
 // TastingRecord has grown fields since this store's earliest deploys (e.g.
 // guestFlavorProfile, added for blind-cupping comparisons) — a browser that
@@ -78,13 +85,16 @@ function read(): TastingRecord[] {
 
 function write(records: TastingRecord[]) {
   cache = records;
+  let persisted = false;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+    persisted = true;
   } catch {
     // Storage unavailable (private mode, quota) — keep the in-memory cache
     // so the current session still works, just without persistence.
   }
   listeners.forEach((listener) => listener());
+  return persisted;
 }
 
 export function subscribe(listener: () => void): () => void {
@@ -219,7 +229,23 @@ export async function syncCheckinsForUser(userId: string, isAuthenticated: boole
       return;
     }
     if (!data) return;
-    write(mergeById(read(), (data as CheckinRow[]).map(rowToRecord)));
+    // A pull started by the outgoing account must not repopulate the
+    // shared cache after account-switch isolation has already run.
+    const activeUserId = window.localStorage.getItem(ACTIVE_USER_KEY);
+    if ((resolvedScopeUserId && resolvedScopeUserId !== userId) || (activeUserId && activeUserId !== userId)) return;
+    const rows = data as CheckinRow[];
+    const serverIds = new Set(rows.map((row) => row.id));
+    const missing = read().filter((record) => record.userId === userId && !serverIds.has(record.id));
+    write(mergeById(read(), rows.map(rowToRecord)));
+    // Retry failed saves/claims on the existing authenticated sync path.
+    // Ignoring conflicts preserves the server copy if another sync won.
+    if (missing.length > 0) {
+      const { error: uploadError } = await supabase.from('checkins').upsert(missing.map(recordToRow), {
+        onConflict: 'id',
+        ignoreDuplicates: true,
+      });
+      if (uploadError) console.warn('[checkins] Supabase retry failed, kept local-only:', uploadError.message);
+    }
   } catch (err) {
     console.warn('[checkins] Supabase fetch threw, local cache stands:', err);
   }
@@ -272,6 +298,25 @@ export function addTastingRecord(
       // claim can re-tag this same id's userId before this lookup resolves,
       // and reference lookup must never clobber that re-tagging.
       let withReference: TastingRecord = { ...record, referenceTasteProfileId };
+      const currentRecord = read().find((r) => r.id === record.id);
+      if (!currentRecord) {
+        // A switch may have parked this save while the lookup was in flight.
+        // Preserve its historical reference there; the owner's next sync
+        // will upload it under their session, never the incoming account's.
+        try {
+          const key = PARKED_STORAGE_PREFIX + record.userId;
+          const raw = window.localStorage.getItem(key);
+          if (raw) {
+            const parked = JSON.parse(raw) as TastingRecord[];
+            window.localStorage.setItem(key, JSON.stringify(parked.map((r) =>
+              r.id === record.id && r.userId === record.userId ? { ...r, referenceTasteProfileId } : r
+            )));
+          }
+        } catch (err) {
+          console.warn('[checkins] Could not update parked tasting reference:', err);
+        }
+        return;
+      }
       write(
         read().map((r) => {
           if (r.id !== record.id) return r;
@@ -279,12 +324,16 @@ export function addTastingRecord(
           return withReference;
         })
       );
+      if (resolvedScopeUserId && resolvedScopeUserId !== withReference.userId) return;
       return getBrowserSupabaseClient().from('checkins').insert(recordToRow(withReference));
     })
     .then((result) => {
       if (result?.error) {
         console.warn('[checkins] Supabase write failed, kept local-only:', result.error.message);
       }
+    })
+    .catch((err) => {
+      console.warn('[checkins] Supabase write threw, kept local-only:', err);
     });
 
   return record;
@@ -298,6 +347,40 @@ export function addTastingRecord(
 // stay consistent regardless of call order.
 export function purgeRecordsForUser(userId: string): void {
   write(read().filter((record) => record.userId !== userId));
+}
+
+// Preserve the outgoing account's cache separately: consumers of
+// getSnapshot must never see it, but offline saves should survive a switch.
+// This is a parked read cache, not an upload queue; normal sync retries it
+// only after its owner signs in again.
+export function parkRecordsForUser(userId: string): void {
+  const records = read().filter((record) => record.userId === userId);
+  if (records.length > 0) {
+    try {
+      const key = PARKED_STORAGE_PREFIX + userId;
+      const raw = window.localStorage.getItem(key);
+      const parked = raw ? (JSON.parse(raw) as TastingRecord[]).filter((record) => record.userId === userId) : [];
+      window.localStorage.setItem(key, JSON.stringify(mergeById(parked, records)));
+    } catch (err) {
+      // Privacy wins if storage cannot preserve an isolated copy.
+      console.warn('[checkins] Could not preserve outgoing account cache:', err);
+    }
+  }
+  purgeRecordsForUser(userId);
+}
+
+export function restoreRecordsForUser(userId: string): void {
+  try {
+    const key = PARKED_STORAGE_PREFIX + userId;
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return;
+    const records = (JSON.parse(raw) as TastingRecord[])
+      .filter((record) => record.userId === userId)
+      .map(normalizeRecord);
+    if (write(mergeById(read(), records))) window.localStorage.removeItem(key);
+  } catch (err) {
+    console.warn('[checkins] Could not restore account cache:', err);
+  }
 }
 
 // GAP 2 (IDENTITY_SESSION_CONTINUITY_IMPLEMENTATION.md) — called once, right

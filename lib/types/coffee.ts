@@ -335,14 +335,15 @@ export function emptyDrinkSelectionDraft(): DrinkSelectionDraft {
 }
 
 // Gates the "Далее" button on the drink-selection step — every branch of
-// the tree described at the top of this section must be fully resolved
+// the tree described at the top of this section must be resolved
 // before the guest can move on to the (still-blind) taste assessment.
 export function isDrinkSelectionComplete(draft: DrinkSelectionDraft): draft is DrinkSelection {
   if (!draft.drinkCategory || !draft.drinkType) return false;
   if (draft.drinkType === 'custom' && !draft.customDrinkName.trim()) return false;
   if (draft.drinkCategory === 'milk_based') {
     if (!draft.milkBaseType) return false;
-    if (draft.milkBaseType === 'cow' && (!draft.cowMilkType || draft.fatContentPercent === null)) return false;
+    // A guest may not know the cow-milk type or fat content; null keeps
+    // that uncertainty without making them guess before tasting.
     if (draft.milkBaseType === 'plant' && !draft.plantMilkType?.trim()) return false;
   }
   return true;

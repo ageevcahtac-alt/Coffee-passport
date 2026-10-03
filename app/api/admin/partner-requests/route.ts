@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/adminClient';
+import { requireAdminBasicAuth } from '@/lib/auth/requireAdminBasicAuth';
 
 // A no-argument GET is otherwise statically prerendered at build time, which
 // would call createAdminSupabaseClient() without runtime secrets.
 export const dynamic = 'force-dynamic';
 
-// Protected by middleware.ts (HTTP Basic Auth on /api/admin/**) — lists
+// Independently protected here as well as in middleware — lists
 // every partner request, newest first, for the CRM tab.
-export async function GET() {
+export async function GET(request: Request) {
+  const denied = requireAdminBasicAuth(request);
+  if (denied) return denied;
   const supabase = createAdminSupabaseClient();
   const { data, error } = await supabase
     .from('partner_requests')

@@ -39,15 +39,23 @@ function messageForError(error: unknown): string {
 export function QrScanner({
   onDecode,
   onError,
+  resetKey = 0,
 }: {
   onDecode: (text: string) => void;
   onError?: (message: string) => void;
+  resetKey?: number;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rafRef = useRef<number | null>(null);
   const decodedRef = useRef(false);
+  const onDecodeRef = useRef(onDecode);
+  const onErrorRef = useRef(onError);
+  const tickRef = useRef<(() => void) | null>(null);
+  // Keep the camera alive when the parent refreshes catalog/menu state.
+  onDecodeRef.current = onDecode;
+  onErrorRef.current = onError;
 
   const [state, setState] = useState<ScannerState>('idle');
   const [errorMessage, setErrorMessage] = useState('');
@@ -60,7 +68,7 @@ export function QrScanner({
         const message = 'Этот браузер не поддерживает доступ к камере. Введите код лота вручную ниже.';
         setErrorMessage(message);
         setState('error');
-        onError?.(message);
+        onErrorRef.current?.(message);
         return;
       }
 
@@ -87,12 +95,12 @@ export function QrScanner({
         const message = messageForError(error);
         setErrorMessage(message);
         setState('error');
-        onError?.(message);
+        onErrorRef.current?.(message);
       }
     }
 
     function tick() {
-      if (decodedRef.current) return;
+      if (cancelled || decodedRef.current) return;
       const video = videoRef.current;
       const canvas = canvasRef.current;
 
@@ -109,7 +117,7 @@ export function QrScanner({
             const result = jsQR(imageData.data, width, height, { inversionAttempts: 'dontInvert' });
             if (result && result.data) {
               decodedRef.current = true;
-              onDecode(result.data);
+              onDecodeRef.current(result.data);
               return;
             }
           }
@@ -118,16 +126,26 @@ export function QrScanner({
       rafRef.current = requestAnimationFrame(tick);
     }
 
-    start();
+    tickRef.current = tick;
+    void start();
 
     return () => {
       cancelled = true;
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
+      tickRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- start()/tick() close over refs; onDecode/onError identity churn shouldn't restart the camera
   }, []);
+
+  useEffect(() => {
+    decodedRef.current = false;
+    if (streamRef.current && tickRef.current) {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(tickRef.current);
+    }
+  }, [resetKey]);
 
   if (state === 'error') {
     return (

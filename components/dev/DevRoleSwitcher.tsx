@@ -6,9 +6,8 @@ import { signInAsPilotStaff } from '@/app/auth/actions';
 import { PILOT_STAFF_ROLES } from '@/lib/auth/pilotStaff';
 
 // Demo-stage convenience: jump straight into any cabinet without typing a
-// login form by hand. Always visible (this whole deployment IS the demo),
-// not gated behind NODE_ENV, since it's meant for testing the live Render
-// site too, not just local dev.
+// login form by hand. The whole panel is opt-in, so a guest deployment
+// with the demo flag off has no development navigation covering its CTAs.
 //
 // Энтузиаст/Админ are plain navigation — neither route needs a session
 // (/journey works anonymously, /admin is HTTP-Basic-gated by
@@ -36,15 +35,16 @@ const buttonClasses = (active: boolean) =>
 // roaster/café accounts alongside the demo ones — gate them behind an
 // explicit opt-in env var (server-checked again in signInAsPilotStaff,
 // and at the DB layer in 0029_pilot_demo_kill_switch.sql) rather than
-// showing them unconditionally. Энтузиаст/Админ stay unconditional: they
-// are plain navigation to routes gated by their own auth (none, and HTTP
-// Basic Auth respectively), not a role grant.
+// showing them unconditionally. The same opt-in hides navigation-only
+// buttons too; authorization remains independent of this UI gate.
 const PILOT_DEMO_ENABLED = process.env.NEXT_PUBLIC_PILOT_DEMO_ENABLED === 'true';
 
 export function DevRoleSwitcher() {
   const router = useRouter();
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+
+  if (!PILOT_DEMO_ENABLED) return null;
 
   return (
     // inset-x-0 + justify-center (rather than left-1/2 + -translate-x-1/2)

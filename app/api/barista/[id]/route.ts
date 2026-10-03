@@ -4,11 +4,8 @@ import type { BaristaProfileRow, RecipeRow } from '@/lib/types/database';
 import type { Barista, BrewingRecipe } from '@/lib/types/coffee';
 import { getBaristaById } from '@/lib/data/baristas';
 
-// Same "not really an admin bypass" client as /api/events — createAdminSupabaseClient
-// uses the anon key (no service role configured for this project yet), so
-// every read here is still gated by barista_profiles'/recipes' own RLS
-// policies (see supabase/migrations/0015_barista_profiles.sql and
-// 0005_recipes_equipment_checkins.sql's "public reads published recipes").
+// This service-role client bypasses RLS. The public route must therefore
+// explicitly restrict recipes to published rows.
 export const dynamic = 'force-dynamic';
 
 function rowToRecipe(row: RecipeRow): BrewingRecipe {
@@ -59,7 +56,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
   const [{ data: profileRow, error: profileError }, { data: recipeRows, error: recipeError }] =
     await Promise.all([
       supabase.from('barista_profiles').select('*').eq('id', params.id).maybeSingle(),
-      supabase.from('recipes').select('*').eq('author_type', 'barista').eq('author_id', params.id),
+      supabase.from('recipes').select('*').eq('author_type', 'barista').eq('author_id', params.id).eq('is_public', true),
     ]);
 
   if (profileError) {

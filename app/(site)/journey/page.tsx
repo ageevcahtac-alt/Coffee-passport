@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useJourney } from '@/lib/journey/useJourney';
-import { getMergedLotById } from '@/lib/data/lotsStore';
+import { getMergedLotById, syncLotsFromSupabase } from '@/lib/data/lotsStore';
+import { useLots } from '@/lib/data/useLots';
 import { consumePinJustActivated } from '@/lib/journey/mapFlag';
 import { useCurrentUser } from '@/lib/auth/currentUser';
 import { CoffeeJourney } from '@/components/coffee/CoffeeJourney';
@@ -24,6 +25,12 @@ import type { TastingRecord } from '@/lib/types/coffee';
 
 export default function JourneyPage() {
   const { userId, ready } = useCurrentUser();
+  // Checkins can arrive before their non-seed lots on a new device. Keep
+  // this parent subscribed so the map and history re-render after sync.
+  useLots();
+  useEffect(() => {
+    void syncLotsFromSupabase();
+  }, []);
   // Scoped to the resolved account/anonymous-device id — this store is one
   // flat local array with no server-side per-account partition, so without
   // this filter a second account signed in on the same browser would see

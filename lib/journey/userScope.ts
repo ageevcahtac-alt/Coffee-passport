@@ -1,6 +1,6 @@
 'use client';
 
-import { purgeRecordsForUser } from '@/lib/journey/store';
+import { parkRecordsForUser, restoreRecordsForUser, setJourneyUserScope } from '@/lib/journey/store';
 import { purgeEnthusiastRecipesForUser } from '@/lib/data/brewingRecipesStore';
 import { purgeEquipmentForUser } from '@/lib/data/equipmentStore';
 import { purgeVotesForUser } from '@/lib/data/recipeVotesStore';
@@ -24,6 +24,8 @@ const ACTIVE_USER_KEY = 'coffee-passport:active-user';
 // if the active REAL account changed, drop every record that belonged to
 // the PREVIOUS real account before the new one's session starts reading
 // these stores, so their data can't bleed into someone else's view.
+// Journey checkins are parked outside the shared snapshot instead of
+// deleted, so failed/offline cloud writes can retry when their owner returns.
 //
 // Deliberately narrow: only ever removes entries the outgoing user
 // authored/owns. Roaster and coffee-shop authored data (benchmark recipes,
@@ -45,7 +47,9 @@ const ACTIVE_USER_KEY = 'coffee-passport:active-user';
 // purge, local cache never touched), and only signing into a genuinely
 // DIFFERENT real account still triggers the purge.
 export function reconcileUserScope(newUserId: string, isAuthenticated: boolean): void {
-  if (typeof window === 'undefined' || !isAuthenticated) return;
+  if (typeof window === 'undefined') return;
+  setJourneyUserScope(newUserId);
+  if (!isAuthenticated) return;
 
   let previousUserId: string | null = null;
   try {
@@ -55,7 +59,7 @@ export function reconcileUserScope(newUserId: string, isAuthenticated: boolean):
   }
 
   if (previousUserId && previousUserId !== newUserId) {
-    purgeRecordsForUser(previousUserId);
+    parkRecordsForUser(previousUserId);
     purgeEnthusiastRecipesForUser(previousUserId);
     purgeEquipmentForUser(previousUserId);
     purgeVotesForUser(previousUserId);
@@ -70,6 +74,7 @@ export function reconcileUserScope(newUserId: string, isAuthenticated: boolean):
 
   try {
     window.localStorage.setItem(ACTIVE_USER_KEY, newUserId);
+    restoreRecordsForUser(newUserId);
   } catch {
     // Storage unavailable — nothing to reconcile against next time either,
     // so this is a no-op rather than a half-applied purge.

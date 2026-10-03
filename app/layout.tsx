@@ -36,10 +36,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${display.variable} ${body.variable} ${mono.variable}`}>
+    <html lang="ru" className={`${display.variable} ${body.variable} ${mono.variable}`}>
       <body>
         {children}
-        <DevRoleSwitcher />
+        {process.env.NEXT_PUBLIC_PILOT_DEMO_ENABLED === 'true' && <DevRoleSwitcher />}
       </body>
     </html>
   );

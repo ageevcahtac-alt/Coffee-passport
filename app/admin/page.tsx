@@ -22,8 +22,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'legacy', label: 'Создать лот (Supabase)' },
 ];
 
-// Gated by HTTP Basic Auth in middleware.ts — this page itself has no
-// further auth of its own.
+// Basic Auth is checked by both middleware and this segment's server layout.
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>('requests');
   const allLots = useLots();

@@ -37,6 +37,7 @@ export function TastingForm({
   onCancel,
   submitLabel = 'Сохранить дегустацию в дневник',
   drinkCategory,
+  initialValues,
 }: {
   onSave: (values: TastingFormValues) => void;
   onCancel?: () => void;
@@ -47,23 +48,26 @@ export function TastingForm({
   // "Мой кофе" cupping flow (CustomCoffeeCuppingForm), which has no drink
   // selection step and renders the original, category-agnostic form.
   drinkCategory?: DrinkCategory;
+  initialValues?: TastingFormValues;
 }) {
-  const [rating, setRating] = useState(0);
-  const [acidity, setAcidity] = useState(3);
-  const [sweetness, setSweetness] = useState(3);
-  const [body, setBody] = useState(3);
-  const [bitterness, setBitterness] = useState(3);
-  const [bodyTexture, setBodyTexture] = useState<BodyTexture | null>(null);
-  const [sensoryTags, setSensoryTags] = useState<SensoryTagId[]>([]);
-  const [subDescriptors, setSubDescriptors] = useState<FlavorSubDescriptors>({});
-  const [defects, setDefects] = useState<DefectId[]>([]);
-  const [liked, setLiked] = useState('');
-  const [disliked, setDisliked] = useState('');
-  const [note, setNote] = useState('');
-  const [milkBalance, setMilkBalance] = useState(3);
-  const [coffeeReadability, setCoffeeReadability] = useState(3);
-  const [creaminess, setCreaminess] = useState(3);
-  const [aftertaste, setAftertaste] = useState(3);
+  // The parent retains the draft while the barista step is open. Remounting
+  // after "Назад" restores it, while a new tasting keeps the original defaults.
+  const [rating, setRating] = useState(initialValues?.rating ?? 0);
+  const [acidity, setAcidity] = useState(initialValues?.guestFlavorProfile.acidity ?? 3);
+  const [sweetness, setSweetness] = useState(initialValues?.guestFlavorProfile.sweetness ?? 3);
+  const [body, setBody] = useState(initialValues?.guestFlavorProfile.body ?? 3);
+  const [bitterness, setBitterness] = useState(initialValues?.guestFlavorProfile.bitterness ?? 3);
+  const [bodyTexture, setBodyTexture] = useState<BodyTexture | null>(initialValues?.bodyTexture ?? null);
+  const [sensoryTags, setSensoryTags] = useState<SensoryTagId[]>(initialValues?.sensoryTags ?? []);
+  const [subDescriptors, setSubDescriptors] = useState<FlavorSubDescriptors>(initialValues?.subDescriptors ?? {});
+  const [defects, setDefects] = useState<DefectId[]>(initialValues?.defects ?? []);
+  const [liked, setLiked] = useState(initialValues?.liked ?? '');
+  const [disliked, setDisliked] = useState(initialValues?.disliked ?? '');
+  const [note, setNote] = useState(initialValues?.note ?? '');
+  const [milkBalance, setMilkBalance] = useState(initialValues?.milkBalance ?? 3);
+  const [coffeeReadability, setCoffeeReadability] = useState(initialValues?.coffeeReadability ?? 3);
+  const [creaminess, setCreaminess] = useState(initialValues?.creaminess ?? 3);
+  const [aftertaste, setAftertaste] = useState(initialValues?.aftertaste ?? 3);
 
   const showMilkAxes = drinkCategory === 'milk_based';
   const showAftertasteAxis = drinkCategory === 'black_coffee' || drinkCategory === 'filter_alternative';

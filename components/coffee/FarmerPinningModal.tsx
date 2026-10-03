@@ -66,7 +66,7 @@ export function FarmerPinningModal({
       aria-modal="true"
       aria-label="Печать Фермера"
     >
-      <div className="relative w-full max-w-sm rounded-md bg-parchment-100 px-6 py-10 text-center shadow-xl">
+      <div className="relative w-full max-w-sm max-h-[calc(100dvh-3rem)] overflow-y-auto rounded-md bg-parchment-100 px-6 py-10 text-center shadow-xl">
         <button
           type="button"
           onClick={() => router.push(`/passport/${lot.id}`)}

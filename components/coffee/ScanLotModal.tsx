@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { useLots } from '@/lib/data/useLots';
+import { getMergedLotById, syncLotsFromSupabase } from '@/lib/data/lotsStore';
 import { getMenuLotIds, syncCafeMenuFromSupabase } from '@/lib/data/cafeMenuStore';
 import { extractLotId } from '@/lib/utils/lotId';
 import { QrScanner } from '@/components/coffee/QrScanner';
@@ -12,48 +12,54 @@ import { QrScanner } from '@/components/coffee/QrScanner';
 const ACTIVE_SHOP_ID = 'shop-xo-vsevolozhsk';
 
 // Validates the full chain before letting a guest into a lot's passport:
-// the code must resolve to a real lot in the roaster catalog (useLots,
-// merged across roasters), AND that lot must be on the current cafe's
-// active menu (cafeMenuStore) — a code for a real lot the guest's shop
-// doesn't actually serve is rejected just like an unknown code.
+// Known catalog lots must be on the pilot cafe's active menu. Unknown
+// local ids are delegated to the passport's scoped fetch rather than
+// rejected against a possibly incomplete/offline cache.
 export function ScanLotModal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
-  const lots = useLots();
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [scannerFailed, setScannerFailed] = useState(false);
+  const [scannerResetKey, setScannerResetKey] = useState(0);
+  const syncRef = useRef<Promise<unknown> | null>(null);
+  const resolvingRef = useRef(false);
 
-  // getMenuLotIds below reads the local cache synchronously (it's called
-  // from a plain resolve function, not a hook, so it can't await this
-  // itself) — kick the fetch off as early as possible, on mount, so the
-  // cache is warm by the time a real scan/submit happens a beat later,
-  // same best-effort pattern as syncEquipmentFromSupabase elsewhere.
+  // Start both reads together, but wait for them before checking the menu.
+  // The decode callback then reads today's snapshot rather than closing
+  // over the initial render's seed-only array.
   useEffect(() => {
-    void syncCafeMenuFromSupabase(ACTIVE_SHOP_ID);
+    syncRef.current = Promise.all([
+      syncLotsFromSupabase(),
+      syncCafeMenuFromSupabase(ACTIVE_SHOP_ID),
+    ]);
   }, []);
 
-  function resolveAndNavigate(raw: string) {
+  async function resolveAndNavigate(raw: string) {
     const lotId = extractLotId(raw);
-    if (!lotId) return;
-
-    const lot = lots.find((candidate) => candidate.id.toUpperCase() === lotId);
-    if (!lot) {
-      setError('Лот с таким кодом не найден у обжарщиков.');
+    if (!lotId) {
+      setError('Не удалось прочитать код лота. Попробуйте ещё раз.');
       return;
     }
-
-    const menuLotIds = getMenuLotIds(ACTIVE_SHOP_ID);
-    if (!menuLotIds.includes(lot.id)) {
-      setError('Этот лот пока не включён в меню кофейни — уточните у бариста.');
-      return;
+    if (resolvingRef.current) return;
+    resolvingRef.current = true;
+    try {
+      await syncRef.current;
+      const lot = getMergedLotById(lotId);
+      // Offline/unknown local rows are delegated to the passport's own
+      // scoped fetch instead of presenting a false "not found" here.
+      if (lot && !getMenuLotIds(ACTIVE_SHOP_ID).includes(lot.id)) {
+        setError('Этот лот пока не включён в меню кофейни — уточните у бариста.');
+        return;
+      }
+      router.push(`/passport/${lot?.id ?? lotId}`);
+    } finally {
+      resolvingRef.current = false;
     }
-
-    router.push(`/passport/${lot.id}`);
   }
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    resolveAndNavigate(code);
+    void resolveAndNavigate(code);
   }
 
   return (
@@ -82,7 +88,13 @@ export function ScanLotModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="mb-4">
-          <QrScanner onDecode={resolveAndNavigate} onError={() => setScannerFailed(true)} />
+          <QrScanner onDecode={resolveAndNavigate} onError={() => setScannerFailed(true)} resetKey={scannerResetKey} />
+          {error && !scannerFailed && (
+            <button type="button" onClick={() => { setError(''); setScannerResetKey((key) => key + 1); }}
+              className="text-sm text-ink-700 underline mt-3">
+              Сканировать ещё раз
+            </button>
+          )}
         </div>
         <p className="text-xs text-ink-400 mb-4">
           {scannerFailed

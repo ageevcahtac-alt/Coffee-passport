@@ -65,7 +65,7 @@ export function MilkBaseSelector({
       {value.milkBaseType === 'cow' && (
         <div className="flex flex-col gap-4 reveal-fade">
           <div>
-            <p className="text-xs text-ink-400 mb-2">Вид молока</p>
+            <p className="text-xs text-ink-400 mb-2">Вид молока — можно пропустить</p>
             <div role="radiogroup" aria-label="Вид коровьего молока" className="grid grid-cols-2 gap-3">
               {(Object.keys(COW_MILK_TYPE_LABELS) as CowMilkType[]).map((id) => (
                 <MilkBaseCard
@@ -75,6 +75,11 @@ export function MilkBaseSelector({
                   onClick={() => onChange({ cowMilkType: id })}
                 />
               ))}
+              <MilkBaseCard
+                label="Не знаю"
+                checked={value.cowMilkType === null}
+                onClick={() => onChange({ cowMilkType: null })}
+              />
             </div>
           </div>
 
@@ -89,8 +94,19 @@ export function MilkBaseSelector({
           </label>
 
           <div>
-            <p className="text-xs text-ink-400 mb-2">Жирность, %</p>
+            <p className="text-xs text-ink-400 mb-2">Жирность, % — можно пропустить</p>
             <div className="flex flex-wrap gap-2 mb-2">
+              <button
+                type="button"
+                onClick={() => onChange({ fatContentPercent: null })}
+                aria-pressed={value.fatContentPercent === null}
+                className={`rounded-full border px-3.5 py-2 text-sm transition-colors
+                            ${value.fatContentPercent === null
+                              ? 'border-gold-400 bg-gold-400/10 text-ink-900 font-medium'
+                              : 'border-ink-200 bg-parchment-200 text-ink-500'}`}
+              >
+                Не знаю
+              </button>
               {COW_MILK_FAT_PRESETS.map((percent) => (
                 <button
                   key={percent}

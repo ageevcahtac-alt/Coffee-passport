@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/adminClient';
+import { requireAdminBasicAuth } from '@/lib/auth/requireAdminBasicAuth';
 import { PARTNER_REQUEST_STATUS_ORDER, type PartnerRequestStatus } from '@/lib/types/partnerRequest';
 
-// Protected by middleware.ts (HTTP Basic Auth on /api/admin/**) — updates
+// Independently protected here as well as in middleware — updates
 // status and/or manager notes for one lead. Partial: only fields present
 // in the body are changed.
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+  const denied = requireAdminBasicAuth(request);
+  if (denied) return denied;
   let body: { status?: string; manager_notes?: string };
   try {
     body = await request.json();

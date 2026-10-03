@@ -268,6 +268,7 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
               onSave={handleSaveTaste}
               submitLabel="Далее — работа бариста"
               drinkCategory={drinkSelection.drinkCategory}
+              initialValues={pendingTasteValues ?? undefined}
             />
           </>
         )}

@@ -16,3 +16,14 @@ export function safeNextPath(next: string | null | undefined): string {
   if (next.includes('://')) return '/'
   return next
 }
+
+// A contextual login already carries ?next=...; appending another '?' hides
+// the error inside that value. Parse the safe path so both fields survive.
+export function authErrorPath(errorRedirect: string, message: string): string {
+  const url = new URL(safeNextPath(errorRedirect), 'http://local')
+  // URL treats backslashes as path separators. Recheck the parsed origin
+  // so a crafted /\\host path cannot change the redirect destination.
+  if (url.origin !== 'http://local') return '/'
+  url.searchParams.set('error', message)
+  return url.pathname + url.search
+}

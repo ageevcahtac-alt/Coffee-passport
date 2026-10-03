@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { PILOT_STAFF_PASSWORD, PILOT_STAFF_ROLES, type PilotStaffRole } from '@/lib/auth/pilotStaff'
-import { safeNextPath } from '@/lib/auth/safeRedirect'
+import { authErrorPath, safeNextPath } from '@/lib/auth/safeRedirect'
 
 export async function signInWithPassword(formData: FormData) {
   const supabase = await createClient()
@@ -15,7 +15,7 @@ export async function signInWithPassword(formData: FormData) {
   // Which page's form submitted this — /auth/login's standalone form vs the
   // enthusiast form embedded on the landing page — so a failed attempt
   // bounces back to where the guest actually was, not always /auth/login.
-  const errorRedirect = String(formData.get('errorRedirect') || '/auth/login')
+  const errorRedirect = safeNextPath(String(formData.get('errorRedirect') || '/auth/login'))
 
   const { error } = await supabase.auth.signInWithPassword({
     email,
@@ -23,7 +23,7 @@ export async function signInWithPassword(formData: FormData) {
   })
 
   if (error) {
-    redirect(`${errorRedirect}?error=${encodeURIComponent(error.message)}`)
+    redirect(authErrorPath(errorRedirect, error.message))
   }
 
   revalidatePath('/', 'layout')
@@ -36,7 +36,7 @@ export async function signUpWithPassword(formData: FormData) {
   const email = String(formData.get('email') || '')
   const password = String(formData.get('password') || '')
   const next = safeNextPath(String(formData.get('next') || '/'))
-  const errorRedirect = String(formData.get('errorRedirect') || '/auth/login')
+  const errorRedirect = safeNextPath(String(formData.get('errorRedirect') || '/auth/login'))
 
   const { error } = await supabase.auth.signUp({
     email,
@@ -44,7 +44,7 @@ export async function signUpWithPassword(formData: FormData) {
   })
 
   if (error) {
-    redirect(`${errorRedirect}?error=${encodeURIComponent(error.message)}`)
+    redirect(authErrorPath(errorRedirect, error.message))
   }
 
   revalidatePath('/', 'layout')

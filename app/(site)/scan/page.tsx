@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useLots } from '@/lib/data/useLots';
-import { syncLotsFromSupabase } from '@/lib/data/lotsStore';
 import { getRoasterById } from '@/lib/data/roasters';
 import { extractLotId } from '@/lib/utils/lotId';
 import { QrScanner } from '@/components/coffee/QrScanner';
@@ -19,32 +18,17 @@ export default function ScanPage() {
   const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [scannerFailed, setScannerFailed] = useState(false);
-
-  // End-to-end audit (PUBLIC_COFFEE_PASSPORT_END_TO_END_AUDIT.md, §IDENTITY):
-  // this page used to validate a scanned/typed code against `useLots()`
-  // without ever syncing the canonical catalog first — the same overlay
-  // /dashboard/roaster, /dashboard/cafe/add-lot, and /passport/[lotId]
-  // already fetch on mount. Every real Canonical Lot lives only in
-  // Supabase, not in the hardcoded seed demo lots, so a guest using this
-  // in-app scanner (rather than their phone's own camera, which decodes the
-  // QR straight to /passport/[lotId] without passing through this page at
-  // all) got a hard "не найден" for any real lot, with no retry — worse
-  // than a transient flash, since resolveAndNavigate never re-checks.
-  useEffect(() => {
-    void syncLotsFromSupabase();
-  }, []);
+  const [scannerResetKey, setScannerResetKey] = useState(0);
 
   function resolveAndNavigate(raw: string) {
     const lotId = extractLotId(raw);
-    if (!lotId) return;
-
-    const lot = lots.find((candidate) => candidate.id.toUpperCase() === lotId);
-    if (!lot) {
-      setError('Лот с таким кодом не найден. Проверьте код на этикетке.');
+    if (!lotId) {
+      setError('Не удалось прочитать код лота. Попробуйте ещё раз.');
       return;
     }
-
-    router.push(`/passport/${lot.id}`);
+    // The passport loads its own real catalog row and handles unknown ids.
+    // A scanner must not reject a non-seed lot from its initial render cache.
+    router.push(`/passport/${lotId}`);
   }
 
   function handleSubmit(event: FormEvent) {
@@ -59,7 +43,13 @@ export default function ScanPage() {
     <main className="min-h-dvh flex flex-col px-6 py-16 max-w-md mx-auto w-full">
       <p className="section-label mb-6">Сканировать кофе</p>
 
-      <QrScanner onDecode={resolveAndNavigate} onError={() => setScannerFailed(true)} />
+      <QrScanner onDecode={resolveAndNavigate} onError={() => setScannerFailed(true)} resetKey={scannerResetKey} />
+      {error && !scannerFailed && (
+        <button type="button" onClick={() => { setError(''); setScannerResetKey((key) => key + 1); }}
+          className="text-sm text-ink-700 underline mt-3">
+          Сканировать ещё раз
+        </button>
+      )}
 
       <p className="text-xs text-ink-400 mt-3 mb-8">
         {scannerFailed
