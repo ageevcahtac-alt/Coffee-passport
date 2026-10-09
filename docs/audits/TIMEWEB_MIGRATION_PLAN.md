@@ -342,3 +342,10 @@ UFW установлен, фактический `ufw status` — inactive. Fire
 - Timer `coffee-passport-cert-renew.timer` включён: проверка продления каждые шесть часов, reload Nginx после renew. `certbot renew --dry-run` успешно завершён. Короткий IP certificate требует работающего продления.
 - DNS/production traffic не переключались. HTTP 200 ещё не подтверждает полноценное приложение: импорт рабочей базы ожидает отдельного согласования, а Next public URL всё ещё требует пересборки с HTTPS API.
 - Конфигурация proxy, service/timer и проверенный installer включены в `deploy/timeweb/` и `scripts/timeweb/configure_ip_https.py`. ACME account/private key и issuance/renewal logs остаются только на сервере.
+
+## Код конфигурации Next.js
+
+- `next.config.js` теперь берёт image hostname/protocol/port из фактического `NEXT_PUBLIC_SUPABASE_URL`, сохраняя прежний Cloud hostname как fallback при отсутствии env. Разрешение всех произвольных hosts не добавлялось.
+- `.env.example` поясняет публичный HTTPS URL и обязательную пересборку NEXT_PUBLIC variables.
+- Локальный `npm run build` с этими изменениями завершился успешно: compilation, встроенные lint/type checks и генерация всех 38 static pages. Runtime Timeweb env и server rebuild проверяются отдельно; локальная сборка сама по себе их не подтверждает.
+- Read-only Source Auth settings API подтвердил: signup разрешён, email/password включён, email autoconfirm=true, phone и все OAuth providers отключены. У target обнаружены email autoconfirm=false и phone=true; для сохранения source-сценариев эти target flags требуют исправления вместе с SITE_URL/callback URL.

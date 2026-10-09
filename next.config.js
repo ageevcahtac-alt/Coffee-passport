@@ -1,10 +1,15 @@
 /** @type {import('next').NextConfig} */
+const supabaseUrl = new URL(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://vodmmtzclvqemcujwmdf.supabase.co'
+);
+
 const nextConfig = {
   images: {
     remotePatterns: [
       {
-        protocol: 'https',
-        hostname: 'vodmmtzclvqemcujwmdf.supabase.co',
+        protocol: supabaseUrl.protocol.replace(':', ''),
+        hostname: supabaseUrl.hostname,
+        port: supabaseUrl.port,
       },
     ],
   },
