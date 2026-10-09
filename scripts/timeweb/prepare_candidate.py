@@ -126,12 +126,31 @@ def main():
         sql += b'CREATE SCHEMA public AUTHORIZATION postgres;\n'
     source_public_owner = next(row['owner'] for row in source_inventory['schema_acl'] if row['nspname']=='public')
     owner_sql = ('ALTER SCHEMA public OWNER TO "' + source_public_owner.replace('"','""') + '";\n').encode()
-    sql += auth_sql + b'\n' + public_sql + b'\n' + owner_sql + schema_acl_sql + b'\n' + trigger_sql + b'\nSET session_replication_role = origin;\n'
+    # pg_dump expresses schema ACL changes relative to PostgreSQL's standard
+    # public schema. Explicit CREATE SCHEMA lacks its default PUBLIC USAGE.
+    # Reconstruct the complete observed ACL, including grantors and grant option,
+    # rather than assuming defaults or adding an unverified broad grant.
+    acl_query = "SELECT coalesce(json_agg(x),'[]') FROM (SELECT pg_get_userbyid(a.grantor) AS grantor,CASE WHEN a.grantee=0 THEN 'PUBLIC' ELSE pg_get_userbyid(a.grantee) END AS grantee,a.privilege_type,a.is_grantable FROM pg_namespace n CROSS JOIN LATERAL aclexplode(coalesce(n.nspacl,acldefault('n',n.nspowner))) a WHERE n.nspname='public' ORDER BY 1,2,3)x"
+    acl = json.loads(query(source_db, acl_query))
+    def identifier(value):
+        return '"' + value.replace('"','""') + '"'
+    acl_sql = 'SET ROLE ' + identifier(source_public_owner) + ';\n'
+    grantees = sorted({row['grantee'] for row in acl})
+    # Include the creator to remove CREATE SCHEMA's initial implicit ACL.
+    for grantee in sorted(set(grantees + ['PUBLIC','postgres'])):
+        acl_sql += 'REVOKE ALL ON SCHEMA public FROM ' + ('PUBLIC' if grantee=='PUBLIC' else identifier(grantee)) + ';\n'
+    acl_sql += 'RESET ROLE;\n'
+    for row in acl:
+        acl_sql += 'SET ROLE '+identifier(row['grantor'])+';\nGRANT '+row['privilege_type']+' ON SCHEMA public TO '+('PUBLIC' if row['grantee']=='PUBLIC' else identifier(row['grantee']))+(' WITH GRANT OPTION' if row['is_grantable'] else '')+';\nRESET ROLE;\n'
+    sql += auth_sql + b'\n' + public_sql + b'\n' + owner_sql + schema_acl_sql + acl_sql.encode() + b'\n' + trigger_sql + b'\nSET session_replication_role = origin;\n'
     restore_sql = private('filtered-restore.sql', sql)
     command(['docker', 'exec', '-i', 'supabase-db', 'psql', '-U', 'supabase_admin', '-d', candidate,
              '-X', '--single-transaction', '-v', 'ON_ERROR_STOP=1'], 'candidate-filtered-restore.log', input=sql)
 
     mismatches = []
+    actual_acl=json.loads(query(candidate,acl_query))
+    if actual_acl != acl:
+        raise SystemExit('CANDIDATE_SCHEMA_ACL_MISMATCH')
     for table in tables(source_db,'public'):
         if digest(source_db,'public',table) != digest(candidate,'public',table):
             mismatches.append('public.'+table)
@@ -150,6 +169,7 @@ def main():
               'source_public_tables':len(tables(source_db,'public')),'auth_tables_imported':selected_tables,
               'auth_application_triggers':app_triggers,'auth_schema_migrations_preserved':True,
               'storage_schema_and_history_preserved':True,'content_mismatches':mismatches,
+              'schema_acl_exact_match':True,
               'target_before':target_before}
     private('candidate-summary.json',json.dumps(report,indent=2))
     latest = root/'candidate-summary.json'

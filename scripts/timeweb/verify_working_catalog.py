@@ -27,7 +27,7 @@ for name in ['tables','columns','constraints','policies','rls','functions','trig
         # Database names are expected to differ. ACLs must be compared with the
         # live-source inventory: a full restore into template0 can retain its
         # default PUBLIC schema USAGE, which was not present in the Cloud ACL.
-        selected=[{k:v for k,v in x.items() if k!='table_catalog'} for x in rows if any(x.get(k)=='public' for k in ['schemaname','table_schema','nspname'])]
+        selected=[{k:sorted(v) if isinstance(v,list) else v for k,v in x.items() if k!='table_catalog'} for x in rows if any(x.get(k)=='public' for k in ['schemaname','table_schema','nspname'])]
         return sorted((json.dumps(x,sort_keys=True) for x in selected))
     # Compare deparsed definitions under the same target search_path so auth
     # qualification differences (uid() vs auth.uid()) are not false failures.
@@ -61,8 +61,15 @@ else:
                 if response.status==200: break
         except Exception: time.sleep(1)
     else: failures.append('app_restart_https')
-    with urllib.request.urlopen('https://147.45.102.186/supabase/auth/v1/health',timeout=15) as response:
-        if response.status!=200: failures.append('auth_restart')
+    env=dict(line.split('=',1) for line in Path('/opt/coffee-passport/app/.env.local').read_text().splitlines() if line.startswith('NEXT_PUBLIC_SUPABASE_ANON_KEY='))
+    # Gateway requires an API key even for Auth's health route.
+    request=urllib.request.Request('https://147.45.102.186/supabase/auth/v1/health',headers={'apikey':env['NEXT_PUBLIC_SUPABASE_ANON_KEY'].strip().strip('"').strip("'")})
+    for attempt in range(20):
+        try:
+            with urllib.request.urlopen(request,timeout=15) as response:
+                if response.status==200: break
+        except Exception: time.sleep(1)
+    else: failures.append('auth_restart')
 path=root/('working-catalog-verification-'+datetime.datetime.now().strftime('%Y%m%d_%H%M%S')+'.json')
 path.touch(mode=0o600);path.write_text(json.dumps({'failures':failures,'catalogs':11,'public_tables':len(tables),'api_checks':len(api['results']),'restart_tested':not failures},indent=2))
 print('FINAL_VERIFICATION_FAILURES',failures,flush=True)

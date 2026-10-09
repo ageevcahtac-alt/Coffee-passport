@@ -18,7 +18,10 @@ def main():
         raise SystemExit('Unexpected backup directory')
     approved = json.loads((root/'candidate-summary.json').read_text())
     if (root/'working-summary.json').exists():
-        raise SystemExit('Previous working import requires explicit review; refusing repeat')
+        prior=json.loads((root/'working-summary.json').read_text())
+        if prior.get('rollback_verified') is not True or (prior.get('approved_sql_sha256')==approved['restore_sql_sha256'] and '--retry-after-verified-rollback' not in sys.argv[2:]):
+            raise SystemExit('Previous working import requires explicit review; refusing repeat')
+        (root/'working-summary.json').rename(root/('working-summary-rolled-back-'+datetime.datetime.now().strftime('%Y%m%d_%H%M%S')+'.json'))
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%d_%H%M%S')
     run = root/('working-'+stamp)
     run.mkdir(mode=0o700)
@@ -95,7 +98,9 @@ def main():
     actual_acl=json.loads(query(rehearsal,"SELECT row_to_json(x) FROM (SELECT nspname,pg_get_userbyid(nspowner) AS owner,nspacl FROM pg_namespace WHERE nspname='public')x"))
     # A schema created explicitly does not inherit template0's PUBLIC USAGE.
     # Fail before touching working data if the filtered archive omits it.
-    if actual_acl!=source_acl:
+    def normalized_acl(item):
+        return (item['owner'],sorted(item['nspacl'] or []))
+    if normalized_acl(actual_acl)!=normalized_acl(source_acl):
         raise SystemExit('REHEARSED_SCHEMA_ACL_MISMATCH; working database unchanged')
     apply(rehearsal, rollback, 'rehearsal-rollback')
     if state(rehearsal)!=before:
