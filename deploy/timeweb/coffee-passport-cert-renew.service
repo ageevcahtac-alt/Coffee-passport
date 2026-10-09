@@ -1,0 +1,11 @@
+[Unit]
+Description=Renew Coffee Passport IP TLS certificate
+Requires=docker.service
+After=docker.service nginx.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker run --rm --network host -v /etc/letsencrypt:/etc/letsencrypt -v /var/lib/letsencrypt:/var/lib/letsencrypt -v /var/log/letsencrypt:/var/log/letsencrypt -v /var/www/coffee-passport-acme:/var/www/coffee-passport-acme certbot/certbot:v5.4.0 renew --cert-name coffee-passport-ip --quiet --no-random-sleep-on-renew
+ExecStartPost=/usr/sbin/nginx -s reload
+TimeoutStartSec=300

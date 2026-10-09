@@ -333,3 +333,12 @@ UFW установлен, фактический `ufw status` — inactive. Fire
 - Проверенные инструменты добавлены в `scripts/timeweb/`: read-only SQL audit/export, проверка export против живого источника, подготовка изолированного candidate и API-проверки. Все private exports/logs/env остаются на сервере вне репозитория.
 - Запрошено отдельное согласование транзакционного импорта в рабочий `postgres`. На момент этой записи он не выполнен. `_supabase`, Cloud, Render и DNS не изменены.
 - Для HTTPS запрошены имена доменов; вариант проверки по IP без DNS сверён с официальной документацией Let’s Encrypt. Ubuntu certbot 4.0 не поддерживает IP certs; нужен certbot >=5.4. HTTPS в этой записи ещё не объявляется готовым.
+
+## Проверенный HTTPS endpoint без DNS-переключения
+
+- Nginx установлен (ранее отсутствовал); подготовлен reverse proxy для Next и API path `/supabase/`. Публичный proxy допускает только Auth/REST/Storage/Realtime/Functions/GraphQL; Studio и внутренние administrative routes возвращают 404.
+- Выдан доверенный IP certificate Let’s Encrypt для `147.45.102.186` через pinned `certbot/certbot:v5.4.0`. Ubuntu certbot 4.0 не устанавливался. Nginx config проверен `nginx -t`.
+- Endpoint `https://147.45.102.186/` проверен доверенным curl с сервера и внешним Windows curl: HTTP 200, без отключения certificate validation. PowerShell Invoke-WebRequest ранее дал connection error; внешний curl подтвердил рабочий TLS.
+- Timer `coffee-passport-cert-renew.timer` включён: проверка продления каждые шесть часов, reload Nginx после renew. `certbot renew --dry-run` успешно завершён. Короткий IP certificate требует работающего продления.
+- DNS/production traffic не переключались. HTTP 200 ещё не подтверждает полноценное приложение: импорт рабочей базы ожидает отдельного согласования, а Next public URL всё ещё требует пересборки с HTTPS API.
+- Конфигурация proxy, service/timer и проверенный installer включены в `deploy/timeweb/` и `scripts/timeweb/configure_ip_https.py`. ACME account/private key и issuance/renewal logs остаются только на сервере.
