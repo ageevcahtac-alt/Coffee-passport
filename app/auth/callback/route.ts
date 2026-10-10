@@ -3,7 +3,14 @@ import { createClient } from '@/lib/supabase/server';
 import { safeNextPath } from '@/lib/auth/safeRedirect';
 
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  // Next.js may expose localhost as request.url behind the production proxy.
+  // Nginx overwrites Host and X-Forwarded-Proto; restrict production hosts.
+  const host = request.headers.get('host');
+  const publicHosts = new Set(['coffeepassport.ru', '147.45.102.186']);
+  const origin = host && publicHosts.has(host)
+    ? `https://${host}`
+    : new URL(request.url).origin;
   const code = searchParams.get('code');
   const next = safeNextPath(searchParams.get('next'));
 
