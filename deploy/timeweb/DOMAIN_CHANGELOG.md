@@ -49,3 +49,12 @@
 - Read-only API checks after container recreation: Auth health 200; REST `lots?select=public_id&limit=1` 200 (response data not logged); Storage status 200. Public `/supabase/` and `/supabase/pg/` remain blocked with 404. OpenAPI root is restricted by Envoy and is not used as an anonymous availability check.
 - Prepared activation values: Next.js NEXT_PUBLIC_SUPABASE_URL and Supabase SUPABASE_PUBLIC_URL = `https://coffeepassport.ru/supabase`; API_EXTERNAL_URL = `https://coffeepassport.ru/supabase/auth/v1`; SITE_URL = `https://coffeepassport.ru`. Runtime changes and Next.js rebuild occur only after domain TLS verification.
 - DNS and domain certificate remain pending. Render, Supabase Cloud, DNS NS/MX/mail TXT, database contents, users, passwords and RLS unchanged.
+
+## Next.js public environment rebuild
+
+- Saved previous `.next`, app/Supabase env and Nginx in `/opt/coffee-passport/backups/public-env-build-20261010T115837Z` (0700).
+- Rebuilt Next.js 14.2.35 on Timeweb with actual `NEXT_PUBLIC_SUPABASE_URL=https://147.45.102.186/supabase` from `.env.local`. Domain activation remains gated on working DNS/TLS.
+- Build succeeded; build ID changed from `xrk47MElbD7Aipq5-pqTa` to `ZB4eItz15id0F4E1i8y0o`. Next.js restarted and is active.
+- Read-only API checks after restart passed: Auth, REST lot query and Storage 200; administrative proxy paths 404. Build log: `/opt/coffee-passport/logs/public-env-rebuild.log`.
+- Fresh Chromium context checked main, login, recovery and guest cafe/roaster cabinet navigation after restart. No requests to localhost, loopback IPv4/IPv6 or 0.0.0.0; no JavaScript page errors. Network requests included real browser REST calls to the working IP proxy.
+- Exercised the compiled Supabase browser SDK through a recovery probe: it requested `https://147.45.102.186/supabase/auth/v1/verify`. The deliberately invalid probe was intercepted locally and never submitted to Auth, so no account state changed. Evidence saved locally in ignored `.next/domain-qa/browser-network.json`; query strings, headers and bodies are omitted from logs.
