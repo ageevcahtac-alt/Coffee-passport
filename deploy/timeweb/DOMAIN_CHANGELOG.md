@@ -39,3 +39,13 @@
 - Activation script now includes www in the domain certificate and adds its HTTPS redirect when www resolves to the Timeweb IP. Otherwise apex can be activated independently. DNS guard still stops activation before certificate or auth URL changes.
 - Renewal service now runs `certbot renew` for all installed certificates, covering IP and future domain certificates. Timer enabled; manual service start succeeded (Result=success, exit 0). Domain renewal dry run remains pending until issuance.
 - Owner DNS action: replace A records for `@` and `www` with `147.45.102.186`; preserve NS and mail MX/TXT records.
+
+## Public URL and Auth configuration verification
+
+- Verified running gateway is **Envoy**, service `api-gw`, not Kong. Inspected its mounted `volumes/api/envoy/lds.template.yaml` and cluster configuration. Nginx removes `/supabase/` and proxies to loopback port 8000; Envoy removes `/auth/v1/` before forwarding to Auth on port 9999. Public API base is therefore `/supabase`, external Auth base `/supabase/auth/v1`.
+- Actual stack uses both `docker-compose.yml` and `docker-compose.local.yml`. Activation now preserves these files and reconciles only services whose URL environment differs. It rejects environment changes outside the public URL allowlist before recreating any service.
+- Backed up Auth env in `/opt/coffee-passport/backups/auth-redirects-20261010T110802Z`. Added exact `https://coffeepassport.ru/auth/callback` and `https://coffeepassport.ru/auth/reset-password` to the running Auth allowlist, preserving existing entries and adding IP recovery URL. Auth runtime verification confirms all four destinations.
+- Corrected stale runtime `http://localhost:8000` public URLs in api-gw, storage, functions and studio to current `https://147.45.102.186/supabase`. Comparison against running container environment confirmed only SUPABASE_PUBLIC_URL/STORAGE_PUBLIC_URL changed. Auth API_EXTERNAL_URL, SITE_URL and issuer remain on working IP until domain TLS succeeds.
+- Read-only API checks after container recreation: Auth health 200; REST `lots?select=public_id&limit=1` 200 (response data not logged); Storage status 200. Public `/supabase/` and `/supabase/pg/` remain blocked with 404. OpenAPI root is restricted by Envoy and is not used as an anonymous availability check.
+- Prepared activation values: Next.js NEXT_PUBLIC_SUPABASE_URL and Supabase SUPABASE_PUBLIC_URL = `https://coffeepassport.ru/supabase`; API_EXTERNAL_URL = `https://coffeepassport.ru/supabase/auth/v1`; SITE_URL = `https://coffeepassport.ru`. Runtime changes and Next.js rebuild occur only after domain TLS verification.
+- DNS and domain certificate remain pending. Render, Supabase Cloud, DNS NS/MX/mail TXT, database contents, users, passwords and RLS unchanged.

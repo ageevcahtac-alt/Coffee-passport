@@ -75,7 +75,7 @@ s=p.read_text().replace('NEXT_PUBLIC_SUPABASE_URL=https://147.45.102.186/supabas
 p.write_text(s)
 PY
 cd /opt/coffee-passport/supabase
-docker compose up -d --no-deps auth
+python3 /opt/coffee-passport/app/deploy/timeweb/reconcile-public-url-runtime.py
 cd /opt/coffee-passport/app
 npm run build
 systemctl restart coffee-passport
