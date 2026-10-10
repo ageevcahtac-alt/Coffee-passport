@@ -11,13 +11,16 @@
 - Local `npm run build`: passed (Next.js 14.2.35, 39 generated pages).
 - Existing page uses intrinsic 1672×941 image, `w-full h-auto`, and opens full-size original in a new tab. No interface styles changed.
 - Imagegen edit rejected: dimensions preserved, but protected lower image samples changed and corner was RGB(242,238,229), not #F5F2EB. Original asset retained. Exact masked processing awaits user authorization.
-- Source image rollback copy saved locally under ignored `.next/source-backup/`; committed source remains unchanged and server baseline remains available in Git.
+- Source image rollback copy saved in the server backup above as `coffee-passport-four-philosophies.png`; committed source remains unchanged.
 - Browser checks passed at 320/390/768/1440: computed main background `rgb(245, 242, 235)`, full image ratio, original opens, no horizontal overflow or page errors.
 - Auth tests passed: 13 tests in three files, including public-host callback and arbitrary Host rejection.
 - Found and fixed callback redirect to `https://localhost:3000`. Focused commit `856f42f1e6fd87aaeae0af376dc6d46cac8f5d8f` deployed after successful server build and Next.js restart. Confirmed redirect now uses `https://147.45.102.186/auth/login`.
 - Main and login routes respond after restart; guest cafe/roaster cabinet requests redirect to login. Recovery page returns 200. Supabase Auth health returns 200 with public key, without exposing it.
 - IP certificate valid through 2026-10-16; renewal timer enabled and most recent renewal service result success/exit 0. Domain certificate has not been issued.
 - Commits `f54b4b6` and `856f42f` pushed. No authenticated user login, valid callback exchange or password update was performed, respecting the prohibition on password/data changes.
+- Repeated all four browser viewport checks after the deployed Next.js restart: passed; screenshots and JSON stored locally in ignored `.next/domain-qa/`. Visual review at 320 px confirms the original background rectangle remains visible.
+- Actual HTTPS request to the public domain failed TLS hostname validation (curl error 60) on the old DNS target. No domain acceptance claim is made.
+- Verification commit `98edc85` pushed and pulled on Timeweb; journal copied to `/opt/coffee-passport/logs/domain-changelog-20261010.md`.
 - Database contents, users, roles, passwords and RLS unchanged. IP cookies/localStorage do not migrate to the domain.
 
 ## Pending acceptance
