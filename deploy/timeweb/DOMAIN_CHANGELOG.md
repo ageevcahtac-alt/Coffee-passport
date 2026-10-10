@@ -30,3 +30,12 @@
 - Computed background and screenshots at 320/390/768/1440 px.
 - Background seam elimination while preserving protected pixels.
 - API, authenticated access, callback and recovery via domain; Next.js restart verification.
+
+## Apex HTTPS and www preparation
+
+- Both apex and www resolve to `92.53.96.201` on workstation and Timeweb. Actual HTTPS checks for both fail hostname validation (curl 60). DNS management is unavailable in the connected tools/browser session.
+- Before changes, saved Nginx, renewal service, app/Supabase env, previous build and activation script in `/opt/coffee-passport/backups/domain-www-20261010T110139Z` (0700).
+- Installed HTTP www host with ACME webroot and 308 redirect to `https://coffeepassport.ru$request_uri`. Verified `/verification?test=1` redirects with path/query intact. IP HTTPS stays available.
+- Activation script now includes www in the domain certificate and adds its HTTPS redirect when www resolves to the Timeweb IP. Otherwise apex can be activated independently. DNS guard still stops activation before certificate or auth URL changes.
+- Renewal service now runs `certbot renew` for all installed certificates, covering IP and future domain certificates. Timer enabled; manual service start succeeded (Result=success, exit 0). Domain renewal dry run remains pending until issuance.
+- Owner DNS action: replace A records for `@` and `www` with `147.45.102.186`; preserve NS and mail MX/TXT records.

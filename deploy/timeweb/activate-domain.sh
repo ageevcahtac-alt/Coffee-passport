@@ -8,6 +8,15 @@ if [ "$resolved" != "$ip" ]; then
     echo "DNS pending: $domain resolves to $resolved; expected $ip" >&2
     exit 2
 fi
+cert_domains=(-d "$domain")
+export COFFEE_DOMAIN_WWW=0
+www_resolved=$(getent ahostsv4 "www.$domain" | awk '{print $1}' | sort -u || true)
+if [ "$www_resolved" = "$ip" ]; then
+    cert_domains+=(-d "www.$domain")
+    export COFFEE_DOMAIN_WWW=1
+else
+    echo "www DNS pending; activating apex only (www resolves to $www_resolved)"
+fi
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
 backup=/opt/coffee-passport/backups/domain-activation-$stamp
 install -d -m 700 "$backup"
@@ -18,12 +27,30 @@ cp -a /opt/coffee-passport/supabase/.env "$backup/supabase.env"
 certbot() {
  docker run --rm --network host -v /etc/letsencrypt:/etc/letsencrypt -v /var/lib/letsencrypt:/var/lib/letsencrypt -v /var/log/letsencrypt:/var/log/letsencrypt -v /var/www/coffee-passport-acme:/var/www/coffee-passport-acme certbot/certbot:v5.4.0 "$@"
 }
-certbot certonly --webroot -w /var/www/coffee-passport-acme --non-interactive --agree-tos --register-unsafely-without-email --cert-name coffee-passport-domain -d "$domain"
+certbot certonly --webroot -w /var/www/coffee-passport-acme --non-interactive --agree-tos --register-unsafely-without-email --cert-name coffee-passport-domain --expand "${cert_domains[@]}"
 python3 - <<'PY'
+import os
 from pathlib import Path
 p=Path('/etc/nginx/sites-available/coffee-passport')
 s=p.read_text()
 s=s[s.index('server {'):].replace(' default_server','').replace('147.45.102.186','coffeepassport.ru').replace('coffee-passport-ip/','coffee-passport-domain/')
+if os.environ['COFFEE_DOMAIN_WWW']=='1':
+ s+='''
+server {
+    listen 80;
+    server_name www.coffeepassport.ru;
+    location /.well-known/acme-challenge/ { root /var/www/coffee-passport-acme; }
+    location / { return 308 https://coffeepassport.ru$request_uri; }
+}
+server {
+    listen 443 ssl;
+    server_name www.coffeepassport.ru;
+    ssl_certificate /etc/letsencrypt/live/coffee-passport-domain/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/coffee-passport-domain/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    return 308 https://coffeepassport.ru$request_uri;
+}
+'''
 Path('/etc/nginx/sites-available/coffee-passport-domain').write_text(s)
 PY
 nginx -t
@@ -55,6 +82,9 @@ systemctl restart coffee-passport
 sleep 5
 curl --fail --silent --show-error "https://$domain/" -o /dev/null
 curl --fail --silent --show-error https://147.45.102.186/ -o /dev/null
+if [ "$COFFEE_DOMAIN_WWW" = 1 ]; then
+    curl --fail --silent --show-error -I "https://www.$domain/"
+fi
 sed -i 's/ --cert-name coffee-passport-ip//' /etc/systemd/system/coffee-passport-cert-renew.service
 systemctl daemon-reload
 certbot renew --cert-name coffee-passport-domain --dry-run --no-random-sleep-on-renew
