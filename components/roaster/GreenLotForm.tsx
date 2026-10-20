@@ -22,7 +22,7 @@ export interface GreenLotFormValues {
   notes: string;
 }
 
-// COFFEE_GREEN_LOT_EDIT_PATHS_IMPLEMENTATION.md — shared between creation
+// docs/reports/COFFEE_GREEN_LOT_EDIT_PATHS_IMPLEMENTATION.md — shared between creation
 // (app/dashboard/roaster/new/page.tsx, blank/no initialGreenLot) and
 // editing (components/roaster/CanonicalLotChain.tsx, pre-filled from the
 // real row). Every field here is Green-Lot-owned only (purchase/contract/

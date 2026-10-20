@@ -11,7 +11,7 @@ const NAV_LINK_CLASSES = 'hover:text-ink-900';
 
 export function Navbar({ userEmail }: { userEmail: string | null }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  // GAP 1 (IDENTITY_SESSION_CONTINUITY_IMPLEMENTATION.md) — "Log in" is
+  // GAP 1 (docs/reports/IDENTITY_SESSION_CONTINUITY_IMPLEMENTATION.md) — "Log in" is
   // reachable from every (site) page, including the Public Passport, but
   // used to always drop the guest's return context (no `next`). A guest
   // signing up from /passport/[lotId] now lands back on that exact Lot's

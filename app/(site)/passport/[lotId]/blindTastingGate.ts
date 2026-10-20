@@ -4,7 +4,7 @@ import type { TastingRecord } from '@/lib/types/coffee';
 // Next.js page file, which may only export a fixed set of names like
 // `default`/`metadata`) so it's both importable from page.tsx and directly
 // testable (see blindTastingGate.test.ts —
-// COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md: this rule had no test
+// docs/reports/COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md: this rule had no test
 // coverage anywhere). True only once a tasting this exact guest already
 // saved, at this exact shop, for this exact lot, exists in their journey —
 // the one condition under which community tastings/roaster comparison

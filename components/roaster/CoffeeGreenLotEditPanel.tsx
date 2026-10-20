@@ -15,9 +15,9 @@ import {
 import { CoffeeForm, type CoffeeFormValues } from './CoffeeForm';
 import { GreenLotForm, type GreenLotFormValues } from './GreenLotForm';
 
-// COFFEE_GREEN_LOT_EDIT_PATHS_IMPLEMENTATION.md — closes the "no edit path
+// docs/reports/COFFEE_GREEN_LOT_EDIT_PATHS_IMPLEMENTATION.md — closes the "no edit path
 // exists for Coffee/Green Lot, for anyone" gap
-// (COFFEE_GREEN_LOT_OWNERSHIP_AUDIT.md / COFFEE_PASSPORT_END_TO_END_ARCHITECTURE_AUDIT.md
+// (docs/reports/COFFEE_GREEN_LOT_OWNERSHIP_AUDIT.md / docs/reports/COFFEE_PASSPORT_END_TO_END_ARCHITECTURE_AUDIT.md
 // findings #2/#3). Deliberately its own component, separate from the
 // existing read-only components/roaster/CanonicalLotChain.tsx — it does its
 // own small Coffee/Green Lot fetch (the same lot -> green lot -> coffee

@@ -1,4 +1,4 @@
-// Contextual Taste (COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md, §16) — the
+// Contextual Taste (docs/reports/COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md, §16) — the
 // product's core philosophy statement earns its place once, at full length,
 // the first time ANY guest completes a reveal, then recedes to a short
 // always-present line so it never reads as a repeated lecture. This is a

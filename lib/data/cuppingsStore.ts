@@ -70,7 +70,7 @@ export function deleteCuppingRecord(id: string): void {
   write(read().filter((record) => record.id !== id));
 }
 
-// Final release audit (COFFEE_PASSPORT_FINAL_RELEASE_AUDIT.md) — this store
+// Final release audit (docs/reports/COFFEE_PASSPORT_FINAL_RELEASE_AUDIT.md) — this store
 // shares one localStorage key across every user on the browser (see the
 // header comment above) but was missing from lib/journey/userScope.ts's
 // reconcileUserScope purge list, unlike every sibling personal store

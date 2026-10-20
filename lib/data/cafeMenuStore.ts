@@ -41,7 +41,7 @@ export interface CafeMenuEntry {
   scheduledRemovalAt: string | null;
   // Read-only signal derived from the Canonical Lot's own live status —
   // see cafe_menu_entries_roaster_status_view and
-  // CANONICAL_LOT_CAFE_MENU_INTEGRITY_DESIGN.md. Never set by
+  // docs/reports/CANONICAL_LOT_CAFE_MENU_INTEGRITY_DESIGN.md. Never set by
   // addLotToMenu/setMenuLotActive/setMenuLotStatus below — only ever
   // populated by syncCafeMenuFromSupabase reading the view. Undefined
   // until that sync has run at least once for this shop; treat
@@ -235,7 +235,7 @@ export async function syncCafeMenuFromSupabase(shopId: string): Promise<void> {
   }
 }
 
-// Production readiness hardening (COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
+// Production readiness hardening (docs/reports/COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
 // RoasterSupplyMapWidget used to mount one row per coffee shop and have
 // each row call syncCafeMenuFromSupabase(shop.id) independently — a real
 // N+1 (one round trip per shop in the whole system, on every roaster
@@ -400,7 +400,7 @@ export function ensureCafeMenuRealtimeSubscribed(): void {
 // setMenuLotStatus, neither of which ever knows the Canonical Lot's uuid)
 // can never clobber a lot_ref a prior addLotToMenu call already resolved
 // and wrote for this same entry.
-// Production readiness hardening (COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
+// Production readiness hardening (docs/reports/COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
 // addLotToMenu/setMenuLotActive/setMenuLotStatus are synchronous, fire an
 // unguarded upsert each, and are called straight from onClick handlers
 // with no in-flight tracking anywhere up the call chain — rapidly
@@ -470,7 +470,7 @@ export function addLotToMenu(shopId: string, lotId: string): void {
   write({ ...readOverrides(), [shopId]: { ...current, [lotId]: entry } });
   // Resolves the Canonical Lot's real uuid so this brand-new entry can
   // carry a real lot_ref from creation on — see
-  // CANONICAL_LOT_CAFE_MENU_INTEGRITY_DESIGN.md §3. Best-effort and
+  // docs/reports/CANONICAL_LOT_CAFE_MENU_INTEGRITY_DESIGN.md §3. Best-effort and
   // non-blocking: the local entry (and the base write-through below) are
   // already committed regardless of whether this resolves; a Lot with no
   // canonical row yet (or an offline lookup) just leaves lot_ref null,
@@ -519,7 +519,7 @@ export function setMenuLotStatus(
 }
 
 // Shared "is this menu entry's underlying Lot no longer offered by the
-// roaster" signal — CANONICAL_LOT_CAFE_MENU_INTEGRITY_DESIGN.md. Used by
+// roaster" signal — docs/reports/CANONICAL_LOT_CAFE_MENU_INTEGRITY_DESIGN.md. Used by
 // both the café's own dashboard (the existing "Снято с производства
 // обжарщиком" badge, previously blind to an outright archived Lot) and
 // the café's public guest-facing menu. Purely a read-only label: it never

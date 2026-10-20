@@ -92,7 +92,7 @@ export function purgeKitchenRecipesForUser(userId: string): void {
   write(read().filter((recipe) => recipe.userId !== userId));
 }
 
-// ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — no backend table
+// docs/reports/ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — no backend table
 // at all, so unlike the Supabase-backed stores this is a pure local re-tag:
 // each entry already has its own generated id, so no two entries can ever
 // collide, and nothing here needs a merge/dedupe step. Idempotent for the

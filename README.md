@@ -72,12 +72,12 @@ archive events whose `end_date` has passed and to pull new candidates
 from any configured `.ics` calendar feeds. Both jobs live behind
 secret-gated API routes (`app/api/cron/events-archive`,
 `app/api/cron/events-aggregate`) — there's no cron built into this app
-or into Render, so the actual scheduler is
+or on the Timeweb server, so the actual scheduler is
 `.github/workflows/events-cron.yml`, a GitHub Actions workflow. The
 workflow itself is complete; it only needs two secrets set once to start
 running:
 
-1. **On the deployed app** (Render → your service → Environment), set
+1. **On the deployed app** (Timeweb server, `/opt/coffee-passport/app/.env.local`, then restart `coffee-passport`), set
    `EVENTS_CRON_SECRET` to any long random string. This is the value
    both cron routes check for in the request's
    `Authorization: Bearer <secret>` header before doing anything —
@@ -85,7 +85,7 @@ running:
 2. **On GitHub** (repo → Settings → Secrets and variables → Actions →
    "New repository secret"), add:
    - `APP_URL` — the deployed app's base URL, e.g.
-     `https://coffee-passport.onrender.com` (no trailing slash)
+     `https://147.45.102.186` (no trailing slash)
    - `EVENTS_CRON_SECRET` — the exact same value you set in step 1
 3. That's it, no code or workflow change needed. Once both secrets
    exist, the workflow runs automatically every day at 03:00 UTC, and

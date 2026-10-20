@@ -146,7 +146,7 @@ export function purgeEquipmentForUser(userId: string): void {
   write(read().filter((setup) => setup.userId !== userId));
 }
 
-// ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — same gap as
+// docs/reports/ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — same gap as
 // brewingRecipesStore's claimEnthusiastRecipesForUser (anon writes can
 // never satisfy equipment_garage's owner_user_id uuid/RLS, so an
 // anonymous Garage stays local-only forever). Equipment is a SINGLETON per

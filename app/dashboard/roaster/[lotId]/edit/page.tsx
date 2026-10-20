@@ -48,26 +48,26 @@ export default function EditLotPage({ params }: { params: { lotId: string } }) {
   const [roastProfileSaveError, setRoastProfileSaveError] = useState<string | null>(null);
 
   // Public Coffee Passport block's roast_batches audit
-  // (ROAST_BATCH_PUBLIC_PASSPORT_AUDIT.md) — saveRoastProfile() only ever
+  // (docs/reports/ROAST_BATCH_PUBLIC_PASSPORT_AUDIT.md) — saveRoastProfile() only ever
   // wrote the local cache; the button right below already says "Опубликовать
   // профиль обжарки," but nothing published anywhere. roast_batches rows are
   // immutable (a DB trigger rejects UPDATE/DELETE), so every save — new
   // profile or "Редактировать" on an existing one — creates one new,
   // permanent batch event rather than attempting to rewrite one in place.
   //
-  // REFERENCE_ROAST_PROFILE_IMPLEMENTATION.md — the same one save action
+  // docs/reports/REFERENCE_ROAST_PROFILE_IMPLEMENTATION.md — the same one save action
   // also activates a new reference_roast_profiles version (the roaster's
   // declared target approach, versioned like Taste Profile), reusing the
   // exact fields RoastProfileForm already collects (its logged curve
   // doubles as the newly-declared target curve) — one form, one button, one
   // production flow, not a second parallel one.
   //
-  // ROAST_BATCH_REFERENCE_LINK.md — order matters here: the reference
+  // docs/reports/ROAST_BATCH_REFERENCE_LINK.md — order matters here: the reference
   // profile version must be activated FIRST so its real id exists before the
   // immutable roast_batches row is created, so that row can record the
   // EXACT version it followed (reference_roast_profile_id) rather than
   // leaving that FK permanently null.
-  // Production readiness hardening (COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
+  // Production readiness hardening (docs/reports/COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
   // this used to write the local cache and close the form FIRST, before
   // the canonical Supabase writes even started — so a failed
   // activateReferenceRoastProfile/createRoastBatch left this roaster's own
@@ -131,7 +131,7 @@ export default function EditLotPage({ params }: { params: { lotId: string } }) {
   // (country, region, variety, process, cropYear, producer.*, story) remain
   // local-only by design — they belong to Coffee, not this Lot, and editing
   // them here still doesn't write back to `coffees` (a separate, larger,
-  // still-open question — see PHASE_4.5.12_REPORT.md).
+  // still-open question — see docs/reports/PHASE_4.5.12_REPORT.md).
   //
   // The Public Passport next-major-block audit found the flavor sliders
   // (acidity/sweetness/body/bitterness) had the same gap one level deeper:
@@ -142,7 +142,7 @@ export default function EditLotPage({ params }: { params: { lotId: string } }) {
   // the guest-facing "roaster's reference" (ProducerRoasterCard,
   // TasteComparison) current instead of permanently frozen at whatever the
   // one-time backfill script set (or, for any Lot created since, nothing at
-  // all — see PUBLIC_PASSPORT_NEXT_BLOCK_AUDIT.md).
+  // all — see docs/reports/PUBLIC_PASSPORT_NEXT_BLOCK_AUDIT.md).
   const [lotSaving, setLotSaving] = useState(false);
   async function handleSave(updated: Lot) {
     if (lotSaving) return;

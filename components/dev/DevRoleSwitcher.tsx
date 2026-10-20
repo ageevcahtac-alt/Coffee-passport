@@ -29,7 +29,7 @@ const buttonClasses = (active: boolean) =>
    font-body font-medium text-center transition-colors
    ${active ? 'bg-ink-900 text-parchment-100' : 'text-ink-700 hover:bg-parchment-300'}`;
 
-// Production readiness hardening (COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
+// Production readiness hardening (docs/reports/COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
 // the sign-in-as-pilot-staff buttons are a real privilege-escalation
 // vector for any site visitor once this deployment carries real
 // roaster/café accounts alongside the demo ones — gate them behind an

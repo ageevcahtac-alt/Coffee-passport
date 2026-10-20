@@ -4,7 +4,7 @@ import { descriptorsByBrewMethod, mostCommonDescriptors } from '@/lib/journey/co
 import { StarRating } from './StarRating';
 import { formatTastingDate } from '@/lib/utils/date';
 
-// Community Layer, Category A (COMMUNITY_LAYER_PRODUCT_AUDIT.md) — the
+// Community Layer, Category A (docs/reports/COMMUNITY_LAYER_PRODUCT_AUDIT.md) — the
 // first guest-facing surface where one guest's blind-tasting experience
 // becomes visible to another, on this exact Lot's own Passport ("PASSPORT"
 // visibility tier, not a cross-Lot feed). Every entry here was explicitly
@@ -15,7 +15,7 @@ import { formatTastingDate } from '@/lib/utils/date';
 // every other "not fabricating data" card in this codebase, applied here
 // to identity rather than a data value.
 //
-// Contextual Taste (COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md, §9) — the
+// Contextual Taste (docs/reports/COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md, §9) — the
 // aggregate section above the flat list is deliberately conservative: both
 // mostCommonDescriptors and descriptorsByBrewMethod render nothing below
 // their own minimum-sample thresholds, so a lot with only 1-2 opted-in

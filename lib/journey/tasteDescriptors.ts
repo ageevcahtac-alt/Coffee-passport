@@ -1,6 +1,6 @@
 import { SENSORY_TAGS, type FlavorSubDescriptors, type SensoryTagId } from '@/lib/types/coffee';
 
-// Contextual Taste (COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md) — the reveal's
+// Contextual Taste (docs/reports/COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md) — the reveal's
 // core comparison is between the ACTUAL words a guest picked and the
 // roaster's ACTUAL declared descriptors, not the four abstract numeric axes
 // alone. This file is pure, deterministic, and dependency-free on purpose:

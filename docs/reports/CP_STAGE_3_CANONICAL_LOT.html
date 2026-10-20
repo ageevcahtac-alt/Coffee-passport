@@ -1,0 +1,451 @@
+<title>Canonical Lot Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Libre+Franklin:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#EDEAE0; --surface:#F8F6EE; --surface-2:#F1EEE1; --surface-3:#E7E2D2;
+    --ink:#1E2419; --ink-soft:#535B4C; --ink-faint:#8B9082;
+    --rule:#D3CDB8; --rule-strong:#B7B096;
+    --copper:#AE4A29; --copper-ink:#7C331B; --copper-tint:#F0DCCF;
+    --verdigris:#3E6558; --verdigris-tint:#DCE6DD;
+    --gold:#9C7423; --gold-tint:#EFE2C2;
+    --slate:#4A5B7C; --slate-tint:#E1E6EF;
+    --p0:#7C2A19; --p1:#A24A2A; --p2:#9C7423; --p3:#7C7A5C;
+    --fact:#3E6558; --decision:#AE4A29; --conflict:#7C2A19; --gap:#6B5E3C;
+    --shadow: 0 1px 2px rgba(30,36,25,.06), 0 8px 24px -12px rgba(30,36,25,.18);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#141810; --surface:#1B2016; --surface-2:#20261A; --surface-3:#2A3122;
+      --ink:#EAE6D6; --ink-soft:#B7B79E; --ink-faint:#7E8271;
+      --rule:#343C29; --rule-strong:#454E36;
+      --copper:#E08B5F; --copper-ink:#F3C7A9; --copper-tint:#3A2A1E;
+      --verdigris:#8FBBA8; --verdigris-tint:#20302A;
+      --gold:#D9B25B; --gold-tint:#332911;
+      --slate:#9DB0E0; --slate-tint:#1E2636;
+      --p0:#E08B5F; --p1:#D9A15F; --p2:#D9B25B; --p3:#A9A98C;
+      --fact:#8FBBA8; --decision:#E08B5F; --conflict:#E08B5F; --gap:#D9B25B;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px -14px rgba(0,0,0,.55);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#141810; --surface:#1B2016; --surface-2:#20261A; --surface-3:#2A3122;
+    --ink:#EAE6D6; --ink-soft:#B7B79E; --ink-faint:#7E8271;
+    --rule:#343C29; --rule-strong:#454E36;
+    --copper:#E08B5F; --copper-ink:#F3C7A9; --copper-tint:#3A2A1E;
+    --verdigris:#8FBBA8; --verdigris-tint:#20302A;
+    --gold:#D9B25B; --gold-tint:#332911;
+    --slate:#9DB0E0; --slate-tint:#1E2636;
+    --p0:#E08B5F; --p1:#D9A15F; --p2:#D9B25B; --p3:#A9A98C;
+    --fact:#8FBBA8; --decision:#E08B5F; --conflict:#E08B5F; --gap:#D9B25B;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 28px -14px rgba(0,0,0,.55);
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg); color:var(--ink); font-family:"Libre Franklin", ui-sans-serif, system-ui, sans-serif; font-size:16px; line-height:1.55; -webkit-font-smoothing:antialiased}
+  h1,h2,h3,h4{font-family:"Fraunces", Georgia, serif; font-weight:600; color:var(--ink); text-wrap:balance; margin:0}
+  p{margin:0} ul,ol{margin:0;padding:0;list-style:none} a{color:inherit}
+  table{border-collapse:collapse;width:100%}
+  code,.mono{font-family:"IBM Plex Mono", ui-monospace, monospace}
+  ::selection{background:var(--copper-tint); color:var(--copper-ink)}
+
+  .shell{max-width:1280px; margin:0 auto; padding:0 24px 120px; display:grid; grid-template-columns:236px minmax(0,1fr); gap:56px}
+  @media (max-width:960px){.shell{grid-template-columns:1fr; padding:0 16px 80px}}
+
+  .masthead{max-width:1280px; margin:0 auto; padding:36px 24px 28px; border-bottom:1px solid var(--rule)}
+  @media (max-width:960px){.masthead{padding:28px 16px 22px}}
+  .masthead-eyebrow{font-family:"IBM Plex Mono", monospace; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--copper); display:flex; align-items:center; gap:10px}
+  .masthead-eyebrow::before{content:""; width:22px; height:1px; background:var(--copper)}
+  .masthead h1{margin-top:14px; font-size:clamp(30px,4.2vw,50px); line-height:1.03; letter-spacing:-.01em}
+  .masthead .sub{margin-top:14px; max-width:70ch; color:var(--ink-soft); font-size:16.5px}
+  .masthead .meta{margin-top:22px; display:flex; flex-wrap:wrap; gap:10px 22px; font-family:"IBM Plex Mono",monospace; font-size:11.5px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.06em}
+  .masthead .meta b{color:var(--ink-soft); font-weight:600}
+  .masthead .lineage{margin-top:20px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--ink-faint)}
+  .lineage .doc-chip{padding:4px 10px; border:1px solid var(--rule-strong); border-radius:999px; color:var(--ink-soft)}
+  .lineage .doc-chip.self{border-color:var(--copper); color:var(--copper-ink); background:var(--copper-tint); font-weight:600}
+
+  .rail{position:sticky; top:24px; align-self:start; max-height:calc(100vh - 48px); overflow-y:auto; padding-right:6px}
+  @media (max-width:960px){.rail{position:sticky; top:0; z-index:20; max-height:none; overflow:visible; background:var(--bg); margin:0 -16px; padding:10px 16px; border-bottom:1px solid var(--rule); display:block}}
+  .rail-title{font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:10px}
+  @media (max-width:960px){.rail-title{display:none}}
+  .rail-list{display:flex; flex-direction:column; gap:1px}
+  @media (max-width:960px){.rail-list{flex-direction:row; overflow-x:auto; gap:6px; padding-bottom:2px; scrollbar-width:thin}}
+  .rail-list a{display:flex; gap:9px; align-items:baseline; padding:7px 8px; border-radius:3px; font-size:12.5px; color:var(--ink-soft); text-decoration:none; white-space:nowrap; border-left:2px solid transparent}
+  @media (max-width:960px){.rail-list a{border-left:none; border-bottom:2px solid transparent; background:var(--surface); border:1px solid var(--rule)}}
+  .rail-list a:hover{color:var(--ink); background:var(--surface-2)}
+  .rail-list a.active{color:var(--copper-ink); border-left-color:var(--copper); background:var(--copper-tint); font-weight:600}
+  .rail-list a .n{font-family:"IBM Plex Mono",monospace; color:var(--ink-faint); font-size:11px}
+  .rail-list a.active .n{color:var(--copper)}
+
+  main{min-width:0; padding-top:8px}
+  section.doc{padding:56px 0 8px; border-bottom:1px solid var(--rule); scroll-margin-top:20px}
+  @media (max-width:960px){section.doc{padding:36px 0 4px}}
+  section.doc:last-of-type{border-bottom:none}
+  .doc-num{font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--copper); letter-spacing:.1em}
+  .doc h2{margin-top:8px; font-size:clamp(22px,2.8vw,32px); letter-spacing:-.01em}
+  .doc .kicker{margin-top:10px; max-width:76ch; color:var(--ink-soft); font-size:15.5px; line-height:1.65}
+  .doc-body{margin-top:30px; display:flex; flex-direction:column; gap:26px}
+  h3.h{font-size:17px; font-weight:700; color:var(--ink)}
+  h4.h{font-size:14px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.04em}
+  .prose{max-width:78ch; font-size:15.5px; color:var(--ink); line-height:1.7}
+  .prose + .prose{margin-top:10px}
+  .prose b{font-weight:700}
+
+  .sheet{background:var(--surface); border:1px solid var(--rule); border-radius:4px; box-shadow:var(--shadow); padding:22px 24px}
+  .grid-2{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  .grid-3{display:grid; grid-template-columns:repeat(3,1fr); gap:16px}
+  .grid-4{display:grid; grid-template-columns:repeat(4,1fr); gap:14px}
+  @media (max-width:800px){.grid-2,.grid-3,.grid-4{grid-template-columns:1fr}}
+
+  .tag{display:inline-flex; align-items:center; gap:6px; font-family:"IBM Plex Mono",monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; padding:3px 8px; border-radius:2px; border:1px solid var(--rule-strong); color:var(--ink-soft)}
+  .tag.fact{color:var(--fact); border-color:var(--fact)}
+  .tag.decision{color:var(--decision); border-color:var(--decision); font-weight:700}
+  .tag.conflict{color:var(--conflict); border-color:var(--conflict); font-weight:700}
+  .tag.gap{color:var(--gap); border-color:var(--gap)}
+
+  .tbl{font-size:13.5px}
+  .tbl-wrap{overflow-x:auto; border:1px solid var(--rule); border-radius:4px}
+  .tbl th{text-align:left; font-family:"IBM Plex Mono",monospace; font-weight:600; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-faint); padding:10px 14px; background:var(--surface-2); border-bottom:1px solid var(--rule); white-space:nowrap}
+  .tbl td{padding:12px 14px; border-bottom:1px solid var(--rule); vertical-align:top; color:var(--ink)}
+  .tbl tr:last-child td{border-bottom:none}
+  .tbl td.soft{color:var(--ink-soft)}
+  .tbl tbody tr:hover{background:var(--surface-2)}
+
+  .callout{border-left:3px solid var(--copper); background:var(--copper-tint); padding:14px 18px; border-radius:0 4px 4px 0}
+  .callout p{font-size:14px; color:var(--ink)}
+  .callout.v{border-color:var(--verdigris); background:var(--verdigris-tint)}
+  .callout.g{border-color:var(--gold); background:var(--gold-tint)}
+  .callout.c{border-color:var(--conflict); background:rgba(124,42,25,.08)}
+
+  .rec{border:1.5px solid var(--copper); border-radius:8px; padding:26px 28px; background:var(--surface)}
+  .rec h3{font-family:"IBM Plex Mono",monospace; font-size:12.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--copper); margin-bottom:10px}
+
+  .tree{display:flex; flex-direction:column; align-items:stretch; gap:4px; font-size:13.5px}
+  .t-row{display:flex; align-items:center; gap:10px}
+  .t-node{border:1.5px solid var(--rule-strong); border-radius:6px; padding:9px 14px; background:var(--surface); font-family:"IBM Plex Mono",monospace; font-size:12.5px}
+  .t-node.core{border-color:var(--copper); color:var(--copper-ink); font-weight:700; background:var(--copper-tint)}
+  .t-node.dim{opacity:.6; border-style:dashed}
+  .t-line{color:var(--ink-faint); font-family:"IBM Plex Mono",monospace; font-size:12.5px; white-space:pre}
+  .t-card{color:var(--ink-soft); font-size:12px}
+  .indent1{margin-left:34px} .indent2{margin-left:68px} .indent3{margin-left:102px}
+
+  .qbox{border:1.5px solid var(--verdigris); border-radius:8px; padding:24px 26px; background:var(--verdigris-tint)}
+  .qbox h3{color:var(--verdigris); font-family:"IBM Plex Mono",monospace; font-size:12.5px; letter-spacing:.08em; text-transform:uppercase; margin-bottom:10px}
+
+  footer.doc-footer{max-width:1280px; margin:0 auto; padding:40px 24px 60px; display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.06em}
+  @media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+</style>
+
+<header class="masthead">
+  <div class="masthead-eyebrow">Canonical Lot Architecture · Stage 3</div>
+  <h1>Coffee Passport — Canonical Lot Architecture</h1>
+  <p class="sub">Целевая физическая модель Lot: разделение Coffee / Green Lot / Lot / Roast Batch, версионирование эталонных профилей, стратегия ID и путь миграции существующих текстовых связей. Архитектурное решение — не код, не миграция, не изменение существующей системы.</p>
+  <div class="meta">
+    <span><b>Метод:</b> прямое чтение lib/types/coffee.ts, lotsStore.ts, roastProfilesStore.ts, migrations 0001/0005/0012/0017</span>
+    <span><b>Дата:</b> 2026-09-07</span>
+    <span><b>Легенда:</b> <span class="tag fact">FACT</span> <span class="tag decision">DECISION</span> <span class="tag conflict">CONFLICT</span> <span class="tag gap">GAP</span></span>
+  </div>
+  <div class="lineage">
+    <span class="doc-chip">Stage 1 · Coffee Passport Architecture</span>
+    <span class="doc-chip">Stage 2 · Lot Bridge Architecture</span>
+    <span class="doc-chip">2.0 Audit</span>
+    <span class="doc-chip">Stage 2.5 · Reconciliation</span>
+    <span class="doc-chip self">→ Stage 3 · это документ</span>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="rail" aria-label="Оглавление">
+    <div class="rail-title">Оглавление</div>
+    <ul class="rail-list" id="railList">
+      <li><a href="#sA"><span class="n">A</span>Executive Summary</a></li>
+      <li><a href="#sB"><span class="n">B</span>Current Lot Reality</a></li>
+      <li><a href="#sC"><span class="n">C</span>Target Lot Definition</a></li>
+      <li><a href="#sD"><span class="n">D</span>Core Objects</a></li>
+      <li><a href="#sE"><span class="n">E</span>Relationship Model</a></li>
+      <li><a href="#sF"><span class="n">F</span>Canonical ID Strategy</a></li>
+      <li><a href="#sG"><span class="n">G</span>Versioning</a></li>
+      <li><a href="#sH"><span class="n">H</span>Lifecycle</a></li>
+      <li><a href="#sI"><span class="n">I</span>Existing → Target</a></li>
+      <li><a href="#sJ"><span class="n">J</span>localStorage → Supabase</a></li>
+      <li><a href="#sK"><span class="n">K</span>XO Integration Boundary</a></li>
+      <li><a href="#sL"><span class="n">L</span>Migration Risk</a></li>
+      <li><a href="#sM"><span class="n">M</span>Non-Goals</a></li>
+      <li><a href="#sN"><span class="n">N</span>Final Recommendation</a></li>
+      <li><a href="#sQ"><span class="n">?</span>Final Question</a></li>
+    </ul>
+  </nav>
+
+  <main>
+
+    <!-- A -->
+    <section class="doc" id="sA">
+      <div class="doc-num">A / Executive Summary</div>
+      <h2>Lot нужно расщепить на четыре сущности — и перестать путать «эталон» с «историей попыток»</h2>
+      <div class="doc-body">
+        <ol style="display:flex; flex-direction:column; gap:10px; max-width:78ch">
+          <li class="prose"><b>1.</b> Сегодняшний <code>Lot</code> уже незаметно смешивает происхождение кофе, физическую партию зерна и коммерческий продукт в один плоский объект. Это надо явно разделить на Coffee (происхождение) → Green Lot (партия зелёного) → Lot (коммерческий продукт).</li>
+          <li class="prose"><b>2.</b> Текущий тип <code>RoastProfile</code> в коде уже ведёт себя как история попыток обжарки (массив, сортировка по дате, показ всех записей), а не как единственный эталон — но не имеет флага, какая запись сейчас «эталонная». Это ровно тот же разрыв, что и запрошенный Reference Roast Profile vs. Roast Batch — его нужно формализовать, а не изобретать заново.</li>
+          <li class="prose"><b>3.</b> <span class="tag conflict">CONFLICT</span> Reference Taste Profile (<code>Lot.roasterFlavorProfile</code>) сегодня — одно мутируемое поле без истории вообще. Это прямо нарушает принцип «история не переписывается задним числом» уже сейчас, при одном ростере и одном пилоте — не в будущем.</li>
+          <li class="prose"><b>4.</b> Один Green Lot может законно порождать несколько коммерческих Lot (например, один и тот же зелёный кофе — отдельным продуктом под фильтр и отдельным под эспрессо). Модель должна поддерживать это как обычный, не крайний случай.</li>
+          <li class="prose"><b>5.</b> <code>generateLotId()</code> сегодня проверяет уникальность только внутри одного браузера (localStorage) — при двух устройствах одного ростера коллизия ID физически возможна уже сейчас, до всякого мультиростерного будущего.</li>
+          <li class="prose"><b>6.</b> Source of truth должен переехать в Supabase — но не потому что «это очевидно», а потому что Lot уже используется как FK-цель (текстовая) в трёх реальных Supabase-таблицах (<code>checkins</code>, <code>recipes</code>, <code>cafe_menu_entries</code>), и продолжать держать источник истины вне БД, в которой уже живут его потребители, — единственный вариант, который гарантированно не масштабируется.</li>
+          <li class="prose"><b>7.</b> Миграция 0001 (<code>lots</code>/<code>coffees</code>/<code>coffee_shop_lots</code>) не является источником истины — она мертва — но её структура (разделение <code>coffees</code>=происхождение от <code>lots</code>=партия) независимо подтверждает правильность разделения Coffee/Lot, предложенного здесь. Использовать её напрямую всё равно нельзя: в ней нет Green Lot, Roast Batch, Reference Taste Profile и никакой связи с checkins/loyalty/barista.</li>
+          <li class="prose"><b>8.</b> Barista и Loyalty осознанно не получают прямой связи с Lot — оба уже корректно спроектированы вокруг Coffee Shop / Guest, добавление Lot FK туда решало бы проблему, которой не существует.</li>
+          <li class="prose"><b>9.</b> Инвентаризация количества («Low Stock», «Sold Out» как автоматически вычисляемые статусы) сознательно исключена из модели Lot — учёт остатков в проекте явно вне периметра продукта и передан внешним системам (Yumi/iiko), это не Stage 3 придумывает заново, это уже существующее продуктовое решение.</li>
+          <li class="prose"><b>10.</b> Итоговая рекомендация — одна: перевести Coffee/Green Lot/Lot/Roast Profile/Roast Batch/Reference Taste Profile в реальные таблицы Supabase, с неразрушающей, аддитивной стратегией миграции существующих текстовых связей (раздел I), без единого изменения текущего UI.</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- B -->
+    <section class="doc" id="sB">
+      <div class="doc-num">B / Current Lot Reality</div>
+      <h2>Карта реального использования Lot в коде — не предположения</h2>
+      <div class="doc-body">
+        <div class="tbl-wrap"><table class="tbl">
+          <tr><th>Место</th><th>Что происходит с Lot ID</th></tr>
+          <tr><td class="mono">lib/types/coffee.ts</td><td class="soft"><code>Lot.id: string</code> — единственное поле идентичности; всё остальное (roasterId, name, country, region, variety, process, cropYear, qGrade, roastProfile: string, roastType, descriptors, roasterFlavorProfile, producer, inRoasterCatalog) свалено в один плоский тип. <code>roasterFlavorProfile</code> — единственный мутируемый объект, без версии/истории.</td></tr>
+          <tr><td class="mono">lib/data/lotsStore.ts</td><td class="soft"><code>generateLotId(roaster, country)</code> строит <code>LOT-{roasterCode}-{countryCode}-{seq}</code>, проверяя уникальность только против <code>read()</code> — то есть только против localStorage <b>этого браузера</b>. <code>saveLot()</code> — полный upsert по id, без версии, без истории правок.</td></tr>
+          <tr><td class="mono">lib/data/roastProfilesStore.ts</td><td class="soft"><code>RoastProfile[]</code> — массив на lotId, каждый <code>saveRoastProfile()</code> либо обновляет запись по id, либо добавляет новую в начало массива. Нет поля, помечающего «эту запись роастер считает эталонной».</td></tr>
+          <tr><td class="mono">components/coffee/RoastingTab.tsx</td><td class="soft">рендерит <b>все</b> профили лота, отсортированные по дате — то есть UI уже трактует это как историю попыток, просто без явного статуса «текущий эталон».</td></tr>
+          <tr><td class="mono">lib/utils/lotId.ts</td><td class="soft"><code>extractLotId()</code> — парсит <code>LOT-...</code> из произвольного текста/URL/QR для ручного ввода и сканирования.</td></tr>
+          <tr><td class="mono">supabase/migrations/0005 → public.recipes</td><td class="soft"><code>lot_id text not null</code>, индекс по <code>(lot_id, brewing_method_id)</code> — реальная Supabase-таблица, текстовая связь, без FK.</td></tr>
+          <tr><td class="mono">supabase/migrations/0005 → public.checkins</td><td class="soft"><code>lot_id text not null</code>, плюс отдельные текстовые <code>roaster_id</code>/<code>coffee_shop_id</code>/<code>barista_id</code> — все четыре текстовые, без единого FK.</td></tr>
+          <tr><td class="mono">supabase/migrations/0017 → public.cafe_menu_entries</td><td class="soft"><code>lot_id text not null</code>, <code>unique(coffee_shop_id, lot_id)</code> — фактически уже работает как таблица связи Lot↔Coffee Shop многие-ко-многим, просто без FK с обеих сторон.</td></tr>
+          <tr><td class="mono">supabase/migrations/0012 → public.loyalty_transactions</td><td class="soft"><span class="tag fact">FACT</span> Lot ID здесь <b>не встречается вообще</b> — ни одной колонки, ссылающейся на лот. Только <code>guest_id</code>, <code>shop_id</code>, <code>barista_id</code>, <code>subscription_id</code>.</td></tr>
+          <tr><td class="mono">supabase/migrations/0001 (мёртвая)</td><td class="soft"><code>public.coffees</code> (происхождение: country/region/farm/producer/variety/process/altitude) отдельно от <code>public.lots</code> (партия: harvest_year/crop_year/roast_date/q_score) отдельно от <code>public.coffee_shop_lots</code> (join-таблица). Никогда не была применена к живой БД (см. 2.0 Audit §17) — но структурно уже угадала Coffee/Lot-разделение, предложенное в этом документе.</td></tr>
+          <tr><td class="mono">QR / Passport route</td><td class="soft"><code>Lot.id</code> и есть QR-payload и параметр маршрута <code>/passport/[lotId]</code> — единственное место, где сегодняшний Lot ID несёт реальную техническую нагрузку помимо простого текстового совпадения.</td></tr>
+          <tr><td class="mono">Roaster catalog</td><td class="soft">весь каталог лотов ростера — seed-массив <code>lib/data/lots.ts</code> + localStorage-оверрайд, разрешаемые слиянием по id при каждом чтении (<code>computeAll()</code>).</td></tr>
+        </table></div>
+        <div class="callout c"><p><b>Где Lot ID теряется/расходится сегодня:</b> (1) между двумя браузерами одного ростера — коллизия sequence-номера возможна; (2) между localStorage-каталогом и тремя Supabase-таблицами, которые на него ссылаются, — ничто не гарантирует, что <code>checkins.lot_id</code> всё ещё соответствует существующей записи в чьём-то localStorage; (3) на стороне XO Coffee — по данным Stage 2, поле id теряется между <code>CartItem</code> и <code>OrderPayloadItem</code> ещё до всякой Supabase-интеграции (раздел K).</p></div>
+      </div>
+    </section>
+
+    <!-- C -->
+    <section class="doc" id="sC">
+      <div class="doc-num">C / Target Lot Definition</div>
+      <h2>Lot — коммерческий продукт, знающий свою партию и свой эталон, но не хранящий их данные внутри себя</h2>
+      <div class="doc-body">
+        <div class="callout g"><p><b>Финальное определение:</b> Lot — это коммерческая единица кофе: ссылка на одну конкретную физическую партию зелёного зерна (Green Lot) плюс один активный эталонный подход к её раскрытию (Reference Roast Profile) плюс один активный ожидаемый вкусовой профиль (Reference Taste Profile), под собственным публичным идентификатором, вокруг которого собираются реальные события (Roast Batch, Recipe, Tasting) — но ни одно из них не хранится как поле внутри самого Lot.</p></div>
+        <div class="grid-2">
+          <div class="sheet"><h4 class="h">Lot ЕСТЬ</h4><p class="prose" style="margin-top:8px">публичная идентичность продукта (id, отображаемое имя, дескрипторы, тип обжарки, статус жизненного цикла) + указатель на Green Lot + указатель на активный Reference Roast Profile + указатель на активный Reference Taste Profile.</p></div>
+          <div class="sheet"><h4 class="h">Lot НЕ ЕСТЬ</h4><p class="prose" style="margin-top:8px">ни сама партия зерна (это Green Lot), ни сама обжарка (это Roast Batch), ни сама дегустация (это Tasting), ни заказ, ни рецепт, ни отзыв, ни лояльность, ни пользователь любой роли — Lot их только связывает по FK.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- D -->
+    <section class="doc" id="sD">
+      <div class="doc-num">D / Core Objects</div>
+      <div class="doc-body">
+        <div class="tbl-wrap"><table class="tbl">
+          <tr><th>Object</th><th>Purpose</th><th>Owner</th><th>Source of Truth (target)</th></tr>
+          <tr><td><b>Roaster</b></td><td class="soft">identity-якорь для FK-графа (id/name/slug) — не полная миграция всего профиля ростера</td><td class="soft">Roaster</td><td class="soft">Supabase (новая тонкая таблица)</td></tr>
+          <tr><td><b>Coffee</b></td><td class="soft">описание происхождения: страна/регион/ферма-станция/производитель/сорт/высота/обработка/урожай — переиспользуется годами</td><td class="soft">Roaster</td><td class="soft">Supabase</td></tr>
+          <tr><td><b>Green Lot</b></td><td class="soft">конкретная физическая закупка зелёного зерна под одним Coffee — вес, дата закупки, номер контракта</td><td class="soft">Roaster</td><td class="soft">Supabase</td></tr>
+          <tr><td><b>Lot</b></td><td class="soft">коммерческая единица — публичная идентичность продукта, видимая гостю/QR/Passport</td><td class="soft">Roaster</td><td class="soft">Supabase (сегодня — localStorage)</td></tr>
+          <tr><td><b>Reference Roast Profile</b></td><td class="soft">версионированная декларация «как этот Lot должен обжариваться», один active на Lot</td><td class="soft">Roaster</td><td class="soft">Supabase (сегодня — не выделена, слита с Roast Batch)</td></tr>
+          <tr><td><b>Roast Batch</b></td><td class="soft">одно реальное событие обжарки — дата, машина, фактическая кривая, DTR, Agtron, вес</td><td class="soft">Roaster</td><td class="soft">Supabase (сегодня — не выделена, слита с Reference Roast Profile)</td></tr>
+          <tr><td><b>Reference Taste Profile</b></td><td class="soft">версионированный ожидаемый вкусовой профиль (4 оси), с которым сравнивается слепая дегустация гостя</td><td class="soft">Roaster</td><td class="soft">Supabase (сегодня — мутируемое поле на Lot, без версии)</td></tr>
+          <tr><td><b>Coffee Shop</b></td><td class="soft">identity-якорь для FK-графа — не полная миграция профиля кофейни</td><td class="soft">Coffee Shop</td><td class="soft">Supabase (новая тонкая таблица) + существующие операционные таблицы без изменений</td></tr>
+          <tr><td><b>Recipe</b></td><td class="soft">параметры приготовления, привязанные к Lot и к своему автору</td><td class="soft"><span class="tag decision">уточнено</span> не единый владелец — владелец определяется существующим <code>author_type</code> (roaster / coffee_shop / barista / enthusiast), уже корректно смоделировано</td><td class="soft">Supabase (уже реально, только связь текстовая)</td></tr>
+          <tr><td><b>Roast Batch → Recipe</b></td><td class="soft">н/п — не связаны напрямую сегодня и не должны быть в рамках Stage 3</td><td class="soft">—</td><td class="soft">—</td></tr>
+          <tr><td><b>Tasting (checkins)</b></td><td class="soft">одна слепая дегустация гостя, снимок какой Reference Taste Profile был активен на момент дегустации</td><td class="soft">Guest</td><td class="soft">Supabase (уже реально, связь текстовая)</td></tr>
+          <tr><td><b>Guest Taste Profile</b></td><td class="soft">агрегат вкуса гостя во времени</td><td class="soft">Guest</td><td class="soft"><span class="tag gap">сегодня — только клиентское вычисление, не хранится на сервере; вне периметра Stage 3</span></td></tr>
+        </table></div>
+      </div>
+    </section>
+
+    <!-- E -->
+    <section class="doc" id="sE">
+      <div class="doc-num">E / ERD-level Relationship Model</div>
+      <h2>Не SQL — только форма и кратность</h2>
+      <div class="doc-body">
+        <div class="tree">
+          <div class="t-row"><div class="t-node">Roaster</div><div class="t-card">1 → many Coffee</div></div>
+          <div class="t-row indent1"><div class="t-node">Coffee</div><div class="t-card">1 → many Green Lot (разные урожаи/закупки одного происхождения)</div></div>
+          <div class="t-row indent2"><div class="t-node">Green Lot</div><div class="t-card">1 → many Lot (несколько коммерческих продуктов из одной партии — раздел 5)</div></div>
+          <div class="t-row indent3"><div class="t-node core">Lot</div><div class="t-card">центральный объект</div></div>
+          <div class="t-row indent3" style="margin-left:136px"><div class="t-line">├──</div><div class="t-node">Reference Roast Profile</div><div class="t-card">1 → many версий, ровно 1 active</div></div>
+          <div class="t-row indent3" style="margin-left:136px"><div class="t-line">├──</div><div class="t-node">Roast Batch</div><div class="t-card">1 → many (каждый ссылается на Lot + опционально на версию Reference Roast Profile, которой следовал)</div></div>
+          <div class="t-row indent3" style="margin-left:136px"><div class="t-line">├──</div><div class="t-node">Reference Taste Profile</div><div class="t-card">1 → many версий, ровно 1 active</div></div>
+          <div class="t-row indent3" style="margin-left:136px"><div class="t-line">├──</div><div class="t-node">Coffee Shop</div><div class="t-card">many ↔ many (через cafe_menu_entries, уже существует)</div></div>
+          <div class="t-row indent3" style="margin-left:136px"><div class="t-line">├──</div><div class="t-node">Recipe</div><div class="t-card">1 → many (recipes.lot_id)</div></div>
+          <div class="t-row indent3" style="margin-left:136px"><div class="t-line">└──</div><div class="t-node">Tasting</div><div class="t-card">1 → many (checkins.lot_id), каждая хранит снимок активного Reference Taste Profile на момент записи</div></div>
+          <div class="t-row" style="margin-top:14px"><div class="t-node dim">Barista</div><div class="t-card">НЕТ прямой связи с Lot — только транзитивно через Coffee Shop / Recipe.authorId / Tasting.baristaId</div></div>
+          <div class="t-row"><div class="t-node dim">Loyalty Transaction</div><div class="t-card">НЕТ связи с Lot — остаётся на Guest + Coffee Shop (раздел 20 задачи)</div></div>
+          <div class="t-row"><div class="t-node dim">Order (XO, внешняя система)</div><div class="t-card">НЕТ FK — только совпадение значения public Lot ID между базами (раздел K)</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- F -->
+    <section class="doc" id="sF">
+      <div class="doc-num">F / Canonical ID Strategy</div>
+      <h2>Внутренний UUID + неизменяемый публичный ID — формат не меняется, меняется где он проверяется</h2>
+      <div class="doc-body">
+        <div class="tbl-wrap"><table class="tbl">
+          <tr><th>Вопрос</th><th>Решение</th></tr>
+          <tr><td>Internal ID</td><td class="soft"><span class="tag decision">DECISION</span> <code>lots.id uuid primary key</code> — никогда не показывается пользователю, используется только для FK внутри Supabase</td></tr>
+          <tr><td>Public Lot ID</td><td class="soft"><code>lots.public_id text unique not null</code> — сохраняет текущий читаемый формат <code>LOT-{ROASTER}-{COUNTRY}-{SEQ}</code>, генерируется <b>на сервере</b> (не в браузере), уникальность — реальный unique constraint, а не сканирование localStorage</td></tr>
+          <tr><td>QR / URL</td><td class="soft">без изменений по форме — QR по-прежнему кодирует <code>public_id</code>, маршрут по-прежнему <code>/passport/[lotId]</code>, принимая <code>public_id</code></td></tr>
+          <tr><td>Immutable?</td><td class="soft"><span class="tag decision">DECISION</span> <code>public_id</code> — да, неизменяем после создания (уже напечатан на QR/упаковке). <code>name</code> и остальные описательные поля — изменяемы свободно</td></tr>
+          <tr><td>Slug</td><td class="soft">отдельный slug не нужен — <code>public_id</code> уже URL-safe и человекочитаем; вводить второе поле было бы сущностью ради архитектуры (правило 5)</td></tr>
+          <tr><td>Уникальность</td><td class="soft">обеспечивается таблицей, не приложением — устраняет сегодняшний риск коллизии между двумя браузерами одного ростера</td></tr>
+          <tr><td>Готовность к нескольким Roaster</td><td class="soft">формат уже кодирует ростера в самой строке — второй ростер получает свой префикс без изменения схемы; единственное отличие — генерация переезжает с клиента на сервер</td></tr>
+        </table></div>
+      </div>
+    </section>
+
+    <!-- G -->
+    <section class="doc" id="sG">
+      <div class="doc-num">G / Versioning</div>
+      <h2>Версионировать ровно два поля — не событийный журнал, а неизменяемые снимки</h2>
+      <div class="doc-body">
+        <p class="prose"><b>Что версионируется:</b> Reference Roast Profile и Reference Taste Profile. <b>Что НЕ версионируется отдельно:</b> сам Lot (описательные поля вроде имени/дескрипторов могут просто редактироваться на месте — они не участвуют в сравнении «что обещали vs что получилось»), Green Lot (одна физическая партия не меняется задним числом), Roast Batch (каждый батч — уже неизменяемое событие по своей природе, новое событие = новая строка, никогда не редактирование старой).</p>
+        <div class="grid-2">
+          <div class="sheet"><h4 class="h">Reference Roast Profile</h4><p class="prose" style="margin-top:8px">Каждое изменение подхода к обжарке — новая строка со статусом (<code>draft/active/superseded</code>) и <code>effective_from</code>. Ровно один <code>active</code> на Lot. Каждый Roast Batch хранит FK на ту версию, которой он фактически следовал — не на «текущую активную».</p></div>
+          <div class="sheet"><h4 class="h">Reference Taste Profile</h4><p class="prose" style="margin-top:8px">Тот же паттерн: новая версия при изменении 4-осевого эталона, статус <code>active/superseded</code>. Каждая Tasting-запись (checkins) при создании захватывает FK на версию, которая была <code>active</code> в момент дегустации — не на «текущую».</p></div>
+        </div>
+        <div class="callout"><p><b>Почему этого достаточно и не нужен event sourcing:</b> задача — не восстановить полную историю изменений мысли ростера, а гарантировать, что уже состоявшийся Roast Batch и уже состоявшаяся Tasting навсегда остаются привязаны к тому эталону, который был в момент события. Immutable versioned rows + захват FK в момент записи решают именно это, без журнала событий, диффов или отдельного audit-log-механизма.</p></div>
+        <div class="callout c"><p><b>CONFLICT, зафиксированный, не исправленный:</b> сегодняшний <code>Lot.roasterFlavorProfile</code> — одно мутируемое поле без истории. Любой исторический <code>checkins</code>, созданный до миграции, физически не может «вспомнить», какой была <code>roasterFlavorProfile</code> в момент своей записи — это невосстановимая потеря, которую нужно явно принять при миграции (раздел L), а не пытаться реконструировать задним числом.</p></div>
+      </div>
+    </section>
+
+    <!-- H -->
+    <section class="doc" id="sH">
+      <div class="doc-num">H / Lifecycle</div>
+      <h2>Четыре статуса, не шесть — «Low Stock» и «Sold Out» не принадлежат Lot</h2>
+      <div class="doc-body">
+        <div class="tbl-wrap"><table class="tbl">
+          <tr><th>Статус</th><th>Значение</th></tr>
+          <tr><td class="mono">draft</td><td class="soft">создан ростером, ещё не тестировался — не виден ни в одном каталоге</td></tr>
+          <tr><td class="mono">testing</td><td class="soft">есть Roast Batch, эталонный профиль ещё не устоялся — виден только ростеру</td></tr>
+          <tr><td class="mono">active</td><td class="soft">эталон устоялся, доступен кофейням для добавления в меню</td></tr>
+          <tr><td class="mono">archived</td><td class="soft">снят с производства ростером — <b>archived ≠ deleted</b> (ниже)</td></tr>
+        </table></div>
+        <div class="callout c"><p><b>Отклонено: «Low Stock» и «Sold Out» как статусы Lot.</b> Причина двойная: (1) остаток физического товара — это уже свойство Green Lot (сколько кг закуплено/осталось), а не самого коммерческого продукта — Lot может быть «в наличии у Кофейни А» и «закончился у Кофейни Б» одновременно, что уже корректно решено на уровне <code>cafe_menu_entries.status</code> (new/active/discontinuing) для каждой кофейни отдельно; (2) в этом проекте явно зафиксировано ранее: учёт остатков/списание для лотов — вне периметра продукта, обслуживается внешними системами (Yumi/iiko), а не Coffee Passport. Добавление количественного статуса на сам Lot заново открывало бы вопрос, который уже был закрыт.</p></div>
+        <p class="prose"><b>Archived ≠ Deleted:</b> архивная запись Lot остаётся в БД со всеми связанными Green Lot / Roast Profile / Roast Batch / Recipe / Tasting нетронутыми и читаемыми. Единственный эффект архивации — Lot исчезает из списков «доступно для добавления в новое меню» и из discovery-поверхностей; гость с существующей дегустацией по-прежнему открывает свой Passport по старой ссылке без ошибок.</p>
+      </div>
+    </section>
+
+    <!-- I -->
+    <section class="doc" id="sI">
+      <div class="doc-num">I / Existing Tables → Target Relations</div>
+      <div class="doc-body">
+        <div class="tbl-wrap"><table class="tbl">
+          <tr><th>Current</th><th>Target</th><th>Action (архитектурно, не код)</th></tr>
+          <tr><td class="mono">checkins.lot_id text</td><td class="soft">добавить <code>checkins.lot_ref uuid references lots(id)</code>, nullable</td><td class="soft">аддитивно, не разрушая: новая nullable-колонка рядом с существующей текстовой; backfill — отдельная последующая задача, сопоставляющая text-значение с <code>lots.public_id</code>; текстовая колонка остаётся как есть для строк, которые не удалось сопоставить</td></tr>
+          <tr><td class="mono">recipes.lot_id text</td><td class="soft">тот же паттерн — <code>recipes.lot_ref uuid</code> nullable</td><td class="soft">то же самое</td></tr>
+          <tr><td class="mono">cafe_menu_entries.lot_id text</td><td class="soft">тот же паттерн; эта таблица уже фактически работает как many-to-many Lot↔Coffee Shop — после появления обеих реальных таблиц она формально становится настоящей join-таблицей</td><td class="soft">то же самое, плюс сохранить существующий <code>unique(coffee_shop_id, lot_id)</code> без изменений</td></tr>
+          <tr><td class="mono">loyalty_transactions</td><td class="soft"><span class="tag decision">без изменений</span></td><td class="soft">не добавлять Lot FK — не решает существующую проблему, решает гипотетическую (раздел 20 задачи)</td></tr>
+          <tr><td class="mono">migration 0001 lots/coffees/coffee_shop_lots</td><td class="soft">не переиспользуется, не мигрируется из неё</td><td class="soft">оставить как есть; не источник истины (правило 8) — упомянута только как структурное подтверждение верного направления (раздел A, пункт 7)</td></tr>
+        </table></div>
+        <p class="prose">Ни одна из существующих text-колонок не удаляется и не переименовывается на этом этапе — стратегия строго аддитивна, поэтому ни один сегодняшний UI-путь, читающий их напрямую, не ломается.</p>
+      </div>
+    </section>
+
+    <!-- J -->
+    <section class="doc" id="sJ">
+      <div class="doc-num">J / localStorage → Supabase</div>
+      <div class="doc-body">
+        <div class="grid-2">
+          <div class="sheet"><h4 class="h">Переезжает в Supabase</h4><p class="prose" style="margin-top:8px">Coffee (происхождение), Green Lot, Lot (сам объект), Reference Roast Profile (версии), Roast Batch (события), Reference Taste Profile (версии). Всё это сегодня — <code>coffee-passport:lots</code> и <code>coffee-passport:roast-profiles</code> в localStorage.</p></div>
+          <div class="sheet"><h4 class="h">Остаётся client-side</h4><p class="prose" style="margin-top:8px">Черновики формы до сохранения (обычное UI-состояние), любые UI-предпочтения отображения (сортировка, развёрнутые вкладки). Ничего из данных, формирующих идентичность Lot, не должно оставаться исключительно на клиенте.</p></div>
+        </div>
+        <p class="prose"><b>Legacy-структуры для явного вывода из эксплуатации (после миграции, не сейчас):</b> <code>coffee-passport:lots</code> и <code>coffee-passport:roast-profiles</code> в localStorage становятся read-only кэшем поверх Supabase, затем — источником для одноразового backfill, затем — не нужны. <code>lib/data/lots.ts</code> (seed-массив) перестаёт быть источником каталога, но может остаться как seed-скрипт для новой БД.</p>
+      </div>
+    </section>
+
+    <!-- K -->
+    <section class="doc" id="sK">
+      <div class="doc-num">K / XO Integration Boundary</div>
+      <h2>Одна строка, один raw-value — без общей БД, без общего auth</h2>
+      <div class="doc-body">
+        <div class="tree">
+          <div class="t-row"><div class="t-node">XO COFFEE Roasting</div><div class="t-card">создаёт Lot (внутри Coffee Passport, ростер = staff-роль)</div></div>
+          <div class="t-row indent1"><div class="t-line">↓ creates</div></div>
+          <div class="t-row indent1"><div class="t-node core">LOT (public_id)</div><div class="t-card">единственное значение, пересекающее границу систем</div></div>
+          <div class="t-row indent1"><div class="t-line">↓</div></div>
+          <div class="t-row indent1"><div class="t-node">XO COFFEE storefront</div><div class="t-card">хранит <code>public_id</code> как обычный текстовый атрибут товара в своей витрине</div></div>
+          <div class="t-row indent1"><div class="t-line">↓ purchase</div></div>
+          <div class="t-row indent1"><div class="t-node dim">CartItem → OrderPayloadItem</div><div class="t-card">по Stage 2: id теряется именно здесь — не архитектурная проблема Coffee Passport, но точка, где canonical Lot ID должен физически сохраняться на всём пути заказа XO</div></div>
+          <div class="t-row indent1"><div class="t-line">↓ Lot ID preserved</div></div>
+          <div class="t-row indent1"><div class="t-node">Coffee Passport</div><div class="t-card"><code>/passport/{public_id}</code> — обычная ссылка/QR, без API-вызова между системами</div></div>
+        </div>
+        <div class="callout"><p><b>Единственная архитектурная точка интеграции:</b> XO хранит <code>public_id</code> как непрозрачное строковое значение — не как FK, не через общий backend. Coffee Passport ничего не знает о заказах, ценах или наличии на стороне XO. Это не меняет и не исправляет код XO — только называет, где именно (между CartItem и OrderPayloadItem) canonical Lot ID обязан не теряться, чтобы мост вообще мог заработать.</p></div>
+      </div>
+    </section>
+
+    <!-- L -->
+    <section class="doc" id="sL">
+      <div class="doc-num">L / Migration Risk</div>
+      <div class="doc-body">
+        <div class="tbl-wrap"><table class="tbl">
+          <tr><th>Риск</th><th>Серьёзность</th><th>Природа</th></tr>
+          <tr><td>Сиротские <code>lot_id</code> в checkins/recipes/cafe_menu_entries</td><td class="soft">HIGH</td><td class="soft">исторические строки могут ссылаться на id, которого больше нет ни в одном localStorage (устройство сменилось, запись удалена/переименована) — backfill не сможет сопоставить их с реальной строкой <code>lots</code></td></tr>
+          <tr><td>Коллизии <code>public_id</code> между устройствами одного ростера</td><td class="soft">MEDIUM-HIGH</td><td class="soft">сегодняшняя проверка уникальности — только внутри одного браузера; при первом переносе в единую таблицу с реальным unique constraint такие коллизии всплывут как жёсткие конфликты, требующие ручного решения (не может быть автоматически «исправлено» без решения человека, какая из двух партий получает какой id)</td></tr>
+          <tr><td>Невосстановимая история Reference Taste Profile</td><td class="soft">MEDIUM</td><td class="soft"><code>roasterFlavorProfile</code> никогда не версионировался — backfill исторических checkins сможет привязать их только к «текущему» профилю на момент миграции, что тихо исказит смысл давних сравнений; это должно быть явно принято как потеря, а не «почти решено»</td></tr>
+          <tr><td>Мёртвая схема 0001 как источник путаницы</td><td class="soft">LOW</td><td class="soft">сама по себе безопасна (ничего её не использует), но способна ввести в заблуждение будущего инженера, который решит, что <code>public.lots</code> уже есть — нужно явно и заметно пометить как deprecated при реализации, не в рамках Stage 3</td></tr>
+        </table></div>
+      </div>
+    </section>
+
+    <!-- M -->
+    <section class="doc" id="sM">
+      <div class="doc-num">M / Explicit Non-Goals</div>
+      <div class="doc-body">
+        <p class="prose">Сознательно не решается на Stage 3: DevRoleSwitcher и любой security-hardening; RLS-политики (в том числе для будущего мультиростерного разграничения записи — см. финальный вопрос); Events/Community/Gamification; редизайн Map; масштабирование Loyalty; recommendation engine; концепция Experiments; второй платящий ростер как операционный онбординг; любой новый UI; любые изменения в репозитории XO COFFEE; Visit/Session-объект, связывающий Tasting и Loyalty (раздел 20 задачи — архитектурная возможность названа в разделе E, не создаётся); полноценная миграция всех полей профиля Roaster/Coffee Shop (переносится только identity-якорь, необходимый для FK); количественный учёт остатков (раздел H).</p>
+      </div>
+    </section>
+
+    <!-- N -->
+    <section class="doc" id="sN">
+      <div class="rec">
+        <h3>N / Final Recommendation</h3>
+        <h2>Один вариант: пять таблиц, аддитивная миграция FK, тонкие Roaster/Coffee Shop</h2>
+        <p class="prose" style="margin-top:16px">Ввести в Supabase пять новых таблиц — <code>coffees</code>, <code>green_lots</code>, <code>lots</code>, <code>reference_roast_profiles</code> (+ <code>roast_batches</code> отдельно от неё), <code>reference_taste_profiles</code> — вместе с двумя тонкими identity-таблицами <code>roasters</code> и <code>coffee_shops</code>, содержащими только то, что нужно для реальных внешних ключей (не полную миграцию существующих богатых профилей). <code>lots.public_id</code> сохраняет текущий читаемый формат, генерируется на сервере с реальным unique constraint. К <code>checkins</code>, <code>recipes</code> и <code>cafe_menu_entries</code> добавляются nullable FK-колонки рядом с существующими текстовыми — ничего не удаляется, ничего не переименовывается, ни один текущий UI-путь не меняется. Loyalty и Barista не получают новых связей с Lot. Мёртвая схема 0001 не используется и не трогается.</p>
+        <p class="prose" style="margin-top:10px">Это решение, которое можно утвердить или отклонить целиком — не пять равнозначных вариантов на выбор.</p>
+      </div>
+    </section>
+
+    <!-- Final question -->
+    <section class="doc" id="sQ">
+      <div class="doc-num">Final Question</div>
+      <div class="qbox">
+        <h3>Устойчива ли модель при 100 лотах, 10 кофейнях, тысячах дегустаций и нескольких ростерах через два года?</h3>
+        <p class="prose" style="margin-top:6px"><b>Да — с одной явно названной, а не спрятанной оговоркой.</b></p>
+        <div class="prose" style="margin-top:14px">FK-граф (Coffee→Green Lot→Lot→{Reference Roast Profile, Roast Batch, Reference Taste Profile}, Lot↔Coffee Shop, Lot→Recipe, Lot→Tasting) растёт добавлением строк, не изменением схемы — новый ростер, новая кофейня, новый лот не требуют новой таблицы или новой связи. Формат <code>public_id</code> уже кодирует ростера в самой строке, поэтому коллизии между ростерами исключены по конструкции, как только генерация становится серверной (раздел F). Coffee (происхождение) сознательно скоуплен на одного ростера — если два ростера закупают зерно с одной и той же фермы, это создаёт два отдельных Coffee-объекта, что коммерчески корректно (это разные продукты у разных продавцов), а не архитектурный дефект.</div>
+        <div class="callout c" style="margin-top:14px"><p><b>Где модель ломается без дополнительной работы — честно, не скрыто:</b> ничего в этом документе не проектирует, кто именно может <i>писать</i> в чужой Lot/Green Lot/Roast Profile при нескольких ростерах на одной платформе одновременно — это вопрос RLS-политик (правило 21, явно вне периметра Stage 3), а не схемы данных. Схема готова к множеству ростеров; изоляция записи между ними — отдельная, обязательная, но чисто аддитивная задача поверх уже готовой схемы, не её переделка.</p></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer class="doc-footer">
+  <span>Coffee Passport — Canonical Lot Architecture · Stage 3</span>
+  <span>Архитектурное решение, не реализация · Stage 4 не начат</span>
+</footer>
+
+<script>
+(function(){
+  var links = Array.prototype.slice.call(document.querySelectorAll('#railList a'));
+  var sections = links.map(function(a){ return document.querySelector(a.getAttribute('href')); }).filter(Boolean);
+  if (!('IntersectionObserver' in window) || sections.length === 0) return;
+  var map = {};
+  links.forEach(function(a, i){ map[sections[i].id] = a; });
+  var current = null;
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if (entry.isIntersecting) {
+        if (current) current.classList.remove('active');
+        current = map[entry.target.id];
+        if (current) current.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-10% 0px -75% 0px', threshold: 0 });
+  sections.forEach(function(s){ io.observe(s); });
+})();
+</script>

@@ -12,7 +12,7 @@ export function FlavorSlider({
   label: string;
   value: number;
   onChange: (value: number) => void;
-  // CAFE_LOT_EDIT_OWNERSHIP_IMPLEMENTATION.md — lets a caller render the
+  // docs/reports/CAFE_LOT_EDIT_OWNERSHIP_IMPLEMENTATION.md — lets a caller render the
   // roaster's Taste Intent as view-only (café's Lot-edit screen) without a
   // second slider component. Unused by every other existing caller
   // (defaults to false, unchanged behavior).

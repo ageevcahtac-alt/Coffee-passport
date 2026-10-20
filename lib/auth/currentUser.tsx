@@ -89,7 +89,7 @@ export function CurrentUserProvider({
     const resolvedId = authUserId ?? getOrCreateAnonId();
     const isAuthenticated = Boolean(authUserId);
 
-    // GAP 2 (IDENTITY_SESSION_CONTINUITY_IMPLEMENTATION.md) — must run
+    // GAP 2 (docs/reports/IDENTITY_SESSION_CONTINUITY_IMPLEMENTATION.md) — must run
     // BEFORE reconcileUserScope, and must read the anon id directly rather
     // than trust any earlier render's state: this is the one moment this
     // device's pre-signup anonymous history can still be identified, right
@@ -97,7 +97,7 @@ export function CurrentUserProvider({
     // already sitting in this device's own local cache under this device's
     // own anon id — never anything cross-device or cross-account.
     //
-    // ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — widened from
+    // docs/reports/ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — widened from
     // claimAnonymousTastings alone to claimAnonymousUserData, which claims
     // tastings plus every other personal, userId-scoped local store (see
     // that function's own comment for the full list and each store's

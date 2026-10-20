@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 // handlers that don't need a user session — the partner-requests API
 // routes are gated by HTTP Basic Auth instead (see middleware.ts).
 //
-// Production readiness hardening (see COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
+// Production readiness hardening (see docs/reports/COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
 // 0003_partner_requests.sql's own anon-key "acceptable for now" policies
 // have been dropped by 0028_partner_requests_lockdown.sql — partner_requests
 // is no longer readable/writable with the public anon key at all. This

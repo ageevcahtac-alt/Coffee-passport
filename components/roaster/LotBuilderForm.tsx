@@ -121,8 +121,8 @@ export function LotBuilderForm({
   // (app/dashboard/cafe/[lotId]/edit), which must not be able to touch it,
   // per the task's roaster/cafe separation-of-responsibility rule.
   canEditCatalogFlag = true,
-  // CAFE_LOT_EDIT_OWNERSHIP_IMPLEMENTATION.md — café does not own Canonical
-  // Lot identity, origin, or Taste Intent (CAFE_LOT_EDIT_OWNERSHIP_AUDIT.md).
+  // docs/reports/CAFE_LOT_EDIT_OWNERSHIP_IMPLEMENTATION.md — café does not own Canonical
+  // Lot identity, origin, or Taste Intent (docs/reports/CAFE_LOT_EDIT_OWNERSHIP_AUDIT.md).
   // readOnly renders every one of those fields as plain, disabled/view-only
   // content and drops the <form>/submit entirely, so there is no code path
   // left that can call onSave — not "disabled but still wired," genuinely

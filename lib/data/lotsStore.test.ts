@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Lot } from '@/lib/types/coffee';
 
-// COFFEE_GREEN_LOT_PROVENANCE_SYNC_IMPLEMENTATION.md — covers the
-// Category B gap from COFFEE_GREEN_LOT_OWNERSHIP_AUDIT.md: rowToLot() used
+// docs/reports/COFFEE_GREEN_LOT_PROVENANCE_SYNC_IMPLEMENTATION.md — covers the
+// Category B gap from docs/reports/COFFEE_GREEN_LOT_OWNERSHIP_AUDIT.md: rowToLot() used
 // to source every origin field (country/region/variety/process/cropYear/
 // producer.*) from `fallback` only, so any device without a pre-existing
 // local cache entry for a real (non-seed) Lot saw it blank, even though a
@@ -214,7 +214,7 @@ describe('lib/data/lotsStore — Coffee/Green Lot provenance sync', () => {
       expect(lot?.country).toBe('');
     });
 
-    it('COFFEE_GREEN_LOT_EDIT_PATHS_IMPLEMENTATION.md: a Coffee edit is reflected on the very next sync for a device with no override', async () => {
+    it('docs/reports/COFFEE_GREEN_LOT_EDIT_PATHS_IMPLEMENTATION.md: a Coffee edit is reflected on the very next sync for a device with no override', async () => {
       const { syncLotsFromSupabase, getMergedLotById } = await import('./lotsStore');
 
       nextSelectResult = {

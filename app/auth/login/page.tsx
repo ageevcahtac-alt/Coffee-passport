@@ -1,6 +1,6 @@
 import { EnthusiastAuthForm } from '@/components/site/EnthusiastAuthForm';
 
-// GAP 1 (IDENTITY_SESSION_CONTINUITY_IMPLEMENTATION.md) — this page used to
+// GAP 1 (docs/reports/IDENTITY_SESSION_CONTINUITY_IMPLEMENTATION.md) — this page used to
 // render its own login-only form, with no path to create an account at
 // all. The Navbar's "Log in" link (visible on every (site) page, including
 // the Public Passport) pointed here, so a brand-new guest clicking it hit

@@ -13,8 +13,8 @@ import { RecipeCard } from '@/components/coffee/RecipeCard';
 import { useStaffSession } from '@/lib/auth/staffSession';
 import type { BrewingRecipe } from '@/lib/types/coffee';
 
-// CAFE_LOT_EDIT_OWNERSHIP_IMPLEMENTATION.md — café does not own Canonical
-// Lot identity, origin, or Taste Intent (CAFE_LOT_EDIT_OWNERSHIP_AUDIT.md).
+// docs/reports/CAFE_LOT_EDIT_OWNERSHIP_IMPLEMENTATION.md — café does not own Canonical
+// Lot identity, origin, or Taste Intent (docs/reports/CAFE_LOT_EDIT_OWNERSHIP_AUDIT.md).
 // This page used to call saveLot(updated) here, writing the roaster's data
 // to this café staff member's own browser localStorage — a local override
 // that then silently shadowed the real canonical Lot on every other

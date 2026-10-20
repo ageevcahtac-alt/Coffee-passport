@@ -1,0 +1,1030 @@
+<title>Coffee Passport 2.0 Audit</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root{
+  --bg:#f3f1ec;
+  --surface:#ffffff;
+  --surface-2:#ebe7df;
+  --ink:#221d17;
+  --ink-soft:#5c5346;
+  --ink-faint:#8b8071;
+  --line:#dcd6c9;
+  --line-strong:#c7bfae;
+  --accent:#8a4a26;
+  --accent-soft:#c98a58;
+  --accent-wash:#f2e3d3;
+  --code-bg:#eee9de;
+
+  --fact:#2f6b3e;      --fact-bg:#e3efe3;
+  --code-c:#2857a8;    --code-bg2:#e2ebf7;
+  --decision:#6a4c9c;  --decision-bg:#ece5f5;
+  --hypothesis:#9c7a12; --hypothesis-bg:#f5edd6;
+  --missing:#a63333;   --missing-bg:#f6e2e2;
+  --legacy:#78706a;    --legacy-bg:#eae7e1;
+  --premature:#1f7d78; --premature-bg:#dcefee;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1a1611;
+    --surface:#221d17;
+    --surface-2:#2a241d;
+    --ink:#ece6da;
+    --ink-soft:#bfb5a3;
+    --ink-faint:#8a8072;
+    --line:#3a3327;
+    --line-strong:#4a4132;
+    --accent:#dd9a63;
+    --accent-soft:#a8683c;
+    --accent-wash:#3a2b1c;
+    --code-bg:#241f18;
+
+    --fact:#7fc98c;      --fact-bg:#213024;
+    --code-c:#8fb4e8;    --code-bg2:#1e2937;
+    --decision:#c1a6e8;  --decision-bg:#2c2438;
+    --hypothesis:#e0c467; --hypothesis-bg:#332c17;
+    --missing:#e88888;   --missing-bg:#3a2224;
+    --legacy:#b3aa9d;    --legacy-bg:#2e2b25;
+    --premature:#7fd3cc; --premature-bg:#1d3230;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1a1611;
+  --surface:#221d17;
+  --surface-2:#2a241d;
+  --ink:#ece6da;
+  --ink-soft:#bfb5a3;
+  --ink-faint:#8a8072;
+  --line:#3a3327;
+  --line-strong:#4a4132;
+  --accent:#dd9a63;
+  --accent-soft:#a8683c;
+  --accent-wash:#3a2b1c;
+  --code-bg:#241f18;
+
+  --fact:#7fc98c;      --fact-bg:#213024;
+  --code-c:#8fb4e8;    --code-bg2:#1e2937;
+  --decision:#c1a6e8;  --decision-bg:#2c2438;
+  --hypothesis:#e0c467; --hypothesis-bg:#332c17;
+  --missing:#e88888;   --missing-bg:#3a2224;
+  --legacy:#b3aa9d;    --legacy-bg:#2e2b25;
+  --premature:#7fd3cc; --premature-bg:#1d3230;
+}
+
+*{box-sizing:border-box;}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:'IBM Plex Sans', system-ui, sans-serif;
+  font-size:15.5px;
+  line-height:1.6;
+}
+h1,h2,h3,h4{
+  font-family:'IBM Plex Serif', Georgia, serif;
+  color:var(--ink);
+  text-wrap:balance;
+  font-weight:600;
+  line-height:1.25;
+}
+code, .mono, .id{
+  font-family:'IBM Plex Mono', ui-monospace, monospace;
+}
+a{ color:var(--accent); }
+p{ margin:0 0 0.9em; max-width:72ch; }
+::selection{ background:var(--accent-wash); }
+
+/* ---------- Shell layout ---------- */
+.shell{
+  display:grid;
+  grid-template-columns:272px minmax(0,1fr);
+  min-height:100vh;
+}
+.nav{
+  position:sticky; top:0; align-self:start;
+  height:100vh; overflow-y:auto;
+  border-right:1px solid var(--line);
+  background:var(--surface);
+  padding:22px 18px 60px;
+}
+.nav-brand{
+  font-family:'IBM Plex Serif';
+  font-weight:700; font-size:1.05rem;
+  color:var(--ink);
+  margin-bottom:2px;
+}
+.nav-sub{
+  font-size:0.72rem; color:var(--ink-faint);
+  text-transform:uppercase; letter-spacing:.07em;
+  margin-bottom:20px; padding-bottom:16px;
+  border-bottom:1px solid var(--line);
+}
+.nav-group-label{
+  font-size:0.68rem; text-transform:uppercase; letter-spacing:.09em;
+  color:var(--accent); font-weight:600;
+  margin:18px 0 6px;
+}
+.nav a{
+  display:block; text-decoration:none; color:var(--ink-soft);
+  font-size:0.83rem; padding:3px 0 3px 10px;
+  border-left:2px solid transparent;
+}
+.nav a:hover{ color:var(--ink); border-left-color:var(--line-strong); }
+.nav a.active{ color:var(--accent); border-left-color:var(--accent); font-weight:500; }
+
+main{ padding:0; max-width:100%; }
+.hero{
+  padding:52px 56px 40px;
+  border-bottom:1px solid var(--line);
+  background:
+    linear-gradient(180deg, var(--accent-wash), transparent 140%);
+}
+.hero .eyebrow{
+  font-family:'IBM Plex Mono'; font-size:0.75rem; letter-spacing:.08em;
+  color:var(--accent); text-transform:uppercase; margin-bottom:14px;
+}
+.hero h1{ font-size:2.1rem; margin:0 0 10px; max-width:20ch; }
+.hero .dek{ color:var(--ink-soft); max-width:62ch; font-size:1.02rem; }
+.hero .meta{
+  display:flex; flex-wrap:wrap; gap:10px 22px; margin-top:22px;
+  font-family:'IBM Plex Mono'; font-size:0.78rem; color:var(--ink-faint);
+}
+.hero .meta b{ color:var(--ink-soft); font-weight:600; }
+
+.section{
+  padding:38px 56px;
+  border-bottom:1px solid var(--line);
+  max-width:1180px;
+}
+.section:target{ scroll-margin-top:0; }
+.sec-head{
+  display:flex; align-items:baseline; gap:12px; margin-bottom:6px;
+}
+.sec-num{
+  font-family:'IBM Plex Mono'; color:var(--accent-soft); font-size:0.95rem;
+}
+.sec-head h2{ font-size:1.5rem; margin:0; }
+.sec-intro{ color:var(--ink-soft); margin-bottom:22px; max-width:74ch; }
+h3{ font-size:1.12rem; margin:26px 0 10px; }
+h4{ font-size:0.95rem; margin:18px 0 8px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.04em; font-family:'IBM Plex Sans'; font-weight:600;}
+
+/* badges */
+.badge{
+  display:inline-block; font-family:'IBM Plex Mono'; font-size:0.68rem;
+  font-weight:600; letter-spacing:.03em; text-transform:uppercase;
+  padding:2px 7px; border-radius:3px; white-space:nowrap;
+}
+.b-fact{ color:var(--fact); background:var(--fact-bg); }
+.b-code{ color:var(--code-c); background:var(--code-bg2); }
+.b-decision{ color:var(--decision); background:var(--decision-bg); }
+.b-hypothesis{ color:var(--hypothesis); background:var(--hypothesis-bg); }
+.b-missing{ color:var(--missing); background:var(--missing-bg); }
+.b-legacy{ color:var(--legacy); background:var(--legacy-bg); }
+.b-premature{ color:var(--premature); background:var(--premature-bg); }
+
+.legend{
+  display:flex; flex-wrap:wrap; gap:8px 16px; margin:14px 0 6px;
+  padding:14px 16px; background:var(--surface); border:1px solid var(--line); border-radius:8px;
+}
+.legend div{ font-size:0.8rem; color:var(--ink-soft); display:flex; align-items:center; gap:7px;}
+
+/* tables */
+.tbl-wrap{ overflow-x:auto; margin:14px 0 22px; border:1px solid var(--line); border-radius:8px; }
+table{ border-collapse:collapse; width:100%; font-size:0.86rem; background:var(--surface); }
+th,td{ padding:9px 12px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top; }
+th{
+  font-family:'IBM Plex Mono'; font-size:0.7rem; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--ink-faint); background:var(--surface-2); position:sticky; top:0;
+}
+tr:last-child td{ border-bottom:none; }
+td .mono{ font-size:0.82rem; color:var(--ink-soft); }
+.num{ font-variant-numeric:tabular-nums; }
+
+/* cards */
+.grid{ display:grid; gap:14px; margin:16px 0; }
+.grid-2{ grid-template-columns:repeat(2,1fr); }
+.grid-3{ grid-template-columns:repeat(3,1fr); }
+@media(max-width:900px){ .grid-2,.grid-3{ grid-template-columns:1fr; } }
+.card{
+  border:1px solid var(--line); background:var(--surface); border-radius:8px; padding:16px 18px;
+}
+.card h4{ margin-top:0; color:var(--ink); }
+.card p{ margin:0; font-size:0.88rem; color:var(--ink-soft); }
+
+.callout{
+  border-left:3px solid var(--accent); background:var(--accent-wash);
+  padding:14px 18px; border-radius:0 8px 8px 0; margin:18px 0;
+  font-size:0.92rem;
+}
+.callout.risk{ border-left-color:var(--missing); background:var(--missing-bg); }
+.callout.risk strong{ color:var(--missing); }
+.callout.note{ border-left-color:var(--legacy); background:var(--legacy-bg); }
+
+ul,ol{ padding-left:1.3em; max-width:74ch; }
+li{ margin-bottom:5px; }
+
+/* architecture map */
+.map-wrap{ display:flex; flex-direction:column; gap:10px; margin:20px 0; }
+.map-row{ display:flex; gap:10px; flex-wrap:wrap; }
+.map-box{
+  border:1.5px solid var(--line-strong); border-radius:8px; padding:12px 14px;
+  background:var(--surface); flex:1; min-width:150px;
+}
+.map-box.dim{ opacity:.55; border-style:dashed; }
+.map-box h5{ margin:0 0 4px; font-family:'IBM Plex Mono'; font-size:0.78rem; color:var(--accent); text-transform:uppercase; letter-spacing:.04em;}
+.map-box p{ margin:0; font-size:0.78rem; color:var(--ink-soft); }
+.arrow{ text-align:center; color:var(--ink-faint); font-family:'IBM Plex Mono'; font-size:1rem; }
+
+.tag-row{ display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 16px;}
+.tag{ font-family:'IBM Plex Mono'; font-size:0.72rem; padding:2px 8px; border-radius:12px; background:var(--surface-2); color:var(--ink-soft); border:1px solid var(--line);}
+
+.foot{ padding:40px 56px 80px; color:var(--ink-faint); font-size:0.8rem; }
+
+@media(max-width:860px){
+  .shell{ grid-template-columns:1fr; }
+  .nav{ display:none; }
+  .hero,.section{ padding-left:22px; padding-right:22px; }
+}
+</style>
+
+<div class="shell">
+  <nav class="nav">
+    <div class="nav-brand">Coffee Passport 2.0</div>
+    <div class="nav-sub">Current Product &amp; Architecture Audit</div>
+
+    <div class="nav-group-label">Обзор</div>
+    <a href="#s00">00 · Принципы аудита</a>
+    <a href="#s01">01 · Техническое состояние</a>
+    <a href="#s02">02 · Эволюция продукта</a>
+
+    <div class="nav-group-label">Роли</div>
+    <a href="#s03">03 · Архитектура ролей</a>
+    <a href="#s04">04 · Barista</a>
+    <a href="#s05">05 · Guest</a>
+    <a href="#s06">06 · Roaster</a>
+    <a href="#s07">07 · Coffee Shop</a>
+
+    <div class="nav-group-label">Продуктовые домены</div>
+    <a href="#s08">08 · Sensory 2.0</a>
+    <a href="#s09">09 · Recipes</a>
+    <a href="#s10">10 · Experiments</a>
+    <a href="#s11">11 · Equipment</a>
+    <a href="#s12">12 · Loyalty 2.0</a>
+    <a href="#s13">13 · Map / Location</a>
+    <a href="#s14">14 · Events / News</a>
+    <a href="#s15">15 · Feedback loops</a>
+
+    <div class="nav-group-label">Данные и инфраструктура</div>
+    <a href="#s16">16 · Data Model 2.0</a>
+    <a href="#s17">17 · Migrations</a>
+    <a href="#s18">18 · Auth &amp; Permissions</a>
+    <a href="#s19">19 · QR Architecture</a>
+
+    <div class="nav-group-label">Синтез</div>
+    <a href="#s20">20 · Product Loops</a>
+    <a href="#s21">21 · Core/Supporting/…</a>
+    <a href="#s22">22 · Stage1→2.0 Delta</a>
+    <a href="#s23">23 · Impact on Stage 2</a>
+    <a href="#s24">24 · Architectural Risks</a>
+    <a href="#s25">25 · What CP2.0 Is</a>
+    <a href="#s26">26 · Final Architecture Map</a>
+    <a href="#s27">27 · Decision Status</a>
+
+    <div class="nav-group-label">Итоги</div>
+    <a href="#s28">28 · Deliverable Summary</a>
+  </nav>
+
+  <main>
+    <div class="hero">
+      <div class="eyebrow">Architecture Audit · не Stage 3 · без изменений кода</div>
+      <h1>Coffee Passport 2.0 — аудит текущего продукта</h1>
+      <p class="dek">Полная фиксация фактического состояния кода и базы данных на сегодняшний день. Не заменяет Stage 1 и не меняет Stage 2 — это новая независимая точка отсчёта для следующего архитектурного этапа.</p>
+      <div class="meta">
+        <span><b>Дата аудита:</b> 2026-09-07</span>
+        <span><b>Ветка:</b> main</span>
+        <span><b>Миграций:</b> 21 (0001–0021)</span>
+        <span><b>Роутов:</b> ~50</span>
+        <span><b>Компонентов:</b> 119</span>
+        <span><b>Метод:</b> прямое чтение кода/SQL, 8 параллельных доменных проходов</span>
+      </div>
+    </div>
+
+    <!-- 00 -->
+    <section class="section" id="s00">
+      <div class="sec-head"><span class="sec-num">00</span><h2>Принципы аудита</h2></div>
+      <p class="sec-intro">Единственный источник истины — фактический код и миграции Supabase. README, PRODUCT_BACKLOG.md и предыдущий Stage 1 документ используются только как вспомогательный контекст и никогда не принимаются за текущее состояние без проверки в коде.</p>
+      <div class="legend">
+        <div><span class="badge b-fact">FACT</span> подтверждено кодом/БД напрямую</div>
+        <div><span class="badge b-code">CODE</span> реализовано, но не всегда «правильно» с точки зрения архитектуры</div>
+        <div><span class="badge b-decision">DECISION</span> явное архитектурное решение, видно из комментариев/схемы</div>
+        <div><span class="badge b-hypothesis">HYPOTHESIS</span> вывод по косвенным признакам</div>
+        <div><span class="badge b-missing">MISSING</span> ожидалось, но не найдено в коде</div>
+        <div><span class="badge b-legacy">LEGACY</span> существует, но не должно определять архитектуру</div>
+        <div><span class="badge b-premature">PREMATURE</span> реализовано, ценность зависит от масштаба сети</div>
+      </div>
+      <p>Если UI существует без backend — это указано явно. Если таблица существует, но не используется — помечена LEGACY. Если связь между сущностями предполагалась, но не реализована — помечена MISSING. Расхождения между кодом и документами разрешаются всегда в пользу кода.</p>
+    </section>
+
+    <!-- 01 -->
+    <section class="section" id="s01">
+      <div class="sec-head"><span class="sec-num">01</span><h2>Текущее техническое состояние</h2></div>
+      <p class="sec-intro">Next.js 14 (App Router) + Supabase (Postgres/Auth/RLS), без выделенного бэкенд-сервиса. Значительная часть доменных данных всё ещё живёт в <code>localStorage</code>, с частичным «write-through» синхронизмом в Supabase там, где домен уже был переписан на реальные таблицы.</p>
+
+      <h4>Стек</h4>
+      <div class="tag-row">
+        <span class="tag">Next.js 14.2 (App Router)</span><span class="tag">React 18</span><span class="tag">TypeScript</span>
+        <span class="tag">Tailwind 4</span><span class="tag">Supabase (@supabase/ssr)</span><span class="tag">PostgreSQL + RLS</span>
+        <span class="tag">react-leaflet + Leaflet (OSM tiles)</span><span class="tag">jsQR (камера)</span><span class="tag">qrcode (генерация)</span>
+        <span class="tag">jsPDF</span><span class="tag">SWR</span><span class="tag">d3-geo / react-simple-maps</span>
+      </div>
+
+      <h4>Домены и приблизительный размер</h4>
+      <div class="tbl-wrap"><table>
+        <tr><th>Область</th><th>Кол-во</th><th>Комментарий</th></tr>
+        <tr><td>Supabase-миграции</td><td class="num">21</td><td class="mono">0001_init_schema.sql → 0021_drink_evaluation.sql</td></tr>
+        <tr><td>App-роуты (page/route)</td><td class="num">~50</td><td>(site)/, dashboard/{barista,cafe,roaster,admin}/, api/, auth/, map/</td></tr>
+        <tr><td>Компоненты</td><td class="num">119</td><td>сгруппированы по admin/barista/cafe/coffee/dev/kitchen/loyalty/map/roaster/shared/site</td></tr>
+        <tr><td>lib/data store-модулей</td><td class="num">~40</td><td>каждый — пара «store + use-хук», в основном localStorage-first</td></tr>
+      </table></div>
+
+      <h4>Client/server и границы</h4>
+      <ul>
+        <li><span class="badge b-fact">FACT</span> <code>middleware.ts</code> закрывает <code>/admin</code> HTTP Basic Auth-ом на edge-уровне — это не проверяется Postgres RLS и не связано с ролями <code>profiles</code>.</li>
+        <li><span class="badge b-fact">FACT</span> <code>lib/supabase/adminClient.ts</code> называется «admin», но использует anon-ключ — сервис-роль не сконфигурирована нигде в проекте.</li>
+        <li><span class="badge b-code">CODE</span> Значительная доля доменных данных (лоты, ростеры, кофейни-каталог, бариста-ростер, рецепты «Кухни», голоса за рецепты, дневник каппингов) — это localStorage-массивы, у части из них есть параллельный «write-through» в Supabase (меню кафе, чек-ины/tastings, лояльность, рецепты <code>BrewingRecipe</code>), у части — нет вообще.</li>
+      </ul>
+
+      <h4>Production-like vs demo vs legacy</h4>
+      <div class="grid grid-3">
+        <div class="card"><h4><span class="badge b-fact">Production-like</span></h4><p>Loyalty-модуль (RPC + RLS), checkins/tastings, cafe_menu_entries с cron-истечением, events-модуль с cron-агрегацией, RLS-разграничение ролей.</p></div>
+        <div class="card"><h4><span class="badge b-hypothesis">Demo / pilot</span></h4><p>Весь каталог лотов/ростеров/кофеен/бариста — localStorage поверх seed-массивов; «Легаси»-конструктор лота на <code>/admin</code>; демо-инвайт-пароли партнёров; фиксированный DevRoleSwitcher.</p></div>
+        <div class="card"><h4><span class="badge b-legacy">Legacy</span></h4><p>Вся схема миграции 0001 (users/roasters/coffees/lots/reviews) — по признанию самой миграции 0004, никогда не была применена к реальной БД.</p></div>
+      </div>
+
+      <div class="callout risk"><strong>Риск безопасности, обнаруженный при аудите:</strong> компонент <code>components/dev/DevRoleSwitcher.tsx</code> рендерится безусловно в корневом <code>layout.tsx</code> на каждой странице продакшн-сборки (по собственному комментарию в коде — «это и есть демо-режим приложения»). Любой посетитель сайта без единого пароля может одним кликом войти как <code>barista</code>, <code>cafe_admin</code>, <code>roaster_admin</code> или <code>admin</code>. Подробнее — §18 и §24.</div>
+    </section>
+
+    <!-- 02 -->
+    <section class="section" id="s02">
+      <div class="sec-head"><span class="sec-num">02</span><h2>Эволюция продукта: Stage 1 → 2.0</h2></div>
+      <p class="sec-intro">Сопоставление того, что предполагал первый архитектурный документ, с тем, что реально существует в коде сегодня.</p>
+      <div class="tbl-wrap"><table>
+        <tr><th>Domain</th><th>Stage 1</th><th>Current 2.0</th><th>Что изменилось</th><th>Статус</th></tr>
+        <tr><td>Guest</td><td>сканирует QR, видит паспорт лота</td><td>полный blind-tasting визард, journey-хаб, taste-passport, cupping-журнал</td><td>появился многошаговый sensory-флоу и отдельный «журнал каппингов»</td><td><span class="badge b-code">EXPANDED</span></td></tr>
+        <tr><td>Barista</td><td>не существовал как роль</td><td>роль в <code>profiles</code>, дашборд, лояльность, авторские рецепты, feedback</td><td>полноценная роль появилась с нуля</td><td><span class="badge b-code">NEW</span></td></tr>
+        <tr><td>Cafe</td><td>владелец точки продажи лота</td><td>живое меню с TTL/countdown, аналитика, бенчмарки, команда, лояльность</td><td>из витрины лота — в операционный кабинет</td><td><span class="badge b-code">EXPANDED</span></td></tr>
+        <tr><td>Roaster</td><td>источник Canonical Lot</td><td>та же роль + roast-profile/curve import + анонимизированная аналитика</td><td>добавлена curve-инженерия и обратная связь</td><td><span class="badge b-code">EXPANDED</span></td></tr>
+        <tr><td>Lot</td><td>canonical-сущность с общим ID</td><td>текстовый ID, живёт в localStorage ростера, без единой БД-таблицы</td><td>каноничность утеряна на уровне БД</td><td><span class="badge b-missing">CHANGED / RISK</span></td></tr>
+        <tr><td>Tasting / Taste Model</td><td>единая cupping-форма</td><td>адаптивная модель + отдельная milk-drink-ветка + отдельный cupping-журнал</td><td>модель расщепилась на 2 параллельные сущности</td><td><span class="badge b-code">EXPANDED</span></td></tr>
+        <tr><td>Recipe</td><td>не описан</td><td>2 параллельные системы (личная / мульти-авторская, привязанная к Lot)</td><td>появился целый домен «Coffee Kitchen»</td><td><span class="badge b-code">NEW</span></td></tr>
+        <tr><td>Equipment</td><td>не описан</td><td>«гараж» на владельца (guest/cafe/roaster), кастомные девайсы</td><td>появился с нуля</td><td><span class="badge b-code">NEW</span></td></tr>
+        <tr><td>Loyalty</td><td>не описан</td><td>ранги, абонементы, RPC-транзакции, QR-сканирование гостя</td><td>появился с нуля, наиболее зрелый новый модуль</td><td><span class="badge b-code">NEW</span></td></tr>
+        <tr><td>Map</td><td>не описан</td><td>карта кофеен (не лотов), профиль на карте</td><td>появился с нуля, но не lot-first</td><td><span class="badge b-code">NEW</span></td></tr>
+        <tr><td>Events</td><td>не описан</td><td>модуль событий + cron агрегация/архивация + mute-предпочтения</td><td>появился с нуля</td><td><span class="badge b-code">NEW</span></td></tr>
+        <tr><td>News / Community</td><td>не описан</td><td>нет отдельной сущности — только алгоритмическая витрина топ-рецептов/девайсов</td><td>ожидалось, не реализовано</td><td><span class="badge b-missing">MISSING</span></td></tr>
+        <tr><td>Feedback</td><td>review → passport</td><td>checkin_replies, platform_feedback, cafe/roaster-раздельная видимость</td><td>стал многоуровневым и приватность-осознанным</td><td><span class="badge b-code">EXPANDED</span></td></tr>
+        <tr><td>Auth</td><td>не описан подробно</td><td>email+password, 5 ролей на общей profiles, RLS-модель</td><td>появилась полноценная ролевая модель</td><td><span class="badge b-code">NEW</span></td></tr>
+        <tr><td>Database</td><td>единая реляционная схема</td><td>вторая, несовместимая text-id схема, первая — мертва</td><td>произошла незапланированная миграция архитектуры БД</td><td><span class="badge b-legacy">CHANGED</span></td></tr>
+        <tr><td>QR</td><td>Lot QR → passport</td><td>+ Guest Loyalty QR, дашборд-QR-страница осталась заглушкой</td><td>появился второй, отдельный QR-контур</td><td><span class="badge b-code">EXPANDED</span></td></tr>
+        <tr><td>Passport</td><td>единый артефакт на лот</td><td>3 разных сущности под одним словом (роут, карточка лота, агрегированный taste-passport)</td><td>концепция расщепилась</td><td><span class="badge b-code">CHANGED</span></td></tr>
+        <tr><td>Community</td><td>не описан</td><td>только голосование за рецепты (localStorage) + витрина</td><td>минимально реализовано</td><td><span class="badge b-premature">PREMATURE</span></td></tr>
+        <tr><td>Recommendations</td><td>не описан</td><td>«Карта поставок» ростера, roaster→cafe recommendations widget</td><td>узкая, точечная реализация</td><td><span class="badge b-premature">PREMATURE</span></td></tr>
+        <tr><td>Subscriptions</td><td>не описан</td><td>это и есть ядро Loyalty (не отдельный SaaS-биллинг)</td><td>термин переопределён внутри Loyalty</td><td><span class="badge b-code">NEW</span></td></tr>
+        <tr><td>Gamification</td><td>не описан</td><td>только текстовое поле «achievements» у сотрудника, без движка</td><td>ожидалось системой, оказалось полем</td><td><span class="badge b-missing">MISSING</span></td></tr>
+      </table></div>
+    </section>
+
+    <!-- 03 -->
+    <section class="section" id="s03">
+      <div class="sec-head"><span class="sec-num">03</span><h2>Полная архитектура ролей</h2></div>
+      <p class="sec-intro"><span class="badge b-fact">FACT</span> Все пять ролей — это не отдельные бизнес-сущности, а значения одного enum-столбца <code class="mono">role</code> на единой таблице <code class="mono">public.profiles</code> (<code class="mono">0007_staff_profiles_rls.sql</code>), с текстовыми полями-скоупами <code class="mono">cafe_id / roaster_id / barista_id</code>, взаимоисключение которых проверяется constraint-ом <code class="mono">profiles_role_scope_check</code>.</p>
+
+      <div class="tbl-wrap"><table>
+        <tr><th>Роль</th><th>Тип</th><th>Скоуп</th><th>Создание аккаунта</th><th>RLS-периметр</th></tr>
+        <tr><td class="mono">enthusiast</td><td>роль на профиле</td><td>нет</td><td>автоматически, триггер <code class="mono">handle_new_user_profile</code></td><td>читает/пишет только свои строки; чужие enthusiast-имена читаемы персоналом кофеен (см. риск §18)</td></tr>
+        <tr><td class="mono">barista</td><td>роль на профиле</td><td>cafe_id + barista_id</td><td><span class="badge b-missing">нет self-service</span> — только ручной SQL или dev-seed</td><td>читает/пишет свой <code class="mono">barista_profiles</code>; читает checkins/loyalty своей кофейни</td></tr>
+        <tr><td class="mono">cafe_admin</td><td>роль на профиле</td><td>cafe_id</td><td>ручной SQL / partner-activation (не полноценный аккаунт)</td><td>полный CRUD по своей кофейне: staff, ranks, menu, equipment</td></tr>
+        <tr><td class="mono">roaster_admin</td><td>роль на профиле</td><td>roaster_id</td><td>ручной SQL / partner-activation</td><td>только анонимизированные <code class="mono">*_view</code>; нет доступа к guest identity, к barista-полям, к loyalty</td></tr>
+        <tr><td class="mono">admin</td><td>роль на профиле</td><td>нет</td><td>ручной SQL / dev-seed (<code class="mono">admin@test.com</code>)</td><td>platform_feedback, events CRUD — это <b>не</b> тот же admin, что HTTP-Basic <code class="mono">/admin</code></td></tr>
+      </table></div>
+
+      <p><span class="badge b-fact">FACT</span> Помимо пяти ожидаемых ролей, в коде существует шестой, неформальный «слой ролей»: <code class="mono">StaffMember.role</code> (<code class="mono">barista | confectioner | cook | administrator | manager</code>, <code class="mono">lib/data/staff.ts</code>) — это чисто HR-карточка для UI команды кофейни, полностью на localStorage, никак не связана с auth/RLS.</p>
+
+      <div class="callout">Ни одна роль не является самостоятельной бизнес-сущностью в базе данных: нет таблиц <code class="mono">roasters</code>/<code class="mono">coffee_shops</code>/<code class="mono">baristas</code> с настоящими внешними ключами — только текстовые id-скоупы на общей таблице профилей, сопоставляемые построчно с localStorage-каталогами ростеров/кофеен/бариста.</div>
+    </section>
+
+    <!-- 04 -->
+    <section class="section" id="s04">
+      <div class="sec-head"><span class="sec-num">04</span><h2>Barista — роль/сущность 1.0</h2></div>
+      <p class="sec-intro">Самый развитый новый функционал продукта после Loyalty, но всё ещё роль на общем профиле, а не отдельная сущность.</p>
+
+      <h4>Идентичность и профиль</h4>
+      <ul>
+        <li><span class="badge b-fact">FACT</span> Статичный захардкоженный ростер из 9 бариста (<code class="mono">lib/data/baristas.ts</code>) + одна таблица <code class="mono">barista_profiles</code> (<code class="mono">0015</code>) — это тонкий слой личных предпочтений (любимое происхождение/метод/аватар), а не identity-таблица.</li>
+        <li><span class="badge b-missing">MISSING</span> Self-service-приглашение нового бариста. <code class="mono">generateInvitePassword.ts</code> — прямо по комментарию в коде — не создаёт логин-доступный аккаунт. Реальное появление бариста — ручной SQL <code class="mono">UPDATE profiles SET role='barista', cafe_id=…, barista_id=…</code>.</li>
+        <li><span class="badge b-fact">FACT</span> Один бариста = ровно одна кофейня, работать в нескольких нельзя (нет join-таблицы, только скалярное поле).</li>
+      </ul>
+
+      <h4>Дашборд бариста</h4>
+      <p><span class="badge b-fact">FACT</span> Не демо: лояльность (RPC), фидбек от гостей (<code class="mono">public.checkins</code>, фильтр по <code class="mono">baristaId</code>), авторские рецепты (<code class="mono">public.recipes</code>, <code class="mono">author_type='barista'</code>) — всё реально читается/пишется в Supabase. Статична только идентичность (имя/кофейня из seed-массива). Нет ни одного агрегированного stats-виджета (например, «средний рейтинг» / «чашек приготовлено») — только сырой список последних 5 отзывов.</p>
+
+      <h4>QR-взаимодействие с гостем</h4>
+      <p><span class="badge b-fact">FACT</span> Полностью реализовано, но <b>только для лояльности</b>. Путь: <code class="mono">BaristaLoyaltyPanel</code> → камера (<code class="mono">QrScanner</code>) → <code class="mono">extractGuestId()</code> снимает префикс <code class="mono">coffeepassport-guest:</code> → <code class="mono">fetchGuestProfile</code>/<code class="mono">fetchGuestShopContext</code> → продажа абонемента или списание баллов через RPC <code class="mono">loyalty_sell_subscription</code>/<code class="mono">loyalty_redeem</code>.</p>
+      <p><span class="badge b-missing">MISSING</span> «Сканирование гостя для привязки к дегустации» — этого не существует: <code class="mono">TastingRecord.baristaId</code> устанавливает <b>сам гость</b>, выбирая бариста из списка на последнем шаге своего собственного tasting-визарда, а не бариста сканированием.</p>
+
+      <h4>Связи</h4>
+      <div class="tbl-wrap"><table>
+        <tr><th>Связь</th><th>Статус</th><th>Комментарий</th></tr>
+        <tr><td>Recipes</td><td><span class="badge b-fact">FACT</span></td><td>первоклассная строка, <code class="mono">author_type='barista'</code>, видна гостю как «авторский рецепт»</td></tr>
+        <tr><td>Equipment</td><td><span class="badge b-fact">FACT</span></td><td>только чтение общего «гаража» своей кофейни, личного инвентаря нет</td></tr>
+        <tr><td>Loyalty</td><td><span class="badge b-fact">FACT</span></td><td>полноценный сканирующий терминал, каждая транзакция хранит <code class="mono">barista_id</code></td></tr>
+        <tr><td>Tasting/cupping</td><td><span class="badge b-fact">FACT (read-only)</span></td><td>видит оценку себя, не создаёт запись сам</td></tr>
+        <tr><td>Feedback/рейтинг</td><td><span class="badge b-fact">FACT</span></td><td>разделён на «кофе и экстракция» / «сервис и внешний вид», ревьюер всегда анонимен</td></tr>
+        <tr><td>Achievements/геймификация</td><td><span class="badge b-legacy">LEGACY</span></td><td>только свободный текст в HR-карточке, заполняет cafe_admin — не движок</td></tr>
+      </table></div>
+
+      <p><span class="badge b-decision">DECISION</span> Границы cafe_admin: может редактировать профиль <i>любого</i> бариста своей кофейни; бариста редактирует только свой. HR-карточка (achievements/hobbies/manager note) полностью недоступна самому бариста — ни на чтение, ни на запись.</p>
+    </section>
+
+    <!-- 05 -->
+    <section class="section" id="s05">
+      <div class="sec-head"><span class="sec-num">05</span><h2>Guest / Coffee Enthusiast</h2></div>
+      <p class="sec-intro">Единая точка входа — форма email-регистрации на лендинге, без ролевого выбора и без onboarding-визарда.</p>
+
+      <h3>Путь гостя как он реализован</h3>
+      <div class="map-wrap">
+        <div class="map-row">
+          <div class="map-box"><h5>Вход</h5><p>email-форма на / — единственная точка входа</p></div>
+          <div class="map-box"><h5>Скан / поиск</h5><p>/scan — камера (jsQR) или ручной код лота</p></div>
+          <div class="map-box"><h5>Локация</h5><p>выбор кофейни + подтверждение ростера, не персистится между визитами</p></div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="map-row">
+          <div class="map-box"><h5>Blind tasting визард</h5><p>4 шага: location → drink → taste (вслепую) → barista+рейтинг</p></div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="map-row">
+          <div class="map-box"><h5>Passport reveal</h5><p>сравнение вкуса гостя и ростера, farmer reveal, roast-профиль</p></div>
+          <div class="map-box"><h5>Journey-хаб</h5><p>карта стран/точек, TrophyShelf, Taste Passport (агрегат), timeline</p></div>
+        </div>
+      </div>
+
+      <h4>Что реально, что localStorage, что статично</h4>
+      <div class="grid grid-3">
+        <div class="card"><h4><span class="badge b-fact">Supabase (реально)</span></h4><p>Записи дегустаций — <code class="mono">public.checkins</code>, write-through с fallback на локальную копию при ошибке сети.</p></div>
+        <div class="card"><h4><span class="badge b-legacy">Только localStorage</span></h4><p>Общий «дневник каппингов», кастомные кофе и их дегустации, подтверждения помола — таблиц в БД для них нет вообще.</p></div>
+        <div class="card"><h4><span class="badge b-hypothesis">Статика/сид</span></h4><p>Каталог лотов, ростеров, кофеен, бариста — хардкод-массивы с localStorage-оверрайдом из кабинетов ростера/кафе.</p></div>
+      </div>
+
+      <div class="callout">«Taste Passport» на /journey (агрегированный вкусовой радар) <b>вычисляется на клиенте</b> из локальной истории дегустаций — прямо по комментарию в коде: «пока журнал не подключён к Supabase». При этом в миграции 0004 существует серверный триггер <code class="mono">recompute_taste_profile()</code>, который должен был обслуживать ровно эту функцию — но он висит на другой, фактически неиспользуемой таблице <code class="mono">reviews</code>, а не на <code class="mono">checkins</code>, куда реально пишет tasting-визард. Это осиротевший путь данных.</div>
+
+      <h4>Данные по источнику</h4>
+      <div class="tbl-wrap"><table>
+        <tr><th>Шаг</th><th>Источник данных</th></tr>
+        <tr><td>Выбор кофейни/ростера при чек-ине</td><td>ввод гостя, эфемерный (не история)</td></tr>
+        <tr><td>Тип напитка / молочная база</td><td>ввод гостя, сохраняется в записи</td></tr>
+        <tr><td>Сенсорные оси, дефекты, теги</td><td>ввод гостя вслепую</td></tr>
+        <tr><td>Оценка бариста и заметка</td><td>ввод гостя (не бариста!)</td></tr>
+        <tr><td>Агрегированный вкусовой профиль</td><td>вычисляется системой на клиенте из истории гостя</td></tr>
+        <tr><td>Референсный вкусовой профиль лота</td><td>вводит ростер</td></tr>
+        <tr><td>Ответы на отзыв</td><td>пишет персонал кофейни/ростера</td></tr>
+      </table></div>
+
+      <p><span class="badge b-legacy">LEGACY</span> <code class="mono">app/coffee/[id]/page.tsx</code> — отдельная, стилистически иная страница, читающая напрямую из другой Supabase-таблицы <code class="mono">coffee_lots</code> с иной формой данных (q_score/region/process напрямую). Структурно не связана с навигацией <code class="mono">/passport/[lotId]</code>.</p>
+    </section>
+
+    <!-- 06 -->
+    <section class="section" id="s06">
+      <div class="sec-head"><span class="sec-num">06</span><h2>Roaster</h2></div>
+      <div class="tbl-wrap"><table>
+        <tr><th>Область</th><th>Статус</th><th>Комментарий</th></tr>
+        <tr><td>Профиль</td><td><span class="badge b-fact">FACT</span></td><td>имя, slug, брендовый цвет, философия, город/страна — localStorage-сущность</td></tr>
+        <tr><td>Lot-создание</td><td><span class="badge b-legacy">LEGACY-путь</span></td><td>4-шаговый визард пишет только в localStorage (<code class="mono">coffee-passport:lots</code>); реальные таблицы <code class="mono">public.coffees/lots</code> из миграции 0001 не используются</td></tr>
+        <tr><td>Reference/Roast Profile</td><td><span class="badge b-fact">FACT</span></td><td>температура заряда/съёма, DTR, Agtron, импорт кривой из Cropster/Artisan CSV/JSON</td></tr>
+        <tr><td>Q-grade/дескрипторы</td><td><span class="badge b-code">CODE (упрощённо)</span></td><td>только агрегатный <code class="mono">qGrade</code>-номер, без разбивки SCA-формы по дефектам, без Q-грейдера/даты</td></tr>
+        <tr><td>Producer/process/crop</td><td><span class="badge b-fact">FACT</span></td><td>страна/регион/сорт/процесс/год урожая + карточка производителя (имя фермы, высота, история)</td></tr>
+        <tr><td>Обратная связь от гостей</td><td><span class="badge b-fact">FACT (анонимно)</span></td><td>только через <code class="mono">checkins_roaster_view</code> — без owner_user_id, без coffee_shop_id, без полей бариста</td></tr>
+        <tr><td>Обратная связь от кофеен</td><td><span class="badge b-code">CODE (виджет)</span></td><td>«Карта поставок» — какие кофейни держат его лоты в меню сейчас</td></tr>
+      </table></div>
+
+      <h4>Фактический lifecycle Lot</h4>
+      <div class="map-wrap">
+        <div class="map-row">
+          <div class="map-box"><h5>Roaster</h5><p>создаёт Lot локально (localStorage, текстовый ID)</p></div>
+          <div class="map-box"><h5>Reference Profile</h5><p>тоже localStorage, привязан по тому же текстовому ID</p></div>
+        </div>
+        <div class="arrow">↓ (соединение только по совпадению строкового ID, без FK)</div>
+        <div class="map-row">
+          <div class="map-box"><h5>Coffee Shop menu</h5><p><b>реальная</b> Supabase-таблица <code class="mono">cafe_menu_entries</code></p></div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="map-row">
+          <div class="map-box"><h5>Guest tasting</h5><p><b>реальная</b> таблица <code class="mono">checkins</code></p></div>
+          <div class="map-box"><h5>Analytics</h5><p><b>реальные</b> анонимизированные views</p></div>
+        </div>
+      </div>
+      <p><span class="badge b-missing">MISSING</span> Единого canonical Lot ID на уровне БД нет — передняя половина цепочки (Roaster → Lot → добавление в меню) целиком клиент-локальная, задняя (дегустация → аналитика) — серверная; их связывает только совпадение текстовой строки, без ссылочной целостности Postgres. Это прямо касается вопроса из §23.</p>
+    </section>
+
+    <!-- 07 -->
+    <section class="section" id="s07">
+      <div class="sec-head"><span class="sec-num">07</span><h2>Coffee Shop</h2></div>
+      <div class="tbl-wrap"><table>
+        <tr><th>Область</th><th>Статус</th><th>Комментарий</th></tr>
+        <tr><td>Живое меню</td><td><span class="badge b-fact">FACT</span></td><td>реальная таблица <code class="mono">cafe_menu_entries</code>, статус new/active/discontinuing + <code class="mono">scheduled_removal_at</code> + cron-функция автоистечения</td></tr>
+        <tr><td>Аналитика</td><td><span class="badge b-fact">FACT</span></td><td>фильтруемый, экспортируемый в CSV архив по <code class="mono">public.checkins</code>, с разделением «кофе» / «сервис»</td></tr>
+        <tr><td>Бенчмарк</td><td><span class="badge b-fact">FACT</span></td><td>анонимизированное сравнение топ-2 кофеен по лоту + своя средняя, через <code class="mono">checkins_cafe_benchmark_view</code></td></tr>
+        <tr><td>Команда/staff</td><td><span class="badge b-fact">FACT (HR-уровень)</span></td><td>роль, дата найма, достижения, заметка менеджера — не расписание/payroll</td></tr>
+        <tr><td>Equipment</td><td><span class="badge b-fact">FACT</span></td><td>общий «гараж» кофейни (espresso/filter сетап), помечен как «витринный», не складской учёт</td></tr>
+        <tr><td>Профиль на карте</td><td><span class="badge b-fact">FACT</span></td><td>адрес/телефон/соцсети/фото/координаты, редактируется самой кофейней</td></tr>
+        <tr><td>Отношение к Lot</td><td><span class="badge b-decision">строго кураторское</span></td><td>кофейня никогда не владеет лотом, может править только описательные поля, не каталожный переключатель ростера</td></tr>
+      </table></div>
+      <p><span class="badge b-fact">FACT</span> Добавление лота в меню («Добавить лот») визуально стилизовано под QR-сканирование, но фактически — демо-режим ручного ввода кода («камера появится позже») плюс выбор из каталога.</p>
+      <p><span class="badge b-legacy">LEGACY</span> На <code class="mono">/admin</code> есть компонент <code class="mono">LegacyLotCreator</code>, целящийся в несуществующую таблицу <code class="mono">coffee_lots</code> — по собственному комментарию в коде, оставлен неисправленным.</p>
+      <p><span class="badge b-missing">MISSING</span> Онбординг партнёров (<code class="mono">partner_requests</code>) — это только B2B-лидогенерация с ручной CRM-стадией; «Активация» партнёра создаёт запись ростера/кофейни напрямую и демо-инвайт-код, но <b>не создаёт настоящий аутентифицируемый аккаунт</b>.</p>
+    </section>
+
+    <!-- 08 -->
+    <section class="section" id="s08">
+      <div class="sec-head"><span class="sec-num">08</span><h2>Tasting &amp; Sensory Architecture 2.0</h2></div>
+      <p class="sec-intro">Одна общая слепая sensory-модель с адаптивными, взаимоисключающими ветками по категории напитка — плюс отдельный, несвязанный «дневник каппингов».</p>
+
+      <h4>Базовые оси (все категории напитка)</h4>
+      <ul>
+        <li><b>rating</b> — 1–5 звёзд</li>
+        <li><b>guestFlavorProfile</b>: acidity, sweetness, body, bitterness — слайдеры 1–5</li>
+        <li><b>bodyTexture</b> — категориально: watery / medium / syrupy</li>
+        <li><b>sensoryTags</b> — 10 фиксированных чипов + раскрываемые под-дескрипторы (флейвор-колесо)</li>
+        <li><b>defects</b> — 5 фиксированных тегов (astringent/grassy/burnt/woody/over_bitter)</li>
+        <li>liked / disliked / note — свободный текст</li>
+      </ul>
+
+      <h4>Milk Drink Evaluation — что это архитектурно</h4>
+      <p><span class="badge b-fact">FACT</span> Это <b>аддитивное расширение</b> той же самой формы <code class="mono">TastingForm</code>, а не отдельная модель и не отдельный домен. По собственному комментарию миграции <code class="mono">0021_drink_evaluation.sql</code>: «guestFlavorProfile намеренно не тронут… новые колонки чисто аддитивны».</p>
+      <div class="tbl-wrap"><table>
+        <tr><th>Условие</th><th>Дополнительные оси (1–5, nullable)</th></tr>
+        <tr><td><code class="mono">drinkCategory === 'milk_based'</code></td><td>milkBalance («баланс кофе и молока»), coffeeReadability («читаемость кофе через молоко»), creaminess («сливочность»)</td></tr>
+        <tr><td><code class="mono">drinkCategory ∈ {black_coffee, filter_alternative}</code></td><td>aftertaste («длительность и чистота послевкусия»)</td></tr>
+      </table></div>
+      <p>Идентичность напитка (не сенсорика, фиксируется до дегустации): drinkCategory, drinkType, customDrinkName, milkBaseType (cow/plant), cowMilkType, isLactoseFree, fatContentPercent, plantMilkType.</p>
+
+      <h4>Параллельная сущность: cupping-журнал</h4>
+      <p><span class="badge b-legacy">LEGACY / отдельный домен</span> Собственная форма (<code class="mono">CuppingForm</code>) с осями acidity/body/brightness (не bitterness/sweetness!) и SCA-подобным <code class="mono">finalScore</code> 60–100 — целиком localStorage, не привязан ни к Lot, ни к QR, ни к кофейне.</p>
+    </section>
+
+    <!-- 09 -->
+    <section class="section" id="s09">
+      <div class="sec-head"><span class="sec-num">09</span><h2>Recipes</h2></div>
+      <div class="callout note">В коде существуют <b>две независимые системы рецептов</b>, объединённые только общими именами полей в UI.</div>
+      <div class="grid grid-2">
+        <div class="card"><h4>KitchenRecipe («Мои рецепты»)</h4><p><span class="badge b-legacy">только localStorage</span> — создаёт только гость, без привязки к Lot/кофейне/ростеру. Поля: метод, гриндер, доза, вода, температура, помол, время, преинфузия, заметки, isTop (личный пин), isPublic (шаринг с сообществом). Без TDS/экстракции, без рейтинга.</p></div>
+        <div class="card"><h4>BrewingRecipe (public.recipes)</h4><p><span class="badge b-fact">Supabase, привязан к Lot</span> — авторы: roaster / coffee_shop / barista / enthusiast. Есть measuredTdsPercent → расчёт Extraction Yield %, копирование через parentRecipeId («адаптировать под себя»), лимиты квоты (5 черновиков/метод, публикация не чаще раз в 14 дней — антиспам, не тарифные планы).</p></div>
+      </div>
+      <p><span class="badge b-missing">MISSING</span> Единого «сравнения рецептов» между собой нет — есть только сравнение «моя чашка vs. чашка автора рецепта» по экстракции на одном графике.</p>
+      <p><span class="badge b-legacy">LEGACY</span> Голосование за рецепты (лайк/дизлайк, toggle-механика) — полностью на localStorage, нет персистентности в Supabase, хотя питает витрину «Топ-3 сообщества» и /top-recipes.</p>
+    </section>
+
+    <!-- 10 -->
+    <section class="section" id="s10">
+      <div class="sec-head"><span class="sec-num">10</span><h2>Experiments</h2></div>
+      <div class="callout risk"><strong>MISSING как отдельная концепция.</strong> Поиск по всему репозиторию слова «эксперимент»/«experiment» находит только маркетинговый подзаголовок раздела Coffee Kitchen («полностью автономное пространство для домашних экспериментов») и одинаковый по духу комментарий в сторе — нигде нет ни таблицы, ни страницы, ни стора, ни UI-механики с этим названием.</div>
+      <p>Тем, что могло бы <i>ошибочно</i> восприниматься как «эксперименты»:</p>
+      <ul>
+        <li><code class="mono">KitchenRecipe.notes</code> — свободный текст «что изменилось на вкус при изменении параметров»;</li>
+        <li><code class="mono">parentRecipeId</code>-форк на <code class="mono">BrewingRecipe</code> («Адаптировать под себя»).</li>
+      </ul>
+      <p>Ни то, ни другое не смоделировано, не названо и не отделено от понятия «рецепт» ни в схеме, ни в UI. Роль Experiments в архитектуре продукта на сегодня — <b>нулевая</b>; вся итерация рецепта происходит через заметки и форк.</p>
+    </section>
+
+    <!-- 11 -->
+    <section class="section" id="s11">
+      <div class="sec-head"><span class="sec-num">11</span><h2>Equipment</h2></div>
+      <p><span class="badge b-fact">FACT</span> «Гараж» (<code class="mono">EquipmentSetup</code>) — это одна запись на владельца (не поштучный инвентарь): espresso-гриндер/машина/вода + filter-гриндер/вода + список любимых фильтр-девайсов. Один и тот же компонент <code class="mono">EquipmentGarage</code> переиспользуется для трёх типов владельца — <code class="mono">enthusiast / roaster / coffee_shop</code> — с разными списками моделей (домашние vs. профессиональные).</p>
+      <p><span class="badge b-fact">FACT</span> Кастомные устройства: гость может добавить фильтр-брюер вне пресетов; появляется как <code class="mono">approved: false</code> до модерации; функция <code class="mono">approveCustomDevice()</code> существует в сторе, но UI, вызывающего её, в прочитанных файлах не обнаружено — <span class="badge b-missing">возможно недособранный модерационный флоу</span>.</p>
+      <p>Связь с рецептами — только автозаполнение полей формы из сохранённого «гаража» на момент создания; после сохранения значения в рецепте — снимок (свободный текст), не живая ссылка на оборудование.</p>
+      <p><span class="badge b-decision">DECISION</span> Grind Reference Table сознательно не переводит абсолютные микроны между гриндерами (разная геометрия жерновов), а переносит <i>относительное положение</i> настройки в диапазоне метода — с приоритетом реальных краудсорсинговых подтверждений над статической таблицей.</p>
+    </section>
+
+    <!-- 12 -->
+    <section class="section" id="s12">
+      <div class="sec-head"><span class="sec-num">12</span><h2>Loyalty System 2.0</h2></div>
+      <p class="sec-intro">Самый архитектурно зрелый новый модуль: реальные атомарные RPC вместо клиентских write, RLS без единого клиентского права на запись.</p>
+
+      <h4>Схема (0012_loyalty_module.sql)</h4>
+      <div class="tbl-wrap"><table>
+        <tr><th>Таблица</th><th>Ключевое</th><th>Права на запись клиенту</th></tr>
+        <tr><td class="mono">shop_ranks</td><td>rank_order, discount_percent (0–15), required_visits, required_spend, retention_days</td><td>cafe_admin своей кофейни — да</td></tr>
+        <tr><td class="mono">guest_shop_statuses</td><td>visits_count, total_spent, current_rank_id, rank_expires_at</td><td><span class="badge b-missing">нет</span> — только через RPC</td></tr>
+        <tr><td class="mono">subscriptions</td><td>initial_nominal, current_balance, status</td><td><span class="badge b-missing">нет</span> — только через RPC</td></tr>
+        <tr><td class="mono">loyalty_transactions</td><td>type (sell_subscription/deduct_points), gross/net/discount</td><td><span class="badge b-missing">нет</span> — append-only через RPC</td></tr>
+      </table></div>
+
+      <h4>Номиналы</h4>
+      <p><span class="badge b-fact">FACT</span> <code class="mono">SUBSCRIPTION_NOMINALS = [1000, 1500, 3000, 5000]</code> ₽ — это кнопки быстрого выбора, а не enum; RPC принимает любой <code class="mono">nominal &gt; 0</code>.</p>
+
+      <h4>Lifecycle</h4>
+      <div class="map-wrap">
+        <div class="map-row">
+          <div class="map-box dim"><h5>Create</h5><p><span class="badge b-missing">MISSING</span> как отдельный шаг — строка гостя создаётся лениво внутри redeem</p></div>
+          <div class="map-box"><h5>Sell</h5><p>barista/cafe_admin → RPC <code class="mono">loyalty_sell_subscription</code></p></div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="map-row">
+          <div class="map-box dim"><h5>Activate</h5><p><span class="badge b-missing">MISSING</span> — абонемент активен сразу же с момента продажи</p></div>
+          <div class="map-box"><h5>Redeem</h5><p>RPC <code class="mono">loyalty_redeem</code>: <code class="mono">SELECT … FOR UPDATE</code>, атомарная проверка баланса + скидка по рангу + пересчёт ранга</p></div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="map-row">
+          <div class="map-box"><h5>Transaction/History</h5><p>append-only лог; у гостя нет отдельного экрана истории транзакций, только карточки/абонементы</p></div>
+        </div>
+      </div>
+
+      <h4>QR и безопасность денежных операций</h4>
+      <p><span class="badge b-fact">FACT</span> QR-полезная нагрузка — просто <code class="mono">"coffeepassport-guest:"+uuid</code>, без подписи/срока действия/одноразовости; по признанию самой миграции «UUID и есть credential, как физическая карта».</p>
+      <p><span class="badge b-fact">FACT — хорошо спроектировано</span> Обе денежные операции — <code class="mono">SECURITY DEFINER</code> RPC с блокировкой строк (<code class="mono">FOR UPDATE</code>) внутри одной транзакции — классическая гонка двойного списания закрыта корректно. Авторизация — по <code class="mono">profiles.cafe_id</code>, не самоприсваиваема персоналом.</p>
+      <p><span class="badge b-missing">Риск, не блокирующий</span> Политика <code class="mono">"staff read enthusiast display names"</code> на <code class="mono">profiles</code> не привязана к конкретной кофейне — персонал <i>любой</i> кофейни технически может прочитать имя и email <i>любого</i> гостя-энтузиаста, а не только тех, кто отсканировался у них. Балансы/абонементы (§ выше) от этой дыры не страдают — они шоп-скоуплены отдельными политиками.</p>
+    </section>
+
+    <!-- 13 -->
+    <section class="section" id="s13">
+      <div class="sec-head"><span class="sec-num">13</span><h2>Map / Location Architecture</h2></div>
+      <p><span class="badge b-fact">FACT</span> «Локация» на публичной карте (<code class="mono">/map</code>, react-leaflet + кластеризация, OSM-тайлы) означает <b>только кофейню</b> — ни ростер, ни событие, ни доступность лота не имеют координат в схеме.</p>
+      <p><span class="badge b-fact">FACT</span> Карта устроена «кофейня-first»: выбрал кофейню → увидел, что активно в её меню сейчас (эспрессо/фильтр/дрип/архив, из <code class="mono">cafe_menu_entries</code>).</p>
+      <p><span class="badge b-missing">MISSING</span> Обратного, «лот-first» сценария — «где попробовать/купить именно этот лот» — не существует: нет ни lot-scoped фильтра на карте, ни списка «эти кофейни держат этот лот» на странице паспорта.</p>
+      <p>Редактирует локацию сама кофейня (drag-and-drop пин) либо платформенный админ через реестр партнёров (без редактирования координат там). У только что активированного партнёра координаты — <code class="mono">null</code> до самостоятельного заполнения.</p>
+    </section>
+
+    <!-- 14 -->
+    <section class="section" id="s14">
+      <div class="sec-head"><span class="sec-num">14</span><h2>Events / News / Community</h2></div>
+      <h4>Events</h4>
+      <p><span class="badge b-fact">FACT</span> Одна плоская сущность <code class="mono">public.events</code> без разделения на «отраслевое событие» / «дегустация в кофейне» — статус active/pending_review/archived, источник manual или ICS-агрегатор. Cron: <code class="mono">events-aggregate</code> (импорт ICS-кандидатов с дедупликацией по title+start_date) и <code class="mono">events-archive</code> (архивация прошедших), оба защищены bearer-секретом, fail-closed при его отсутствии. <span class="badge b-missing">MISSING</span> экспорта в ICS/календарь — только импорт.</p>
+
+      <h4>7-дневный TTL и mute — это НЕ часть events-модуля</h4>
+      <div class="callout note">Отдельная фича «обновления на баре»: TTL/mute считаются от статуса записи меню кофейни (<code class="mono">cafe_menu_entries.statusChangedAt</code>), а не от таблицы <code class="mono">events</code>. <code class="mono">shop_mute_preferences</code> — приватная (owner-only RLS) настройка гостя «не показывать обновления этой кофейни».</div>
+
+      <h4>News / Community</h4>
+      <p><span class="badge b-missing">MISSING</span> Отдельной новостной ленты или форума нет. <code class="mono">CommunityHighlights</code> — чисто алгоритмический виджет (ожидающие модерации кастомные девайсы + топ-рецепты по голосам), без комментариев, без ручной редакционной курации — по собственному комментарию в коде: «никто не может вручную выбрать избранный пост».</p>
+    </section>
+
+    <!-- 15 -->
+    <section class="section" id="s15">
+      <div class="sec-head"><span class="sec-num">15</span><h2>Feedback Architecture</h2></div>
+      <div class="tbl-wrap"><table>
+        <tr><th>Связь</th><th>Статус</th><th>Механизм</th></tr>
+        <tr><td>Guest → Barista</td><td><span class="badge b-fact">EXISTS</span></td><td><code class="mono">checkin_replies</code>, ответ персонала на чек-ин</td></tr>
+        <tr><td>Guest → Cafe</td><td><span class="badge b-fact">EXISTS</span></td><td>сам чек-ин + ответы персонала</td></tr>
+        <tr><td>Guest → Roaster</td><td><span class="badge b-fact">EXISTS (анонимно)</span></td><td>через <code class="mono">checkins_roaster_view</code> + возможность роастера отвечать</td></tr>
+        <tr><td>Barista → Guest</td><td><span class="badge b-fact">EXISTS</span></td><td><code class="mono">checkin_replies</code> от лица персонала кофейни</td></tr>
+        <tr><td>Barista → Cafe</td><td><span class="badge b-missing">MISSING</span></td><td>нет внутреннего канала бариста → менеджмент</td></tr>
+        <tr><td>Cafe → Roaster</td><td><span class="badge b-hypothesis">PARTIAL</span></td><td>только косвенно, через общую видимость чек-инов</td></tr>
+        <tr><td>Roaster → Product</td><td><span class="badge b-missing">MISSING</span></td><td>не найдено в прочитанных файлах</td></tr>
+        <tr><td>Recipe → Tasting</td><td><span class="badge b-hypothesis">PARTIAL</span></td><td>рецепт связан с Lot, но не влияет на подсчёт/запись дегустации</td></tr>
+        <tr><td>Tasting → Guest Profile</td><td><span class="badge b-fact">EXISTS</span></td><td>питает journey/passport-историю гостя</td></tr>
+        <tr><td>Tasting → Analytics</td><td><span class="badge b-fact">EXISTS</span></td><td>анонимизированные views для cafe/roaster</td></tr>
+        <tr><td>Loyalty → Retention</td><td><span class="badge b-hypothesis">не подтверждено явно</span></td><td>механизм рангов/retention_days есть, но замкнутого цикла «влияет на возврат» в коде не измерить</td></tr>
+        <tr><td>Пользователь → Platform Admin</td><td><span class="badge b-fact">EXISTS (одностороннее)</span></td><td><code class="mono">platform_feedback</code>: вставка своя, чтение только admin — без ответа заявителю</td></tr>
+      </table></div>
+    </section>
+
+    <!-- 16 -->
+    <section class="section" id="s16">
+      <div class="sec-head"><span class="sec-num">16</span><h2>Data Model 2.0</h2></div>
+      <p class="sec-intro">Карта фактических (живых) сущностей — все с текстовыми/UUID-ключами без единой «канонiчной» реляционной модели, скреплённые где-то FK, а где-то просто совпадением строки.</p>
+      <div class="tbl-wrap"><table>
+        <tr><th>Сущность</th><th>Хранилище</th><th>Ключ</th><th>Классификация</th></tr>
+        <tr><td>profiles</td><td>Supabase</td><td>= auth.users.id</td><td><span class="badge b-fact">CORE</span></td></tr>
+        <tr><td>checkins (tasting record)</td><td>Supabase</td><td>uuid, owner_user_id FK</td><td><span class="badge b-fact">CORE</span></td></tr>
+        <tr><td>recipes (BrewingRecipe)</td><td>Supabase</td><td>uuid, lotId text</td><td><span class="badge b-fact">CORE</span></td></tr>
+        <tr><td>equipment_garage</td><td>Supabase</td><td>uuid, (owner_kind, owner_id) unique</td><td><span class="badge b-premature">SUPPORTING</span></td></tr>
+        <tr><td>barista_profiles</td><td>Supabase</td><td>text PK</td><td><span class="badge b-premature">SUPPORTING</span></td></tr>
+        <tr><td>shop_ranks / guest_shop_statuses / subscriptions / loyalty_transactions</td><td>Supabase</td><td>uuid</td><td><span class="badge b-fact">CORE (Loyalty)</span></td></tr>
+        <tr><td>cafe_menu_entries</td><td>Supabase</td><td>text PK</td><td><span class="badge b-fact">CORE</span></td></tr>
+        <tr><td>checkin_replies</td><td>Supabase</td><td>uuid, checkin_id FK</td><td><span class="badge b-fact">SUPPORTING</span></td></tr>
+        <tr><td>events</td><td>Supabase</td><td>uuid</td><td><span class="badge b-premature">ECOSYSTEM</span></td></tr>
+        <tr><td>shop_mute_preferences</td><td>Supabase</td><td>(guest_id, shop_id)</td><td><span class="badge b-premature">SUPPORTING</span></td></tr>
+        <tr><td>platform_feedback / partner_requests</td><td>Supabase</td><td>uuid</td><td><span class="badge b-premature">OPS, не продукт</span></td></tr>
+        <tr><td>custom_brew_methods / recipe_publish_events</td><td>Supabase</td><td>text / uuid</td><td><span class="badge b-fact">SUPPORTING (антиспам)</span></td></tr>
+        <tr><td>Lot / Roaster / CoffeeShop / Barista (каталог)</td><td><span class="badge b-legacy">localStorage</span></td><td>text, без FK</td><td><span class="badge b-legacy">LEGACY-подход к core-данным</span></td></tr>
+        <tr><td>KitchenRecipe / cupping-журнал / custom coffees</td><td><span class="badge b-legacy">localStorage</span></td><td>uuid, без сервера</td><td><span class="badge b-premature">PREMATURE</span></td></tr>
+        <tr><td>users, roasters, coffee_shops, coffees, lots, reviews, qr_codes (0001)</td><td>Supabase, <span class="badge b-legacy">мертво</span></td><td>uuid</td><td><span class="badge b-legacy">LEGACY / никогда не жило</span></td></tr>
+        <tr><td>reviews (v2) / review_replies / user_taste_profiles (0004)</td><td>Supabase, <span class="badge b-legacy">осиротело</span></td><td>uuid</td><td><span class="badge b-legacy">LEGACY</span></td></tr>
+      </table></div>
+    </section>
+
+    <!-- 17 -->
+    <section class="section" id="s17">
+      <div class="sec-head"><span class="sec-num">17</span><h2>Database &amp; Migration History</h2></div>
+      <div class="callout risk"><strong>Ключевая находка:</strong> миграция <code class="mono">0001_init_schema.sql</code> строит «правильную» реляционную схему (users/roasters/coffees/lots/reviews, uuid-FK) — и по прямому признанию заголовка миграции <code class="mono">0004</code>, эта схема <b>никогда не была применена к реальной БД</b>. Реально живая схема начинается с <code class="mono">0004</code> и построена вокруг текстового <code class="mono">coffee_lots</code> (таблица, которая нигде в этих миграциях даже не создаётся — она появилась раньше истории миграций).</div>
+
+      <div class="tbl-wrap"><table>
+        <tr><th>№</th><th>Файл</th><th>Назначение</th><th>Статус</th></tr>
+        <tr><td class="num">0001</td><td class="mono">init_schema</td><td>«Каноничная» реляционная схема — users/roasters/coffees/lots/reviews/qr_codes</td><td><span class="badge b-legacy">никогда не жила</span></td></tr>
+        <tr><td class="num">0002</td><td class="mono">auth_trigger</td><td>триггер создания public.users при регистрации</td><td><span class="badge b-legacy">мертво рядом с 0001</span></td></tr>
+        <tr><td class="num">0003</td><td class="mono">partner_requests</td><td>B2B лид-форма для будущих партнёров</td><td><span class="badge b-fact">живо</span></td></tr>
+        <tr><td class="num">0004</td><td class="mono">taste_profile</td><td>признаёт мёртвую 0001, вводит реальный <code class="mono">reviews</code> v2 на coffee_lots + user_taste_profiles</td><td><span class="badge b-legacy">осиротело после 0005/0011</span></td></tr>
+        <tr><td class="num">0005</td><td class="mono">recipes_equipment_checkins</td><td>реальные <code class="mono">recipes</code>, <code class="mono">equipment_garage</code>, <code class="mono">checkins</code> — новый, живой per-tasting путь</td><td><span class="badge b-fact">живо</span></td></tr>
+        <tr><td class="num">0006</td><td class="mono">barista_recipes</td><td>добавляет 'barista' в author_type</td><td><span class="badge b-fact">живо</span></td></tr>
+        <tr><td class="num">0007</td><td class="mono">staff_profiles_rls</td><td>ключевая точка — вводит <code class="mono">profiles</code> с ролями + RLS + <code class="mono">checkins_roaster_view</code></td><td><span class="badge b-fact">живо, ядро</span></td></tr>
+        <tr><td class="num">0008</td><td class="mono">dev_seed_staff_profile</td><td>dev RPC для 3 пилотных email</td><td><span class="badge b-hypothesis">dev-only</span></td></tr>
+        <tr><td class="num">0009</td><td class="mono">platform_feedback</td><td>роль admin + таблица обратной связи по платформе</td><td><span class="badge b-fact">живо</span></td></tr>
+        <tr><td class="num">0010</td><td class="mono">cafe_lot_benchmark_view</td><td>анонимизированный топ-2 кофеен по лоту</td><td><span class="badge b-fact">живо</span></td></tr>
+        <tr><td class="num">0011</td><td class="mono">checkin_replies</td><td>новая таблица ответов, явно НЕ переиспользует review_replies из 0004</td><td><span class="badge b-fact">живо</span></td></tr>
+        <tr><td class="num">0012</td><td class="mono">loyalty_module</td><td>ranks/statuses/subscriptions/transactions + 2 SECURITY DEFINER RPC</td><td><span class="badge b-fact">живо, ядро</span></td></tr>
+        <tr><td class="num">0013</td><td class="mono">fix_profiles_rls_recursion</td><td>исправляет баг бесконечной рекурсии политики из 0012</td><td><span class="badge b-fact">живо (патч)</span></td></tr>
+        <tr><td class="num">0014</td><td class="mono">events_module</td><td>таблица events + 2 cron-функции</td><td><span class="badge b-fact">живо</span></td></tr>
+        <tr><td class="num">0015</td><td class="mono">barista_profiles</td><td>тонкий слой личных предпочтений бариста</td><td><span class="badge b-fact">живо</span></td></tr>
+        <tr><td class="num">0016</td><td class="mono">recipe_quota_limits</td><td>антиспам-лимиты и триггеры квот на recipes/custom_brew_methods</td><td><span class="badge b-fact">живо</span></td></tr>
+        <tr><td class="num">0017</td><td class="mono">cafe_menu_entries</td><td>живое меню кофейни, замена localStorage-стора</td><td><span class="badge b-fact">живо</span></td></tr>
+        <tr><td class="num">0018</td><td class="mono">cafe_menu_scheduled_removal</td><td>+ scheduled_removal_at + cron-функция автовыключения</td><td><span class="badge b-fact">живо</span></td></tr>
+        <tr><td class="num">0019</td><td class="mono">shop_mute_preferences</td><td>приватный mute гостя по кофейне</td><td><span class="badge b-fact">живо</span></td></tr>
+        <tr><td class="num">0020</td><td class="mono">fix_pir_event_dates</td><td>чисто дата-фикс, без изменения схемы</td><td><span class="badge b-fact">живо (data-only)</span></td></tr>
+        <tr><td class="num">0021</td><td class="mono">drink_evaluation</td><td>+12 колонок на checkins для milk-drink оценки, аддитивно</td><td><span class="badge b-fact">живо, последняя</span></td></tr>
+      </table></div>
+
+      <h4>Дубли и мёртвая схема</h4>
+      <p>Внутри самой живой (post-0004) линии есть собственное внутреннее дублирование: <code class="mono">reviews / review_replies / user_taste_profiles</code> (0004) против <code class="mono">checkins / checkin_replies</code> (0005/0011) — оба представляют «одну запись дегустации», но по явному комментарию в 0011 «ни один путь кода в приложении не пишет в reviews» — жива только линия checkins.</p>
+    </section>
+
+    <!-- 18 -->
+    <section class="section" id="s18">
+      <div class="sec-head"><span class="sec-num">18</span><h2>Auth &amp; Permissions</h2></div>
+      <p><span class="badge b-fact">FACT</span> Только email+password (<code class="mono">signInWithPassword</code>/<code class="mono">signUpWithPassword</code>). Магик-линк/OAuth не подключены, хотя <code class="mono">app/auth/callback/route.ts</code> реализует PKCE-обмен кода — маршрут существует, но ни одна страница не генерирует ведущий к нему redirect (<span class="badge b-missing">мёртвый код</span>).</p>
+
+      <div class="tbl-wrap"><table>
+        <tr><th>Вопрос из ТЗ</th><th>Ответ</th></tr>
+        <tr><td>Может ли Barista получить данные, предназначенные только Cafe Admin?</td><td><span class="badge b-fact">Частично</span> — читать может (RLS часто объединяет barista/cafe_admin в один OR), писать конфигурацию (ранги, чужие профили бариста) — нет.</td></tr>
+        <tr><td>Может ли Guest увидеть данные другого Guest?</td><td><span class="badge b-fact">Нет</span> по всем owner-scoped политикам (auth.uid()=owner).</td></tr>
+        <tr><td>Может ли Roaster увидеть личные данные Guest?</td><td><span class="badge b-fact">Нет</span> — жёстко изолирован через анонимизированный <code class="mono">checkins_roaster_view</code>, без доступа к loyalty-таблицам вовсе.</td></tr>
+        <tr><td>Может ли Cafe увидеть личные данные Guest?</td><td><span class="badge b-fact">Да, в рамках своей кофейни</span> — checkins, loyalty-статус/абонементы, полное имя+email через непривязанную к shop политику (см. риск ниже).</td></tr>
+      </table></div>
+
+      <div class="callout risk"><strong>RLS-риск:</strong> политика <code class="mono">"staff read enthusiast display names"</code> на <code class="mono">profiles</code> проверяет только <code class="mono">role='enthusiast'</code> и то, что запрашивающий — barista/cafe_admin <i>где угодно</i> — без сопоставления с конкретной кофейней. Персонал одной кофейни технически может прочитать <code class="mono">display_name</code> и <code class="mono">email</code> абсолютно любого гостя платформы, не только своих посетителей.</div>
+
+      <div class="callout risk"><strong>Крупнейший риск аудита — активный в продакшне обход авторизации:</strong> <code class="mono">components/dev/DevRoleSwitcher.tsx</code> рендерится безусловно в <code class="mono">app/layout.tsx</code> на каждой странице сайта, не спрятан за <code class="mono">NODE_ENV</code>. Любой посетитель одним кликом заходит как <code class="mono">barista</code>/<code class="mono">cafe_admin</code>/<code class="mono">roaster_admin</code>/<code class="mono">admin</code> — компонент сам создаёт нужный фиксированный <code class="mono">*@test.com</code> аккаунт при необходимости и обращается к <code class="mono">dev_seed_staff_profile()</code>.</div>
+
+      <p><span class="badge b-fact">FACT</span> <code class="mono">lib/supabase/adminClient.ts</code> вводит в заблуждение названием — использует anon-ключ, сервис-роль не сконфигурирована нигде.</p>
+    </section>
+
+    <!-- 19 -->
+    <section class="section" id="s19">
+      <div class="sec-head"><span class="sec-num">19</span><h2>QR Architecture</h2></div>
+      <div class="tbl-wrap"><table>
+        <tr><th>Сценарий</th><th>Payload</th><th>Auth</th><th>Запись в БД</th><th>Статус</th></tr>
+        <tr><td>Lot QR</td><td>URL/код лота</td><td>нет (публичный каталог)</td><td>только чтение/навигация; <code class="mono">qr_codes.scan_count</code> из схемы 0001 <b>не инкрементируется</b> нигде</td><td><span class="badge b-code">частично wired</span></td></tr>
+        <tr><td>Guest Loyalty QR</td><td><code class="mono">coffeepassport-guest:&lt;uuid&gt;</code></td><td>гейт на уровне RPC (barista/cafe_admin своей кофейни)</td><td>subscriptions/guest_shop_statuses/loyalty_transactions через SECURITY DEFINER функции</td><td><span class="badge b-fact">полностью wired</span></td></tr>
+        <tr><td>Barista scans Guest</td><td>тот же Guest QR</td><td>то же самое</td><td>то же самое — отдельного «QR дегустации» нет</td><td><span class="badge b-fact">= Loyalty QR</span></td></tr>
+        <tr><td>QR-страница дашборда участника</td><td>—</td><td>—</td><td>—</td><td><span class="badge b-missing">заглушка, "step 13" по комментарию</span></td></tr>
+      </table></div>
+      <p>Итого в коде существует не «единый QR», а два содержательно разных, не связанных друг с другом QR-контура: каталожный (Lot) и идентификационный (Guest/Loyalty).</p>
+    </section>
+
+    <!-- 20 -->
+    <section class="section" id="s20">
+      <div class="sec-head"><span class="sec-num">20</span><h2>Current Product Loops</h2></div>
+      <p class="sec-intro">Оригинальный Stage 1-loop (Lot → Roaster → Cafe → Guest → Tasting → Analytics) остаётся <i>частью</i> картины, но больше не является единственным или даже самым зрелым циклом в коде.</p>
+      <div class="grid grid-2">
+        <div class="card"><h4>Loyalty Loop <span class="badge b-fact">наиболее зрелый</span></h4><p>Guest QR → Barista scan → RPC sell/redeem → ранг/скидка → возврат гостя. Замкнут и атомарен на уровне БД.</p></div>
+        <div class="card"><h4>Guest Tasting Loop <span class="badge b-fact">зрелый</span></h4><p>Scan/выбор лота → blind tasting → checkins → passport reveal → journey-история. Реален (Supabase), но taste-passport агрегат считается вне сервера.</p></div>
+        <div class="card"><h4>Cafe Operations Loop <span class="badge b-fact">зрелый</span></h4><p>Меню (реально) → чек-ины гостей → аналитика/бенчмарк → корректировка меню. Замкнут внутри кофейни.</p></div>
+        <div class="card"><h4>Roaster Feedback Loop <span class="badge b-fact">зрелый, но изолирован</span></h4><p>Reference profile → анонимизированная аналитика ← Guest/Cafe. Нет пути назад в каталожный лот (тот же лот правится только вручную).</p></div>
+        <div class="card"><h4>Barista Loop <span class="badge b-code">частично</span></h4><p>Рецепты + фидбек + лояльность — но не замкнут на собственную атрибуцию дегустации (её ставит гость).</p></div>
+        <div class="card"><h4>Recipe/Kitchen Loop <span class="badge b-premature">незамкнут</span></h4><p>Рецепт → голос сообщества (localStorage) — не проверяется дегустацией/оценкой, живёт отдельно от Tasting Loop.</p></div>
+      </div>
+      <p><span class="badge b-decision">Вывод:</span> главный «продуктовый» цикл сегодня — не единый лот-центричный loop, а <b>связка Guest Tasting Loop + Loyalty Loop внутри одной кофейни</b>; Roaster вовлечён как поставщик каталога и получатель анонимной аналитики, но не как активный участник цикла лояльности/меню.</p>
+    </section>
+
+    <!-- 21 -->
+    <section class="section" id="s21">
+      <div class="sec-head"><span class="sec-num">21</span><h2>Core / Supporting / Ecosystem / Premature / Legacy</h2></div>
+      <div class="tbl-wrap"><table>
+        <tr><th>Функция</th><th>Классификация</th><th>Почему</th></tr>
+        <tr><td>Loyalty</td><td><span class="badge b-fact">CORE</span></td><td>единственный модуль с настоящей атомарной бизнес-логикой и явным retention-циклом</td></tr>
+        <tr><td>Guest tasting / sensory</td><td><span class="badge b-fact">CORE</span></td><td>это и есть суть «Passport»-предложения</td></tr>
+        <tr><td>Barista</td><td><span class="badge b-fact">SUPPORTING → стремится к CORE</span></td><td>усиливает и loyalty, и guest-опыт, но пока роль, а не полноценная сущность</td></tr>
+        <tr><td>Recipes (BrewingRecipe)</td><td><span class="badge b-fact">SUPPORTING</span></td><td>усиливает восприятие лота, но не обязателен для основного цикла</td></tr>
+        <tr><td>Recipes (KitchenRecipe)</td><td><span class="badge b-premature">PREMATURE</span></td><td>ценна при большом сообществе, сейчас localStorage-изолирована</td></tr>
+        <tr><td>Experiments</td><td><span class="badge b-missing">NOT IMPLEMENTED</span></td><td>концепции не существует в коде</td></tr>
+        <tr><td>Equipment</td><td><span class="badge b-premature">SUPPORTING/PREMATURE</span></td><td>полезно для персонализации, но не влияет на основной цикл напрямую</td></tr>
+        <tr><td>Maps</td><td><span class="badge b-premature">ECOSYSTEM</span></td><td>сетевой эффект появляется только при множестве кофеен; сейчас cafe-first, не lot-first</td></tr>
+        <tr><td>Events</td><td><span class="badge b-premature">ECOSYSTEM/PREMATURE</span></td><td>полезно при масштабе, сейчас плоская, слабо интегрированная сущность</td></tr>
+        <tr><td>News/Community</td><td><span class="badge b-missing">NOT IMPLEMENTED</span></td><td>только алгоритмическая витрина, не полноценный домен</td></tr>
+        <tr><td>Subscriptions</td><td><span class="badge b-fact">CORE (внутри Loyalty)</span></td><td>это ядро денежного цикла лояльности</td></tr>
+        <tr><td>Gamification</td><td><span class="badge b-missing">NOT IMPLEMENTED</span></td><td>только текстовое поле, без движка</td></tr>
+        <tr><td>Recommendations</td><td><span class="badge b-premature">PREMATURE</span></td><td>единственный экземпляр — «Карта поставок» ростера, узкая точечная фича</td></tr>
+      </table></div>
+    </section>
+
+    <!-- 22 -->
+    <section class="section" id="s22">
+      <div class="sec-head"><span class="sec-num">22</span><h2>Stage 1 → 2.0 Architectural Delta</h2></div>
+      <div class="tbl-wrap"><table>
+        <tr><th>Domain</th><th>Stage 1</th><th>2.0</th><th>Архитектурное следствие</th></tr>
+        <tr><td>Lot identity</td><td>предполагался canonical ID в единой БД</td><td>текстовый ID в localStorage ростера, без БД-таблицы</td><td>каноничность Lot теперь недостаточна для честной интеграции с внешними системами (см. §23)</td></tr>
+        <tr><td>Роли</td><td>не были формализованы</td><td>полноценная RLS-модель на общей profiles-таблице</td><td>решение (одна таблица ролей) остаётся верным и должно войти в ядро новой архитектуры</td></tr>
+        <tr><td>Tasting</td><td>единая cupping-форма</td><td>адаптивная модель + расщеплённый параллельный cupping-журнал</td><td>нужно решить: сливать журналы в одну модель или официально закрепить их как разные продукты</td></tr>
+        <tr><td>Loyalty</td><td>отсутствовал</td><td>зрелый, атомарный, RPC-based</td><td>достаточно зрелая база — стоит рассмотреть как второй core loop наравне с tasting</td></tr>
+        <tr><td>Barista</td><td>отсутствовал</td><td>роль на profiles + богатый UI, без self-service</td><td>нужно решить: становится ли Barista отдельной сущностью до масштабирования сети кофеен</td></tr>
+        <tr><td>Recipes/Equipment/Experiments</td><td>не описаны</td><td>2 несвязанные recipe-системы, нет Experiments вовсе</td><td>периферия — не должна тормозить решения по ядру</td></tr>
+      </table></div>
+    </section>
+
+    <!-- 23 -->
+    <section class="section" id="s23">
+      <div class="sec-head"><span class="sec-num">23</span><h2>Impact on XO × Pure Roast × Passport (Stage 2)</h2></div>
+      <p class="sec-intro">Проверка актуальности Stage 2 Integration Architecture после появления Coffee Passport 2.0 — без внесения изменений в сам документ Stage 2.</p>
+      <div class="tbl-wrap"><table>
+        <tr><th>Понятие Stage 2</th><th>Найдено в 2.0?</th><th>Вывод</th></tr>
+        <tr><td>Canonical Lot / Lot ID</td><td><span class="badge b-missing">не найден как БД-сущность</span></td><td><b>Требует пересмотра.</b> Lot сегодня — localStorage-объект ростера с текстовым ID, join с кофейней происходит только по совпадению строки, без ссылочной целостности. Если Stage 2 предполагает единый Lot ID как интеграционную точку с внешними системами — эта точка сейчас физически не существует в БД.</td></tr>
+        <tr><td>Reference Profile</td><td><span class="badge b-fact">найден</span></td><td>Валиден по факту (roast profile + вкусовой профиль ростера), но тоже localStorage, не БД.</td></tr>
+        <tr><td>Guest / Cafe / Barista / Tasting</td><td><span class="badge b-fact">найдены и реализованы полнее, чем в Stage 1</span></td><td>Stage 2 остаётся корректным в части ролевой модели и tasting-цикла.</td></tr>
+        <tr><td>Recipe / Equipment</td><td><span class="badge b-fact">найдены</span></td><td>Валидны, но менее зрелые, чем предполагалось.</td></tr>
+        <tr><td>Loyalty</td><td><span class="badge b-fact">найдена, значительно более зрелая, чем можно было предполагать</span></td><td>Это усиление, а не отклонение от Stage 2.</td></tr>
+        <tr><td>Location / Analytics</td><td><span class="badge b-fact">найдены</span></td><td>Валидны, cafe-first, не lot-first (см. §13).</td></tr>
+        <tr><td>Purchase → Passport</td><td><span class="badge b-missing">не найден как денежный поток</span></td><td>Loyalty — это скидки/абонементы внутри кофейни, не покупка лота как товара; если Stage 2 предполагал «покупка кофе → запись в Passport» как явный денежный путь — такого пути в коде нет.</td></tr>
+        <tr><td>QR / Authentication</td><td><span class="badge b-fact">найдены, но два разных контура</span></td><td>Требует уточнения: Stage 2, скорее всего, предполагал единый QR; по факту их два (Lot QR и Guest QR), не связанных между собой.</td></tr>
+      </table></div>
+      <div class="callout"><strong>Итог по разделу:</strong> Stage 2 <b>не является полностью валидным без оговорок</b> — ролевая модель, tasting-цикл и loyalty подтверждаются кодом и даже превосходят ожидания; но опора на «Canonical Lot» как единую интеграционную точку требует пересмотра, поскольку такой сущности в базе данных не существует — она эмулируется совпадением строковых ID между localStorage-каталогом ростера и Supabase-таблицами кофейни/дегустаций. Никаких изменений в сам документ Stage 2 в рамках этого аудита не вносится.</div>
+    </section>
+
+    <!-- 24 -->
+    <section class="section" id="s24">
+      <div class="sec-head"><span class="sec-num">24</span><h2>Architectural Risks</h2></div>
+      <div class="tbl-wrap"><table>
+        <tr><th>Риск</th><th>Severity</th><th>Impact</th></tr>
+        <tr><td>DevRoleSwitcher активен в продакшне без гейта</td><td><span class="badge b-missing">HIGH</span></td><td>любой посетитель получает доступ к любой staff-роли без учётных данных</td></tr>
+        <tr><td>Нет Canonical Lot в БД (только localStorage + совпадение строк)</td><td><span class="badge b-missing">HIGH</span></td><td>невозможна честная внешняя интеграция (XO/Pure Roast) без ссылочной целостности; риск рассинхронизации каталога между устройствами/сессиями</td></tr>
+        <tr><td>RLS-политика profiles не шоп-скоуплена для чтения имени/email гостя</td><td><span class="badge b-hypothesis">MEDIUM</span></td><td>утечка PII гостей персоналу произвольной кофейни платформы</td></tr>
+        <tr><td>Дублирующаяся/мёртвая схема БД (0001, часть 0004)</td><td><span class="badge b-legacy">MEDIUM</span></td><td>усложняет онбординг новых разработчиков и будущие миграции; риск случайного использования мёртвых таблиц</td></tr>
+        <tr><td>Две несвязанные recipe-системы</td><td><span class="badge b-legacy">LOW-MEDIUM</span></td><td>путаница для пользователей и будущих разработчиков; данные не мигрируют друг в друга</td></tr>
+        <tr><td>Taste Passport считается на клиенте, сервер держит осиротевший триггер</td><td><span class="badge b-legacy">LOW-MEDIUM</span></td><td>расхождение между разными устройствами/сессиями одного гостя; мёртвый код поддерживать дороже, чем удалить</td></tr>
+        <tr><td>Голосование за рецепты — только localStorage</td><td><span class="badge b-premature">LOW</span></td><td>рейтинги не переживают смену устройства/браузера, community-функции неполноценны</td></tr>
+        <tr><td>Партнёрская активация не создаёт настоящий аккаунт</td><td><span class="badge b-premature">LOW-MEDIUM</span></td><td>операционное узкое место при росте числа партнёров — потребует ручного вмешательства на каждого</td></tr>
+        <tr><td>Два независимых admin-контура (HTTP Basic /admin vs. role-based /dashboard/admin)</td><td><span class="badge b-legacy">LOW-MEDIUM</span></td><td>непоследовательная модель авторизации усложняет будущие проверки доступа</td></tr>
+      </table></div>
+    </section>
+
+    <!-- 25 -->
+    <section class="section" id="s25">
+      <div class="sec-head"><span class="sec-num">25</span><h2>What Coffee Passport 2.0 Actually Is</h2></div>
+      <div class="callout">Coffee Passport 2.0 — это <b>слепой sensory-журнал гостя, привязанный к конкретной паре «лот × кофейня», усиленный работающим внутрикофейным механизмом лояльности</b>, вокруг которого нарастает — но пока не срослась в единую систему — периферия из рецептов, оборудования, карты и событий.</div>
+      <h4>Пять функций, которые определяют продукт сегодня</h4>
+      <ol>
+        <li>Слепая, адаптивная по типу напитка sensory-оценка (§08), записываемая в реальную БД.</li>
+        <li>Ролевая модель на единой таблице профилей с RLS, разделяющая видимость coffee-фидбека и service-фидбека (§03, §18).</li>
+        <li>Атомарный, RPC-based модуль лояльности с рангами и абонементами внутри конкретной кофейни (§12).</li>
+        <li>Анонимизированная, приватность-осознанная аналитика для ростера и кофейни, построенная на Postgres views (§06, §07).</li>
+        <li>Journey/passport-хаб гостя, собирающий историю посещений и вкусовой профиль во времени (§05).</li>
+      </ol>
+      <h4>Чем это принципиально не является</h4>
+      <div class="grid grid-3">
+        <div class="card"><h4>Не coffee rating app</h4><p>Оценка вслепую привязана к конкретному физическому визиту и кофейне, а не к абстрактному каталогу кофе как в Untappd-подобных сервисах.</p></div>
+        <div class="card"><h4>Не loyalty app</h4><p>Лояльность — надстройка над tasting-циклом, а не отдельный продукт; нет отдельного онбординга «просто ради баллов».</p></div>
+        <div class="card"><h4>Не cafe CRM</h4><p>Нет расписаний, payroll, складского учёта (сознательно, см. CLAUDE.md) — только гостевая аналитика и HR-карточка команды.</p></div>
+        <div class="card"><h4>Не recipe database</h4><p>Recipes — вторичны и разделены на 2 несвязанные системы, не являются точкой входа в продукт.</p></div>
+        <div class="card"><h4>Не digital passport-документ</h4><p>Нет генерации PDF/экспортируемого артефакта — «паспорт» это состояние страницы, не документ.</p></div>
+        <div class="card"><h4>Не соцсеть</h4><p>Нет комментариев, форумов, профилей-на-показ — единственная social-механика — голосование за рецепты.</p></div>
+      </div>
+    </section>
+
+    <!-- 26 -->
+    <section class="section" id="s26">
+      <div class="sec-head"><span class="sec-num">26</span><h2>Final Architecture Map (2.0, фактическая)</h2></div>
+      <p class="sec-intro">Пунктирные блоки — localStorage/клиент-only; сплошные — реальные Supabase-таблицы/views. Стрелка «⇢» — соединение только по совпадению текстового ID, без FK.</p>
+      <div class="map-wrap">
+        <div class="map-row">
+          <div class="map-box dim"><h5>Roaster (local)</h5><p>профиль, философия</p></div>
+          <div class="arrow">→</div>
+          <div class="map-box dim"><h5>Lot (local, text id)</h5><p>+ Reference/Roast Profile (local)</p></div>
+        </div>
+        <div class="arrow">⇢ (совпадение строки, не FK)</div>
+        <div class="map-row">
+          <div class="map-box"><h5>Coffee Shop</h5><p>профиль на карте (Supabase)</p></div>
+          <div class="map-box"><h5>cafe_menu_entries</h5><p>живое меню + TTL/countdown (Supabase)</p></div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="map-row">
+          <div class="map-box"><h5>Barista</h5><p>роль на profiles, авторские рецепты, лояльность-терминал</p></div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="map-row">
+          <div class="map-box"><h5>Guest QR</h5><p>coffeepassport-guest:uuid</p></div>
+          <div class="map-box"><h5>Loyalty</h5><p>shop_ranks/subscriptions/transactions, RPC-атомарно</p></div>
+          <div class="map-box"><h5>Guest → Barista Feedback</h5><p>checkin_replies, coffee/service split</p></div>
+        </div>
+        <div class="arrow">↑ Guest сам сканирует Lot QR / выбирает лот</div>
+        <div class="map-row">
+          <div class="map-box"><h5>BrewingRecipe (Supabase)</h5><p>привязан к lotId, авторы: roaster/cafe/barista/enthusiast</p></div>
+          <div class="map-box dim"><h5>Equipment «гараж»</h5><p>по владельцу: enthusiast/cafe/roaster (Supabase)</p></div>
+          <div class="map-box"><h5>PASSPORT</h5><p>blind tasting → checkins (Supabase) → journey-хаб гостя</p></div>
+        </div>
+        <div class="arrow">↓</div>
+        <div class="map-row">
+          <div class="map-box"><h5>checkins_roaster_view</h5><p>анонимизированная аналитика ростеру</p></div>
+          <div class="map-box"><h5>checkins_cafe_benchmark_view</h5><p>анонимизированный бенчмарк кофейням</p></div>
+          <div class="map-box dim"><h5>TastePassportCard</h5><p>клиентский агрегат вкуса гостя (не с сервера)</p></div>
+        </div>
+        <div class="map-row">
+          <div class="map-box dim"><h5>KitchenRecipe / cupping-журнал / voting</h5><p>несвязанная периферия, целиком localStorage</p></div>
+          <div class="map-box dim"><h5>Events / mute-preferences</h5><p>частично Supabase, слабо интегрировано в основной loop</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 27 -->
+    <section class="section" id="s27">
+      <div class="sec-head"><span class="sec-num">27</span><h2>Decision Status — легенда применения</h2></div>
+      <p>Метки FACT / CODE / DECISION / HYPOTHESIS / MISSING / LEGACY / PREMATURE проставлены по всему документу рядом с каждым существенным выводом (см. легенду в §00). Ни один вывод в разделах 01–26 не должен читаться как рекомендация — только как констатация фактического состояния на дату аудита.</p>
+    </section>
+
+    <!-- 28 -->
+    <section class="section" id="s28">
+      <div class="sec-head"><span class="sec-num">28</span><h2>Deliverable — итоговые блоки</h2></div>
+
+      <h3>Executive Summary</h3>
+      <ol>
+        <li>Coffee Passport 2.0 — это слепой sensory-журнал гостя плюс работающий модуль лояльности внутри конкретной кофейни; всё остальное — периферия разной степени готовности.</li>
+        <li>Роль Barista полностью реализована как первоклассная роль на общем <code class="mono">profiles</code>, но не имеет self-service онбординга и не является отдельной бизнес-сущностью.</li>
+        <li>Canonical Lot как единая БД-сущность <b>не существует</b> — лот живёт в localStorage ростера с текстовым ID, соединяется с реальными Supabase-таблицами кофейни/дегустаций только по совпадению строки.</li>
+        <li>Схема БД пережила незапланированную миграцию архитектуры: миграция 0001 (реляционная модель) никогда не применялась к живой БД; реальная схема — вторая, текстово-идентификаторная, начиная с 0004.</li>
+        <li>Loyalty — самый архитектурно зрелый модуль продукта: атомарные SECURITY DEFINER RPC, отсутствие клиентских прав записи на денежные таблицы, корректная защита от гонки двойного списания.</li>
+        <li>Milk Drink Evaluation — это аддитивное расширение единой sensory-модели, а не отдельный домен; при этом существует отдельный, несвязанный «дневник каппингов» со своей, отличающейся моделью осей.</li>
+        <li>Recipes расщепились на две несвязанные системы: личную (localStorage) и мульти-авторскую, привязанную к лоту (Supabase).</li>
+        <li>Experiments как продуктовая концепция не реализована вообще — есть только заметки и форк рецепта.</li>
+        <li>Обнаружен активный в продакшне обход авторизации через DevRoleSwitcher — наивысший приоритет к рассмотрению независимо от прочих архитектурных решений.</li>
+        <li>RLS-политика на profiles допускает персоналу любой кофейни читать имя и email любого гостя платформы, не только своих посетителей.</li>
+        <li>Map устроена «кофейня-first»: нет сценария «где попробовать этот лот» — обратной связи от лота к точкам продаж.</li>
+        <li>News/Community и Gamification ожидались как системы, по факту — не более чем алгоритмическая витрина и одно текстовое поле соответственно.</li>
+        <li>Feedback-архитектура сознательно приватность-осознанная: ростер никогда не видит service-фидбек и личность гостя, только анонимизированные coffee-показатели.</li>
+        <li>Partner onboarding — это B2B-лидоворонка с ручной активацией, не автоматизированный self-service; активация не создаёт настоящий аутентифицируемый аккаунт.</li>
+        <li>Stage 2 Integration Architecture в основном подтверждается кодом (роли, tasting, loyalty), но требует пересмотра в части «Canonical Lot» как интеграционной точки — такой точки в базе данных на сегодня не существует.</li>
+      </ol>
+
+      <h3>Top Architectural Changes vs. Stage 1</h3>
+      <ol>
+        <li>Появилась полноценная роль Barista с нуля (профиль, дашборд, лояльность, рецепты, фидбек).</li>
+        <li>Появился весь модуль Loyalty с нуля — самый зрелый новый домен.</li>
+        <li>Появился домен Coffee Kitchen (Recipes + Equipment), расщеплённый на 2 несвязанные системы.</li>
+        <li>Появилась карта кофеен (не лотов) и модуль событий.</li>
+        <li>Sensory-модель расширена адаптивной milk-drink веткой (аддитивно, не отдельным доменом).</li>
+        <li>Понятие «Passport» расщепилось на 3 разных артефакта под одним словом.</li>
+        <li>Произошла незапланированная смена архитектуры БД: реляционная схема 0001 заброшена в пользу текстово-идентификаторной модели.</li>
+        <li>Canonical Lot как БД-сущность утрачен — заменён на localStorage-каталог + совпадение строковых ID.</li>
+        <li>Появилась полная ролевая RLS-модель с осознанным разделением видимости coffee vs. service фидбека.</li>
+        <li>Появился второй, независимый от Lot QR-контур — Guest/Loyalty QR.</li>
+        <li>Появился платформенный admin-слой, но в двух несвязанных вариантах авторизации.</li>
+        <li>Появилась приватность-осознанная анонимизированная аналитика (views) для ростера и кофейни.</li>
+        <li>Появились антиспам-механизмы (квоты на рецепты, лимиты кастомных методов) — признак реальной эксплуатации, не только прототипа.</li>
+        <li>Recipe voting и taste-profile-агрегация остались клиент-side, несмотря на наличие серверной инфраструктуры под них.</li>
+        <li>Обнаружен продакшн-обход авторизации через демо-виджет переключения ролей — архитектурно значимая находка, не предполагавшаяся Stage 1.</li>
+      </ol>
+
+      <h3>What Remains Valid (из Stage 1 и Stage 2)</h3>
+      <ul>
+        <li>Базовый цикл Roaster → Lot → Cafe → Guest → Tasting → Analytics — концептуально подтверждён, хотя техническая реализация связей слабее, чем предполагалось.</li>
+        <li>Идея приватность-осознанного разделения coffee-фидбека (виден ростеру) и service-фидбека (виден только кофейне) — реализована и работает корректно.</li>
+        <li>Guest, Cafe, Barista, Tasting как понятия Stage 2 — все реализованы и по большей части превосходят ожидания Stage 1/2.</li>
+        <li>Loyalty как направление — полностью подтверждена и оказалась более зрелой, чем можно было предполагать на момент Stage 2.</li>
+      </ul>
+
+      <h3>What Needs Reassessment</h3>
+      <ul>
+        <li>Статус Canonical Lot — нужно совместное решение: вводить ли реальную БД-таблицу лота, или сознательно оставить его localStorage-каталогом ростера с явным протоколом синхронизации.</li>
+        <li>Судьба дублирующейся/мёртвой схемы БД (миграция 0001, осиротевшие reviews/user_taste_profiles из 0004) — оставить как исторический артефакт или спланировать удаление.</li>
+        <li>Объединение или официальное разделение двух recipe-систем и двух tasting/cupping-моделей.</li>
+        <li>Судьба DevRoleSwitcher — критически требует решения до какого-либо публичного/коммерческого использования продакшн-окружения.</li>
+        <li>Судьба RLS-политики широкого чтения profiles — сузить до shop-scope или оставить осознанно (с явным обоснованием доверия к QR-как-credential).</li>
+        <li>Нужна ли лот-центричная карта («где попробовать этот лот») как часть основного гостевого цикла, или это сознательно вне охвата.</li>
+      </ul>
+
+      <h3>Do Not Build Yet</h3>
+      <ul>
+        <li>Experiments как отдельная сущность — концепции нет, вводить её до решения по Recipes/Kitchen архитектуре преждевременно.</li>
+        <li>Gamification/achievements-движок — пока это текстовое поле, а не система; строить движок без ясного продуктового решения о его роли не нужно.</li>
+        <li>News/Community как полноценный домен — нынешняя алгоритмическая витрина не создаёт достаточного основания для форума/ленты.</li>
+        <li>Автоматизированный self-service онбординг партнёров/бариста — до тех пор, пока не решён вопрос реальной multi-tenant аутентификации.</li>
+        <li>Любая интеграция с XO / Pure Roast, завязанная на Canonical Lot ID, — до совместного решения по статусу Lot как БД-сущности (§23).</li>
+      </ul>
+
+      <div class="callout" style="margin-top:28px;"><strong>Критическое условие соблюдено:</strong> этот документ фиксирует фактическое состояние Coffee Passport 2.0. Он не переходит к Stage 3, не содержит кода, миграций или изменений существующих компонентов. Следующий шаг определяется отдельно, после совместного изучения этого артефакта.</div>
+    </section>
+
+    <div class="foot">Coffee Passport 2.0 — Current Product &amp; Architecture Audit · составлено на основе прямого чтения кода и SQL-миграций репозитория, 21 миграция (0001–0021), 8 параллельных доменных проходов · не заменяет и не изменяет Stage 1 / Stage 2</div>
+  </main>
+</div>
+
+<script>
+(function(){
+  var links = Array.prototype.slice.call(document.querySelectorAll('.nav a'));
+  var sections = links.map(function(a){ return document.getElementById(a.getAttribute('href').slice(1)); });
+  function onScroll(){
+    var y = window.scrollY + 120;
+    var idx = 0;
+    for(var i=0;i<sections.length;i++){
+      if(sections[i] && sections[i].offsetTop <= y) idx = i;
+    }
+    links.forEach(function(a,i){ a.classList.toggle('active', i===idx); });
+  }
+  document.addEventListener('scroll', onScroll, {passive:true});
+  onScroll();
+})();
+</script>

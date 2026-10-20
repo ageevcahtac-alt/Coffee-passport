@@ -121,7 +121,7 @@ function LotPassportView({ params }: { params: { lotId: string } }) {
   // syncCafeMenuFromSupabase below. A no-op until migrations 0022-0025 are
   // applied and the backfill script has been run.
   //
-  // End-to-end audit (PUBLIC_COFFEE_PASSPORT_END_TO_END_AUDIT.md, §IDENTITY):
+  // End-to-end audit (docs/reports/PUBLIC_COFFEE_PASSPORT_END_TO_END_AUDIT.md, §IDENTITY):
   // `lotsSynced` gates the not-found decision below on this fetch actually
   // having settled — every real Canonical Lot (i.e. every Lot created since
   // this architecture shipped, as opposed to the handful of hardcoded seed
@@ -178,12 +178,12 @@ function LotPassportView({ params }: { params: { lotId: string } }) {
   const [selectedShopId, setSelectedShopId] = useState<string | null>(null);
   const [selectedRoasterId, setSelectedRoasterId] = useState<string | null>(null);
 
-  // Community Layer (COMMUNITY_LAYER_PRODUCT_AUDIT.md) — anonymized, opt-in
+  // Community Layer (docs/reports/COMMUNITY_LAYER_PRODUCT_AUDIT.md) — anonymized, opt-in
   // shared tastings for this exact Lot, keyed by its public_id (the same id
   // `journey`/`checkins.lot_id` already use — no Canonical Lot lookup
   // needed for this, deliberately decoupled from that chain).
   //
-  // Production readiness hardening (COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
+  // Production readiness hardening (docs/reports/COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
   // this used to fetch as soon as `lot` resolved, before the guest even
   // picked a shop — the data (other guests' flavor axes, liked/disliked,
   // free-text notes) was already visible in the Network tab well before
@@ -219,7 +219,7 @@ function LotPassportView({ params }: { params: { lotId: string } }) {
   // value, because destroying a guest's history when a roaster edits status
   // later is exactly what this phase must not do. `testing`/`archived`/
   // `active` are deliberately left unrestricted for new tastings too — see
-  // PHASE_4.5.7_REPORT.md for why extending this rule to those statuses
+  // docs/reports/PHASE_4.5.7_REPORT.md for why extending this rule to those statuses
   // would mean guessing an undecided product question, not applying an
   // already-established one.
   const [canonicalStatus, setCanonicalStatus] = useState<LotStatus | null>(null);
@@ -257,7 +257,7 @@ function LotPassportView({ params }: { params: { lotId: string } }) {
     };
   }, [lot?.id]);
 
-  // ROAST_BATCH_REFERENCE_LINK.md — prefer the EXACT reference profile
+  // docs/reports/ROAST_BATCH_REFERENCE_LINK.md — prefer the EXACT reference profile
   // version the latest actual roast_batches row recorded following, over
   // "whatever is active now": a Lot re-roasted since its last logged batch
   // against an updated declared approach should show the version that batch
@@ -403,7 +403,7 @@ function LotPassportView({ params }: { params: { lotId: string } }) {
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   const latestTasting = shopTastings[0] ?? null;
 
-  // Contextual Taste (COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md, §8) — "One
+  // Contextual Taste (docs/reports/COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md, §8) — "One
   // Lot — Many Cups": every one of THIS guest's own past tastings of this
   // exact lot, across every shop/method/date, not scoped to the currently
   // selected shop the way `shopTastings` above is. Built from the same

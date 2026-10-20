@@ -84,7 +84,7 @@ export function getMergedLotById(id: string): Lot | undefined {
   return read().find((lot) => lot.id === id);
 }
 
-// COFFEE_GREEN_LOT_PROVENANCE_SYNC_IMPLEMENTATION.md — the join that used
+// docs/reports/COFFEE_GREEN_LOT_PROVENANCE_SYNC_IMPLEMENTATION.md — the join that used
 // to be missing here. `lots.green_lot_id` -> `green_lots.id` (many-to-one,
 // so PostgREST returns a single object) -> `green_lots.coffee_id` ->
 // `coffees.id` (same, single object). Nested the same way `roasters(slug)`
@@ -105,8 +105,8 @@ type LotWithRefs = LotRow & {
 // back onto the existing client-facing Lot shape, so every current
 // consumer of useLots()/getMergedLotById() keeps working unmodified.
 //
-// COFFEE_GREEN_LOT_PROVENANCE_SYNC_IMPLEMENTATION.md — origin fields used
-// to come from `fallback` only (COFFEE_GREEN_LOT_OWNERSHIP_AUDIT.md's
+// docs/reports/COFFEE_GREEN_LOT_PROVENANCE_SYNC_IMPLEMENTATION.md — origin fields used
+// to come from `fallback` only (docs/reports/COFFEE_GREEN_LOT_OWNERSHIP_AUDIT.md's
 // Category B finding: any device without a pre-existing local cache entry
 // for a given Lot saw blank country/region/variety/process/cropYear/
 // producer.* for every real, non-seed Lot, since this function never read
@@ -169,7 +169,7 @@ export function rowToLot(row: LotWithRefs, fallback: Lot | undefined): Lot {
 // `publicId` scopes the query to exactly one Lot — added for the
 // highest-traffic guest path (/passport/[lotId], reached directly from a
 // printed QR code) which only ever needs one row, not the whole catalog
-// (see COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md: this previously
+// (see docs/reports/COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md: this previously
 // fetched every Lot, with three joins, on every single guest scan).
 // Omitted (as every other caller — dashboards, /scan's arbitrary-code
 // validation — still does) it fetches and overlays the full catalog,

@@ -4,12 +4,12 @@ name: Daily maintenance (events + cafe menu)
 # and, since this workflow already exists, the cafe-menu scheduled-removal
 # expiry too (see supabase/migrations/0018_cafe_menu_scheduled_removal.sql)
 # — both live under app/api/cron/*. This repo has no hosted cron runner
-# (deployed on Render, not Vercel), so a scheduled GitHub Actions workflow
+# (self-hosted on a Timeweb server), so a scheduled GitHub Actions workflow
 # is the real, working scheduler: it needs no dashboard clicking beyond
 # setting the two repo secrets below once.
 #
 # Required repo secrets (Settings → Secrets and variables → Actions):
-#   APP_URL            — e.g. https://coffee-passport.onrender.com
+#   APP_URL            — e.g. https://147.45.102.186
 #   EVENTS_CRON_SECRET — must match the EVENTS_CRON_SECRET env var set on
 #                        the deployed app; both routes reject the request
 #                        with 401 if it doesn't match.

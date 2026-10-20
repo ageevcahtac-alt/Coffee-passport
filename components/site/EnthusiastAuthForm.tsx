@@ -13,7 +13,7 @@ const fieldClasses =
 // self-serve signup.
 //
 // Also reused, unchanged in behavior for the homepage, by /auth/login (see
-// IDENTITY_SESSION_CONTINUITY_IMPLEMENTATION.md) — the only previously-
+// docs/reports/IDENTITY_SESSION_CONTINUITY_IMPLEMENTATION.md) — the only previously-
 // missing signup path reachable from a guest already on the Public
 // Passport. `next`/`errorRedirect` default to this component's original
 // hardcoded values, so the homepage call site (which passes neither) is

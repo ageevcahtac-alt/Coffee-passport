@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { resolveComparisonRoasterProfile } from './TasteComparison';
 import type { RoasterFlavorProfile } from '@/lib/types/coffee';
 
-// TASTE_INTENT_HISTORICAL_LINK_IMPLEMENTATION.md — covers the read-path
+// docs/reports/TASTE_INTENT_HISTORICAL_LINK_IMPLEMENTATION.md — covers the read-path
 // version-selection rule TasteComparison delegates to, without rendering
 // the component itself (no jsdom/react-dom in this project — see
 // lib/journey/store.test.ts's own note on the same constraint). `fetchById`
