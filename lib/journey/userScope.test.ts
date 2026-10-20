@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-// COFFEE_PASSPORT_FINAL_RELEASE_AUDIT.md — reconcileUserScope is the one
+// docs/reports/COFFEE_PASSPORT_FINAL_RELEASE_AUDIT.md — reconcileUserScope is the one
 // function standing between account A and account B seeing each other's
 // local data on a shared browser (every personal store here is one flat,
 // unpartitioned localStorage array). It had zero test coverage anywhere in

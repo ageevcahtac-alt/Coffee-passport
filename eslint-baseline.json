@@ -1,0 +1,20 @@
+{
+  "app/(site)/passport/[lotId]/page.tsx": {
+    "react-hooks/exhaustive-deps": 3
+  },
+  "app/(site)/passport/[lotId]/taste/page.tsx": {
+    "react-hooks/exhaustive-deps": 1
+  },
+  "app/dashboard/roaster/page.tsx": {
+    "@next/next/no-img-element": 1
+  },
+  "components/admin/LegacyLotCreator.tsx": {
+    "@next/next/no-img-element": 1
+  },
+  "components/barista/BaristaProfileCard.tsx": {
+    "@next/next/no-img-element": 1
+  },
+  "components/coffee/TasteComparison.tsx": {
+    "react-hooks/exhaustive-deps": 1
+  }
+}

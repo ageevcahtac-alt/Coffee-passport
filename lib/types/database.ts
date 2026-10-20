@@ -181,7 +181,7 @@ export type CheckinCommunityViewRow = {
   disliked: string;
   note: string;
   created_at: string;
-  // Contextual Taste (COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md) — added by
+  // Contextual Taste (docs/reports/COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md) — added by
   // 0031_checkins_community_sensory_tags.sql so "как его чувствовали
   // другие" can aggregate real descriptor words, not just the four numeric
   // axes. Same non-identifying category tags already exposed to staff via
@@ -419,7 +419,7 @@ export type CafeMenuEntryInsert = CafeMenuEntryRow;
 
 // public.cafe_menu_entries_roaster_status_view — see
 // supabase/migrations/0027_cafe_menu_entries_roaster_status_view.sql and
-// CANONICAL_LOT_CAFE_MENU_INTEGRITY_DESIGN.md. Every CafeMenuEntryRow
+// docs/reports/CANONICAL_LOT_CAFE_MENU_INTEGRITY_DESIGN.md. Every CafeMenuEntryRow
 // column, plus two read-only fields derived from the joined Canonical Lot
 // (null if the Lot can't be resolved at all — never happens in practice,
 // since Lots are never deleted, but the join is a LEFT JOIN so it's

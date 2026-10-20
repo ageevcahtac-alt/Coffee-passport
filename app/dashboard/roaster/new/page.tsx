@@ -43,7 +43,7 @@ const dashedButtonClasses =
 // (Phase 4.5.9). Only the fields both models actually share; Q-grade,
 // roast type/profile, descriptors, roaster flavor profile, status and
 // in_roaster_catalog all remain Canonical-Lot-only and are never touched
-// here — see PHASE_4.5.9_REPORT.md for the full field-ownership audit.
+// here — see docs/reports/PHASE_4.5.9_REPORT.md for the full field-ownership audit.
 function buildOriginDefaults(coffee: CanonicalCoffee): LotOriginDefaults {
   return {
     country: coffee.country,
@@ -205,7 +205,7 @@ export default function NewLotPage() {
     }
   }
 
-  // Production readiness hardening (COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
+  // Production readiness hardening (docs/reports/COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
   // getRoasterById only ever finds a roaster among the hardcoded seed list
   // merged with this browser's own localStorage overrides — it never
   // queries Supabase's real `roasters` table. A signed-in roaster_admin

@@ -124,7 +124,7 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
     setStep('barista');
   }
 
-  // Production readiness hardening (COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
+  // Production readiness hardening (docs/reports/COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
   // handleFinish was synchronous with no in-flight guard at all — a rapid
   // double-click (or Enter+click) on "Сохранить дегустацию" could invoke
   // it twice before React re-renders/disables the button, creating two

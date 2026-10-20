@@ -218,7 +218,7 @@ function LotRow({
   const [copied, setCopied] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [catalogSyncError, setCatalogSyncError] = useState<string | null>(null);
-  // Production readiness hardening (COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
+  // Production readiness hardening (docs/reports/COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
   // there was no in-flight guard here at all — rapidly clicking the switch
   // fires overlapping updateCanonicalLotFields requests for the same Lot,
   // and whichever response happens to arrive last (not whichever click was

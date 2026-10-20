@@ -80,7 +80,7 @@ export async function signInAsPilotStaff(formData: FormData) {
   // Server-side re-check of the same gate DevRoleSwitcher hides its
   // buttons behind — a crafted direct POST to this action must not be
   // able to skip the client-side gate. See
-  // COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md and
+  // docs/reports/COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md and
   // 0029_pilot_demo_kill_switch.sql for the DB-level gate on the RPC
   // this action calls next.
   if (process.env.NEXT_PUBLIC_PILOT_DEMO_ENABLED !== 'true') {

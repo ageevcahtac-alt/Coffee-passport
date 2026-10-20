@@ -43,7 +43,7 @@ function normalizeRecord(record: TastingRecord): TastingRecord {
   return {
     ...record,
     guestFlavorProfile: record.guestFlavorProfile ?? { acidity: 0, sweetness: 0, body: 0, bitterness: 0 },
-    // Contextual Taste (COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md) — this was
+    // Contextual Taste (docs/reports/COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md) — this was
     // missing from the backfill even though subDescriptors right below it
     // already got one; a record saved before sensoryTags existed had
     // `undefined` here, which getGuestDescriptorWords (a new consumer that
@@ -214,7 +214,7 @@ function mergeById(local: TastingRecord[], incoming: TastingRecord[]): TastingRe
 // owner_user_id is a uuid column an anonymous device id wouldn't cast into
 // anyway). getCommunityTastingsForLot below is the separate, narrow
 // exception: an explicitly opted-in SUBSET of fields, anonymized, readable
-// by anyone — see COMMUNITY_LAYER_PRODUCT_AUDIT.md.
+// by anyone — see docs/reports/COMMUNITY_LAYER_PRODUCT_AUDIT.md.
 export async function syncCheckinsForUser(userId: string, isAuthenticated: boolean): Promise<void> {
   if (!isAuthenticated) return;
   try {
@@ -251,7 +251,7 @@ export async function syncCheckinsForUser(userId: string, isAuthenticated: boole
   }
 }
 
-// TASTE_INTENT_HISTORICAL_LINK_IMPLEMENTATION.md — resolves whichever
+// docs/reports/TASTE_INTENT_HISTORICAL_LINK_IMPLEMENTATION.md — resolves whichever
 // reference_taste_profiles row is `active` for this lot AT THIS EXACT
 // MOMENT, so it can be captured once on the tasting and never
 // recomputed later. `record.lotId` is the same public_id every other
@@ -288,7 +288,7 @@ export function addTastingRecord(
   // The reference lookup runs before the Supabase insert (not after, and
   // not as a separate update) so the checkin never exists server-side even
   // momentarily without its historical link — see Step 1 of
-  // TASTE_INTENT_HISTORICAL_LINK_IMPLEMENTATION.md. This only delays the
+  // docs/reports/TASTE_INTENT_HISTORICAL_LINK_IMPLEMENTATION.md. This only delays the
   // best-effort remote write by one extra round trip; the local save above
   // already completed synchronously and is what the UI actually waits on.
   void resolveActiveTasteProfileId(record.lotId)
@@ -383,7 +383,7 @@ export function restoreRecordsForUser(userId: string): void {
   }
 }
 
-// GAP 2 (IDENTITY_SESSION_CONTINUITY_IMPLEMENTATION.md) — called once, right
+// GAP 2 (docs/reports/IDENTITY_SESSION_CONTINUITY_IMPLEMENTATION.md) — called once, right
 // after a guest authenticates for the first time on THIS device (see
 // lib/auth/currentUser.tsx), so their pre-signup anonymous tastings don't
 // silently vanish from their own history the moment currentUserId stops
@@ -443,7 +443,7 @@ export interface CommunityTasting {
   disliked: string;
   note: string;
   createdAt: string;
-  // Contextual Taste (COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md) — added
+  // Contextual Taste (docs/reports/COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md) — added
   // alongside 0031_checkins_community_sensory_tags.sql so community
   // aggregation can work with real descriptor words. Defaults to an empty
   // array (not undefined) for a Supabase project that hasn't applied 0031

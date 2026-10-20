@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { summarizeTasteHistory } from './TasteHistoryPreview';
 import type { TastingRecord } from '@/lib/types/coffee';
 
-// Contextual Taste (COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md, §8) — "One Lot
+// Contextual Taste (docs/reports/COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md, §8) — "One Lot
 // — Many Cups." Covers current lot / multiple tasting events / multiple
 // brew methods / empty history per the block's own required test list.
 

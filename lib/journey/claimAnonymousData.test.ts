@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — covers the
+// docs/reports/ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — covers the
 // account-continuity scenarios from that report's own spec: every claimable
 // store actually gets claimed, claiming twice never duplicates anything,
 // one store's Supabase failure can't block any other store's claim, and an

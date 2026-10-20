@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { compareDescriptors, getGuestDescriptorWords } from './tasteDescriptors';
 
-// Contextual Taste (COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md) — the reveal's
+// Contextual Taste (docs/reports/COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md) — the reveal's
 // core comparison. Deliberately exhaustive on edge cases since this logic
 // directly decides what a guest reads as "we agreed" vs "we differed."
 

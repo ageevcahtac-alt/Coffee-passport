@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TastingRecord } from '@/lib/types/coffee';
 
-// TASTE_INTENT_HISTORICAL_LINK_IMPLEMENTATION.md — covers the write-path
-// scenarios from TASTE_INTENT_HISTORICAL_LINK_AUDIT.md's Step 4 (A, B, C, D,
+// docs/reports/TASTE_INTENT_HISTORICAL_LINK_IMPLEMENTATION.md — covers the write-path
+// scenarios from docs/reports/TASTE_INTENT_HISTORICAL_LINK_AUDIT.md's Step 4 (A, B, C, D,
 // E, F). Scenario G (Community anonymity) has no TS code path to exercise —
 // it's a property of checkins_community_view's own column list (verified by
 // reading the migration, see the implementation report) — so it isn't

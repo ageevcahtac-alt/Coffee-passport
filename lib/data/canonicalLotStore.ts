@@ -219,9 +219,9 @@ export async function createCoffee(input: CreateCoffeeInput): Promise<CanonicalC
   return rowToCoffee(data as CoffeeRow);
 }
 
-// COFFEE_GREEN_LOT_EDIT_PATHS_IMPLEMENTATION.md — closes the "no edit path
-// exists for Coffee, for anyone" gap (NEXT_ARCHITECTURE_AUDIT.md §3.1,
-// COFFEE_GREEN_LOT_OWNERSHIP_AUDIT.md, COFFEE_PASSPORT_END_TO_END_ARCHITECTURE_AUDIT.md
+// docs/reports/COFFEE_GREEN_LOT_EDIT_PATHS_IMPLEMENTATION.md — closes the "no edit path
+// exists for Coffee, for anyone" gap (docs/reports/NEXT_ARCHITECTURE_AUDIT.md §3.1,
+// docs/reports/COFFEE_GREEN_LOT_OWNERSHIP_AUDIT.md, docs/reports/COFFEE_PASSPORT_END_TO_END_ARCHITECTURE_AUDIT.md
 // finding #2). Mirrors updateCanonicalLotFields's own shape exactly: a
 // partial patch, RLS-gated by the same "roaster staff manage own coffees"
 // policy createCoffee already runs under (`is_roaster_staff_for(roaster_id)`)
@@ -307,7 +307,7 @@ export async function createGreenLot(input: CreateGreenLotInput): Promise<Canoni
   return rowToGreenLot(data as GreenLotRow);
 }
 
-// COFFEE_GREEN_LOT_EDIT_PATHS_IMPLEMENTATION.md — closes the "no edit path
+// docs/reports/COFFEE_GREEN_LOT_EDIT_PATHS_IMPLEMENTATION.md — closes the "no edit path
 // exists for Green Lot, for anyone" gap (same citations as updateCoffee
 // above). Same shape, same RLS policy already in force
 // ("roaster staff manage own green lots", is_roaster_staff_for(roaster_id)).
@@ -397,7 +397,7 @@ export async function createCanonicalLot(input: CreateCanonicalLotInput): Promis
 // because the audit found a real gap, not because the model needed
 // widening for its own sake: LotBuilderForm has always let a roaster freely
 // edit all four on the edit screen (they are not Coffee/Green-Lot fields —
-// see PHASE_4.5.9_REPORT.md's field-ownership table, they're plain columns
+// see docs/reports/PHASE_4.5.9_REPORT.md's field-ownership table, they're plain columns
 // on `lots` itself), but only name/inRoasterCatalog were ever synced back —
 // editing, say, a Q-Score after cupping silently only updated the local
 // browser's own cache, never Supabase, so every other reader (a different
@@ -438,7 +438,7 @@ export async function findCanonicalLotByPublicId(publicId: string): Promise<Cano
   return rowToCanonicalLot(data as LotRow);
 }
 
-// TASTE_INTENT_HISTORICAL_LINK_IMPLEMENTATION.md — the write path that needs
+// docs/reports/TASTE_INTENT_HISTORICAL_LINK_IMPLEMENTATION.md — the write path that needs
 // "whatever reference_taste_profiles row is active for this lot right now"
 // (checkins.reference_taste_profile_ref, stamped at tasting creation time in
 // lib/journey/store.ts) runs on a totally different timeline than the
@@ -525,7 +525,7 @@ export async function listCanonicalLotsForGreenLot(greenLotId: string): Promise<
 // body: 0, bitterness: 0 } — rendered with full confidence as "Эталон
 // обжарщика" in the app's signature blind-tasting reveal/comparison
 // (components/coffee/TasteComparison.tsx, ProducerRoasterCard.tsx). See
-// PUBLIC_PASSPORT_NEXT_BLOCK_AUDIT.md for the full evidence trail.
+// docs/reports/PUBLIC_PASSPORT_NEXT_BLOCK_AUDIT.md for the full evidence trail.
 // =========================================================
 
 export interface ReferenceTasteProfileValues {
@@ -584,7 +584,7 @@ export async function activateTasteProfile(lotUuid: string, values: ReferenceTas
 // =========================================================
 // Roast Batch — completes another write path found unwired during the
 // Public Coffee Passport block's roast_batches audit
-// (ROAST_BATCH_PUBLIC_PASSPORT_AUDIT.md). Every field this function writes
+// (docs/reports/ROAST_BATCH_PUBLIC_PASSPORT_AUDIT.md). Every field this function writes
 // is already rendered to guests today by components/coffee/
 // RoastProfileSummaryCard.tsx and RoastingTab.tsx (both already live,
 // already reading `roast_batches` via lib/data/roastProfilesStore.ts's
@@ -611,7 +611,7 @@ export interface RoastBatchValues {
   curve: { timeSec: number; bt: number | null; et: number | null; ror: number | null }[];
   notes: string;
   // The exact reference_roast_profiles version this batch followed — see
-  // ROAST_BATCH_REFERENCE_LINK.md. Caller-supplied, not defaulted: the
+  // docs/reports/ROAST_BATCH_REFERENCE_LINK.md. Caller-supplied, not defaulted: the
   // caller must explicitly pass the id it just activated (or null, e.g. an
   // early test roast with no finalized reference profile yet), so this
   // immutable log never silently records the wrong version.
@@ -652,11 +652,11 @@ export async function createRoastBatch(lotUuid: string, values: RoastBatchValues
 // Reference Roast Profile — the roaster's DECLARED target approach for a
 // Lot ("Задумка обжарщика"), distinct from `roast_batches` (an immutable
 // log of what actually happened at each individual roast — see
-// ROAST_BATCH_PUBLIC_PASSPORT_AUDIT.md). Versioned exactly like
+// docs/reports/ROAST_BATCH_PUBLIC_PASSPORT_AUDIT.md). Versioned exactly like
 // `reference_taste_profiles` (draft/active/superseded, exactly one active
 // per Lot enforced by a DB partial unique index) — same shape, same
 // planVersionActivation() contract, reused verbatim rather than inventing a
-// second versioning pattern. See REFERENCE_ROAST_PROFILE_IMPLEMENTATION.md
+// second versioning pattern. See docs/reports/REFERENCE_ROAST_PROFILE_IMPLEMENTATION.md
 // for why the read side (RoastProfileSummaryCard/RoastingTab) is
 // deliberately NOT reconnected to this table in this pass: its existing
 // rendering expects two endpoint temperatures (chargeTemp/dropTemp, a
@@ -680,7 +680,7 @@ export interface ReferenceRoastProfileValues {
 // table), Coffee, or Green Lot.
 //
 // Returns the new version's id (unlike activateTasteProfile, which has no
-// caller needing it) — see ROAST_BATCH_REFERENCE_LINK.md: the caller
+// caller needing it) — see docs/reports/ROAST_BATCH_REFERENCE_LINK.md: the caller
 // (handleRoastProfileSave) must run THIS write first and thread its id into
 // the immutable roast_batches row created right after, so that row records
 // the EXACT version it followed rather than "whatever is active now."
@@ -765,7 +765,7 @@ export async function getActiveReferenceRoastProfile(lotUuid: string): Promise<A
 }
 
 // For the Public Passport's historically-exact pairing (Step 5,
-// ROAST_BATCH_REFERENCE_LINK.md): the specific reference_roast_profiles
+// docs/reports/ROAST_BATCH_REFERENCE_LINK.md): the specific reference_roast_profiles
 // version a given roast_batches row's reference_roast_profile_id points to
 // — which may be a `superseded` version by the time it's read, unlike
 // getActiveReferenceRoastProfile above, which only ever finds the current

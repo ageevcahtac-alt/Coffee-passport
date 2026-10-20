@@ -3,7 +3,7 @@ import type { PartnerRequestInput } from '@/lib/types/partnerRequest';
 // Notifies the manager by email that a new partner lead came in. No SDK
 // dependency — Resend's HTTP API is one POST. No-ops (logs and returns)
 // until both RESEND_API_KEY and PARTNER_NOTIFY_EMAIL are set as env vars
-// (e.g. on Render) — the lead is still saved either way, this is only the
+// (on the server, in .env.local) — the lead is still saved either way, this is only the
 // notification step.
 export async function sendPartnerRequestNotification(input: PartnerRequestInput): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;

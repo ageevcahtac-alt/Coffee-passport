@@ -88,7 +88,7 @@ export function purgeCustomCoffeeForUser(userId: string): void {
   write(read().filter((coffee) => coffee.userId !== userId));
 }
 
-// ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — see
+// docs/reports/ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — see
 // kitchenRecipesStore's claimKitchenRecipesForUser for the general shape:
 // no backend table, pure local re-tag, each entry's own generated id
 // prevents any collision, idempotent by construction.

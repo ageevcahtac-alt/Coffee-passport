@@ -9,7 +9,7 @@ import { FlavorRadar } from './FlavorRadar';
 import { PossibleInfluences } from './PossibleInfluences';
 import { DescriptorTags } from './DescriptorTags';
 
-// TASTE_INTENT_HISTORICAL_LINK_IMPLEMENTATION.md — mirrors the Public
+// docs/reports/TASTE_INTENT_HISTORICAL_LINK_IMPLEMENTATION.md — mirrors the Public
 // Passport's own roast-intent pattern (app/(site)/passport/[lotId]/page.tsx):
 // prefer the EXACT version this tasting was recorded against, over
 // "whatever is active now." Pulled out as its own function (rather than
@@ -30,7 +30,7 @@ export async function resolveComparisonRoasterProfile(
   return profile ?? fallback;
 }
 
-// Contextual Taste (COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md) — this
+// Contextual Taste (docs/reports/COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md) — this
 // component used to open with a scored diff table (+N/-N, "совпадение")
 // comparing only four abstract numeric axes, with the guest's own rating
 // sat directly beside the roaster's Q-Score as if the two were the same
@@ -65,7 +65,7 @@ export function TasteComparison({
 
   // Lot.descriptors is a live, roaster-editable field (no version history,
   // unlike reference_taste_profiles) — see the module comment above and
-  // COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md's disclosed limitation: this is
+  // docs/reports/COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md's disclosed limitation: this is
   // always "the profile as currently declared," not a frozen historical
   // snapshot of what it said the day this tasting was recorded.
   const comparison = useMemo(

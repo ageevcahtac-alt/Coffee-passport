@@ -10,7 +10,7 @@ import { claimVotesForUser } from '@/lib/data/recipeVotesStore';
 import { claimMutedShopsForUser } from '@/lib/data/shopMutePreferencesStore';
 import { claimNotificationPreferenceForUser } from '@/lib/data/notificationPreferencesStore';
 
-// ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — the full
+// docs/reports/ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — the full
 // application E2E audit found claimAnonymousTastings (lib/journey/store.ts)
 // was the only claim mechanism in the codebase: tastings survived a guest's
 // signup, but seven sibling personal, userId-scoped local stores

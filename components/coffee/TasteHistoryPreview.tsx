@@ -5,7 +5,7 @@ import { getGuestDescriptorWords } from '@/lib/journey/tasteDescriptors';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { formatTastingDate } from '@/lib/utils/date';
 
-// Contextual Taste (COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md, §8) — "One Lot
+// Contextual Taste (docs/reports/COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md, §8) — "One Lot
 // — Many Cups" already exists as CoffeeJourney.tsx (Roaster → Lot →
 // individual tastings, on /journey), it just wasn't discoverable from the
 // one place a guest would look for it: the Passport of the lot they just
@@ -21,7 +21,7 @@ import { formatTastingDate } from '@/lib/utils/date';
 // Exported for TasteHistoryPreview.test.ts — the sort/slice logic is the
 // only part of this component with real behavior worth unit-testing
 // without a DOM (this project has no jsdom/component-render infra; see
-// COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md's test-strategy findings).
+// docs/reports/COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md's test-strategy findings).
 export function summarizeTasteHistory(
   records: TastingRecord[],
   maxVisible = 3

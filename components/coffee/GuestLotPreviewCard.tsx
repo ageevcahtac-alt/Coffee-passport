@@ -12,7 +12,7 @@ const STATUS_ACCENT_CLASSES: Record<LotMenuStatus, string> = {
 // that follows the literal title standard from the product spec:
 // "[Страна] [Регион / Ферма / Название]".
 //
-// `roasterDiscontinued` (CANONICAL_LOT_CAFE_MENU_INTEGRITY_DESIGN.md) is a
+// `roasterDiscontinued` (docs/reports/CANONICAL_LOT_CAFE_MENU_INTEGRITY_DESIGN.md) is a
 // separate, read-only signal from `status`: `status` is the café's own
 // menu-lifecycle label (new/active/discontinuing); `roasterDiscontinued`
 // reflects the Canonical Lot's own live status/catalog flag at the

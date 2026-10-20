@@ -17,7 +17,7 @@ const STATUS_LABELS: Record<LotStatus, string> = {
 };
 
 // Phase 4.5.10 — the only two REQUIRED-for-active fields the readiness
-// audit found (PHASE_4.5.10_REPORT.md §2-3): `name` is already guaranteed
+// audit found (docs/reports/PHASE_4.5.10_REPORT.md §2-3): `name` is already guaranteed
 // non-empty by LotBuilderForm's own canSave gate for every save, creating
 // or editing (this check is defense-in-depth, not the enforcement point);
 // `qGrade` is not — LotBuilderForm collapses a blank Q-Score input to `0`
@@ -31,7 +31,7 @@ const STATUS_LABELS: Record<LotStatus, string> = {
 // not a graceful empty state — so this is the one place a genuinely
 // meaningless Canonical Lot could reach status='active' undetected.
 // Exported for components/roaster/CanonicalLotStatusControl.test.ts — this
-// gate had no test coverage at all (COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md).
+// gate had no test coverage at all (docs/reports/COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md).
 export function isReadyForActive(lot: CanonicalLot): boolean {
   return Boolean(lot.name.trim()) && lot.qGrade != null && lot.qGrade > 0;
 }

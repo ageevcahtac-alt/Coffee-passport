@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BrewingRecipe } from '@/lib/types/coffee';
 
-// ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — covers the
+// docs/reports/ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — covers the
 // create/update/delete/ownership scenarios from that report's Café
 // Signature Recipe CRUD section, plus claimEnthusiastRecipesForUser's own
 // "never claim a non-enthusiast row" guard. Same no-jsdom, minimal

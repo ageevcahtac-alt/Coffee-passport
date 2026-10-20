@@ -79,7 +79,7 @@ React 18 + TypeScript 5 + Tailwind CSS 4 (токены — `tailwind.config.ts`,
 ORM и прямого драйвера PostgreSQL нет. Схема — только SQL-миграции
 `supabase/migrations/NNNN_*.sql` (сейчас 0001…0032), сид —
 `supabase/seed/seed.sql`. Тесты — Vitest 2 (`vitest.config.ts`, алиас `@/*`).
-Node 20.11.0 (`render.yaml`). Пилотный обжарщик — XO Coffee; интеграции с
+Node 22 (на сервере `v22.23.3`, в CI — 22). Пилотный обжарщик — XO Coffee; интеграции с
 XO COFFEE Admin (`lib/integrations/xoAdmin.ts`, исходящая) и XO Store
 (`app/api/integrations/xo-store/lots`, входящая, `lib/integrations/xoStoreAuth.ts`).
 
@@ -94,24 +94,24 @@ email/паролю (`app/auth/actions.ts`). Верить коду, а не READM
 
 | Что | Команда | Результат |
 |---|---|---|
-| Тесты | `npm test` (`vitest run`) | 33 файла, 281 тест — зелёные |
+| Тесты | `npm test` (`vitest run`) | 35 файлов, 290 тестов — зелёные |
 | Типы | `npx tsc --noEmit` | без ошибок |
 | Сборка | `npm run build` | обязательна перед аудитом (см. выше) |
-| Lint | `npm run lint` | **не работает**: ESLint не настроен, `next lint` спрашивает конфиг интерактивно. Не считать линтер пройденным. |
+| Lint | `npm run lint` | ESLint Strict (`next/core-web-vitals`, `.eslintrc.json`) через `scripts/lint-baseline.mjs`: 8 старых предупреждений заморожены в `eslint-baseline.json`, любая новая находка (и предупреждение тоже) — красный. Исправил старую → `npm run lint -- --update`. Добавлять записи в baseline руками нельзя. |
 | Локально | `npm run dev` | `.env.local` по образцу `.env.example` |
 
 ## Жёсткие гейты
 
-CI с тестами нет (см. ниже), поэтому «CI-проверка» сейчас — только локальный `npm test`.
+Все тесты гоняет CI (`ci.yml`) на каждом PR.
 
 | # | Правило | Якорь в коде | Проверка | Почему (разбор) |
 |---|---|---|---|---|
-| 1 | `SUPABASE_SERVICE_ROLE_KEY` и `XO_*_SECRET` — только на сервере, никогда `NEXT_PUBLIC_`, без тихого отката на anon-ключ | `lib/supabase/adminClient.ts`, guard `window` в `lib/integrations/xoAdmin.ts` | нет | `COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md` |
+| 1 | `SUPABASE_SERVICE_ROLE_KEY` и `XO_*_SECRET` — только на сервере, никогда `NEXT_PUBLIC_`, без тихого отката на anon-ключ | `lib/supabase/adminClient.ts`, guard `window` в `lib/integrations/xoAdmin.ts` | нет | `docs/reports/COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md` |
 | 2 | `/admin` и `/api/admin/**` — за Basic Auth | `middleware.ts`, `lib/auth/requireAdminBasicAuth.ts` | `app/admin/layout.test.ts`, `app/api/admin/partner-requests/route.test.ts` | миграция `0028_partner_requests_lockdown.sql` |
 | 3 | API кабинетов берёт `cafe_id`/`roaster_id` из профиля сессии, а не из запроса | `lib/auth/requireStaffApi.ts`, `requireStaffRole.ts` | `app/api/cafe/roastery-orders/route.test.ts`, `app/api/roaster/production/route.test.ts` | комментарии в `lib/integrations/xoAdmin.ts` |
 | 4 | Любой `next=` в redirect — только через `safeNextPath`; callback редиректит на публичный хост, не на `Host` запроса | `lib/auth/safeRedirect.ts`, `app/auth/callback/route.ts` | `lib/auth/safeRedirect.test.ts`, `app/auth/callback/route.test.ts` | `deploy/timeweb/DOMAIN_CHANGELOG.md` (редирект на `https://localhost:3000`, фикс `856f42f`) |
-| 5 | Интеграции и cron закрыты, если секрет не задан (fail-closed, 401 / `admin_unavailable`) | `lib/integrations/xoStoreAuth.ts`, `xoAdmin.ts`, `app/api/cron/*` | `app/api/integrations/xo-store/lots/route.test.ts` | `P23_XO_STORE_READ_ONLY_INTEGRATION_BOUNDARY.md` |
-| 6 | Схема и RLS меняются только новой миграцией `supabase/migrations/NNNN_*.sql`, старые не редактировать | `supabase/migrations/` | нет | уточнить: разбор инцидента не найден |
+| 5 | Интеграции и cron закрыты, если секрет не задан (fail-closed, 401 / `admin_unavailable`) | `lib/integrations/xoStoreAuth.ts`, `xoAdmin.ts`, `app/api/cron/*` | `app/api/integrations/xo-store/lots/route.test.ts` | `docs/reports/P23_XO_STORE_READ_ONLY_INTEGRATION_BOUNDARY.md` |
+| 6 | Схема и RLS меняются только новой миграцией `supabase/migrations/NNNN_*.sql`, старые не редактировать | `supabase/migrations/` | нет | профилактическое правило, инцидента не было |
 | 7 | `NEXT_PUBLIC_*` вшиваются при сборке: после их смены нужна пересборка | `deploy/timeweb/rebuild-public-env.sh` | `deploy/timeweb/check-browser-network.cjs` (вручную) | `DOMAIN_CHANGELOG.md`, раздел «Next.js public environment rebuild» |
 
 ## Анти-паттерны этого проекта
@@ -129,26 +129,27 @@ CI с тестами нет (см. ниже), поэтому «CI-проверк
 
 | Workflow | Что делает | Блокирует merge? |
 |---|---|---|
-| `.github/workflows/events-cron.yml` | ежедневно 03:00 UTC: POST в `/api/cron/events-archive`, `events-aggregate`, `cafe-menu-expire` с `EVENTS_CRON_SECRET`; секреты репо `APP_URL`, `EVENTS_CRON_SECRET` | нет (это планировщик) |
-
-Workflow с lint/тестами/сборкой на PR **нет**.
+| `.github/workflows/ci.yml` | job `check`: `npm ci` → тесты → `tsc --noEmit` → lint (baseline) → `next build` с подставными `NEXT_PUBLIC_*`; на каждом PR и push в `main` / `fix/pre-pilot-shortlist`; правки только `*.md`/`docs/**` пропускаются | да — required check `check` в защите веток `main` и `fix/pre-pilot-shortlist` |
+| `.github/workflows/events-cron.yml` | ежедневно 03:00 UTC: POST в `/api/cron/events-archive`, `events-aggregate`, `cafe-menu-expire` с `EVENTS_CRON_SECRET`; секреты репо `APP_URL`, `EVENTS_CRON_SECRET` | нет (планировщик). **Падает каждый запуск**: в репо не задан `APP_URL`, на сервере — `EVENTS_CRON_SECRET` |
 
 ## Деплой
 
-- Прод сейчас — свой сервер Timeweb: `https://147.45.102.186`, приложение в
+- Прод — свой сервер Timeweb: `https://147.45.102.186`, приложение в
   `/opt/coffee-passport/app`, systemd-юнит `coffee-passport`, перед ним Nginx;
   Supabase развёрнут сам (docker compose, Envoy), публичный API — `/supabase`.
-- Обновление: `deploy/timeweb/update-app.sh` (на сервере: `git pull --ff-only
-  origin fix/pre-pilot-shortlist` → `npm run build` → restart → curl ключевых страниц).
-- Проверка здоровья: отдельного `/health` в приложении нет. Сейчас:
-  `curl -sI https://147.45.102.186/` и `…/supabase/auth/v1/health`;
-  полный набор — `deploy/timeweb/check-server.sh`.
-- Логи: `journalctl -u coffee-passport -n 200` (юнит из скриптов; команда не
-  проверена), журналы операций — `/opt/coffee-passport/logs/`.
+  Автодеплоя нет: push сам ничего не выкатывает.
+- **Временно** прод обновляется с ветки `fix/pre-pilot-shortlist`, не с `main`.
+  Сервер не переключать без плана: `docs/DEPLOY_MAIN_SWITCH.md`.
+- Обновление: по SSH `root@147.45.102.186` запустить `deploy/timeweb/update-app.sh`
+  (`git pull --ff-only` → `npm run build` → restart → curl страниц и `/api/health`).
+- Проверка здоровья: `curl -sS https://147.45.102.186/api/health` → `200
+  {"status":"ok","db":"ok",…}`, при недоступной БД — `503`. Полный набор — `deploy/timeweb/check-server.sh`.
+- Логи (проверено): `ssh root@147.45.102.186 "journalctl -u coffee-passport -n 200 --no-pager | grep -v -iE 'token=|secret=|key=|password=|bearer|apikey'"`.
+  Шум: `Failed to parse body as FormData` / `Failed to find Server Action "x"` — POST от сканеров (в Nginx пути `/wp-admin/…`), не регрессия.
+  Журналы операций — `/opt/coffee-passport/logs/`.
 - Перед изменениями на сервере — бэкап в `/opt/coffee-passport/backups/<дата>` (так делают все скрипты).
 - Домен `coffeepassport.ru` ещё не активирован (ждёт смены DNS A-записи);
   активация — `deploy/timeweb/activate-domain.sh`.
-- `render.yaml` (Render, ветка `main`, autoDeploy) остался от прежнего хостинга.
 - История и план переезда: `deploy/timeweb/DOMAIN_CHANGELOG.md`, `docs/audits/TIMEWEB_MIGRATION_PLAN.md`.
 
 ## Где что лежит
@@ -156,4 +157,4 @@ Workflow с lint/тестами/сборкой на PR **нет**.
 - Клиенты Supabase: `lib/supabase/server.ts` (сессия), `browserClient.ts`, `publicServerClient.ts`, `adminClient.ts` (service role).
 - Проверки доступа: `lib/auth/*`. Хранилища данных: `lib/data/*`, `lib/journey/*`.
 - Общие компоненты UI: `components/shared/`, по ролям — `components/{cafe,roaster,barista,admin,…}`.
-- Бэклог: `PRODUCT_BACKLOG.md`. Аудиты: `docs/audits/`, а также много отчётов в корне репо.
+- Бэклог: `PRODUCT_BACKLOG.md`. Аудиты: `docs/audits/`. Отчёты по задачам — `docs/reports/` (новые класть туда, не в корень).

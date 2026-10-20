@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { hasSeenTastePhilosophy, markSeenTastePhilosophy } from '@/lib/journey/tastePhilosophyFlag';
 
-// Contextual Taste (COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md, §16) — the
+// Contextual Taste (docs/reports/COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md, §16) — the
 // product's core philosophy statement, shown at full length exactly once
 // per browser, at the single highest-leverage moment: right after a
 // guest's first-ever reveal, where "did I get it right" would otherwise be

@@ -75,7 +75,7 @@ export function purgeCustomCoffeeCuppingsForUser(userId: string): void {
   write(read().filter((cupping) => cupping.userId !== userId));
 }
 
-// ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — see
+// docs/reports/ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — see
 // kitchenRecipesStore's claimKitchenRecipesForUser for the general shape.
 // A cupping's own userId is independent of its parent UserCustomCoffee's
 // userId (no derived/joined field), so it needs this same direct re-tag

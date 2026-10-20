@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// COFFEE_GREEN_LOT_EDIT_PATHS_IMPLEMENTATION.md — closes the "no edit path
+// docs/reports/COFFEE_GREEN_LOT_EDIT_PATHS_IMPLEMENTATION.md — closes the "no edit path
 // exists for Coffee/Green Lot, for anyone" gap
-// (COFFEE_GREEN_LOT_OWNERSHIP_AUDIT.md / COFFEE_PASSPORT_END_TO_END_ARCHITECTURE_AUDIT.md
+// (docs/reports/COFFEE_GREEN_LOT_OWNERSHIP_AUDIT.md / docs/reports/COFFEE_PASSPORT_END_TO_END_ARCHITECTURE_AUDIT.md
 // findings #2/#3). These tests cover updateCoffee()/updateGreenLot()'s own
 // write shape directly — RLS itself (the actual owner-restriction
 // boundary) is not something a mocked unit test can exercise; that's

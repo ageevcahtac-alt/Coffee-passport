@@ -21,7 +21,7 @@ export function RoastCurveChart({
   points: RoastCurvePoint[];
   // Optional — a real logged event (RoastingTab) always has these; a
   // declared target curve (RoastIntentCard) has none of them as columns at
-  // all (see REFERENCE_ROAST_PROFILE_IMPLEMENTATION.md), so this chart
+  // all (see docs/reports/REFERENCE_ROAST_PROFILE_IMPLEMENTATION.md), so this chart
   // simply omits the two endpoint dots / DTR shading when they're absent,
   // rather than a caller inventing values the data doesn't have.
   chargeTemp?: number;

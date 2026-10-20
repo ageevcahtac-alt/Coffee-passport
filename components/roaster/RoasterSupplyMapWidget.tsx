@@ -15,7 +15,7 @@ import type { CoffeeShop, Lot } from '@/lib/types/coffee';
 //
 // The Supabase read itself, though, is ONE bulk call for every shop at
 // once (syncCafeMenuEntriesForLots), not one per shop — see
-// COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md: this used to be a real
+// docs/reports/COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md: this used to be a real
 // N+1 (one round trip per coffee shop in the entire system on every
 // roaster dashboard load).
 export function RoasterSupplyMapWidget({ myLots }: { myLots: Lot[] }) {

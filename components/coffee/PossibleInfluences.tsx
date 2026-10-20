@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-// Contextual Taste (COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md, §11/§13) —
+// Contextual Taste (docs/reports/COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md, §11/§13) —
 // "known vs. possible," made structural, not just a phrasing choice. This
 // component is deliberately generic and static: it never receives or
 // infers a specific cause for a specific guest's specific difference,

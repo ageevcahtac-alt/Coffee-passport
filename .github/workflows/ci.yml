@@ -1,0 +1,42 @@
+name: CI
+
+# Merge gate for every PR: tests, typecheck, lint (frozen baseline, see
+# scripts/lint-baseline.mjs) and a production build. Also runs on pushes to
+# main and to the branch production currently deploys from
+# (fix/pre-pilot-shortlist, see CLAUDE.md "Деплой"). Docs-only changes skip it.
+on:
+  pull_request:
+    paths-ignore: ['**.md', 'docs/**']
+  push:
+    branches: [main, fix/pre-pilot-shortlist]
+    paths-ignore: ['**.md', 'docs/**']
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Build-time placeholders only: no real project or key is reachable
+      # from CI, and none is needed to compile.
+      NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # same major as the Timeweb server
+          cache: npm
+      - run: npm ci
+      - name: Tests
+        run: npm test
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Lint (no new findings over eslint-baseline.json)
+        run: npm run lint
+      - name: Build
+        run: npm run build

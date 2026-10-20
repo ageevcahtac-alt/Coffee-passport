@@ -4,7 +4,7 @@ import { RoastCurveChart } from './RoastCurveChart';
 // "Задумано обжарщиком" — the roaster's declared target approach for this
 // Lot, distinct from RoastProfileSummaryCard/RoastingTab below it on the
 // Passport (both fed by the most recent actual roast — see
-// PUBLIC_ROAST_INTENT_VS_FACT.md). A new, minimal, purpose-built card
+// docs/reports/PUBLIC_ROAST_INTENT_VS_FACT.md). A new, minimal, purpose-built card
 // rather than a RoastProfileSummaryCard rewrite: that card's own
 // TargetCurve sub-component draws an illustrative curve from two
 // temperature numbers (chargeTemp/dropTemp) — fields the declared-target

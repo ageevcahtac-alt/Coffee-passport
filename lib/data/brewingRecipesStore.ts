@@ -254,7 +254,7 @@ export function purgeEnthusiastRecipesForUser(userId: string): void {
   write(read().filter((recipe) => !(recipe.authorType === 'enthusiast' && recipe.authorId === userId)));
 }
 
-// ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — an anonymous
+// docs/reports/ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — an anonymous
 // guest's own recipes are real per-account content in intent (the same
 // "Мои рецепты" history claimAnonymousTastings already preserves), but
 // `owner_user_id` is a uuid FK to auth.users and RLS requires

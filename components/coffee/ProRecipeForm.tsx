@@ -166,7 +166,7 @@ export function ProRecipeForm({
     !isBarista || isEditing || !form.brewingMethodId || canCreateDraft(allRecipes, 'barista', authorId, form.brewingMethodId);
   const canSave = Boolean(form.brewingMethodId && form.doseG && form.yieldG) && draftSlotAvailable;
 
-  // Production readiness hardening (COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
+  // Production readiness hardening (docs/reports/COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
   // onSave is a plain, synchronous, non-deduplicated insert (addBrewingRecipe
   // generates a fresh id per call) — a double-click on submit before React
   // re-renders/disables the button used to create two distinct recipe rows

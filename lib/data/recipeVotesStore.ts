@@ -94,7 +94,7 @@ export function purgeVotesForUser(userId: string): void {
   write(read().filter((vote) => vote.userId !== userId));
 }
 
-// ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — no backend
+// docs/reports/ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — no backend
 // table, so this is a local re-tag like the other Coffee Kitchen stores,
 // but castVote() enforces "at most one vote per (recipeId, userId)" as an
 // invariant, which a naive re-tag could violate: if this account already

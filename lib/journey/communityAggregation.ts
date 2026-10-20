@@ -1,7 +1,7 @@
 import { BREWING_METHODS, SENSORY_TAGS, type SensoryTagId } from '@/lib/types/coffee';
 import type { CommunityTasting } from './store';
 
-// Contextual Taste (COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md, §9/§12) — "как
+// Contextual Taste (docs/reports/COFFEE_PASSPORT_CONTEXTUAL_TASTE_UX.md, §9/§12) — "как
 // его чувствовали другие" only tells a real story when there's enough real
 // data behind it. These thresholds are deliberately conservative: if a lot
 // only has a couple of opted-in community tastings, showing "most common

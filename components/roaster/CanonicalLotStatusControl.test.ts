@@ -7,7 +7,7 @@ import type { CanonicalLot } from '@/lib/data/canonicalLotStore';
 // never be allowed to go live, since a 0.0 Q-Score renders as the
 // prominent visual centerpiece of the guest-facing Passport, not a
 // graceful empty state. This had zero test coverage
-// (COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md).
+// (docs/reports/COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md).
 function makeLot(overrides: Partial<CanonicalLot> = {}): CanonicalLot {
   return {
     id: 'lot-uuid-1',

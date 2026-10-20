@@ -26,7 +26,7 @@ export interface CoffeeFormValues {
   harvestYear: string;
 }
 
-// COFFEE_GREEN_LOT_EDIT_PATHS_IMPLEMENTATION.md — the same 8-field Coffee
+// docs/reports/COFFEE_GREEN_LOT_EDIT_PATHS_IMPLEMENTATION.md — the same 8-field Coffee
 // form, shared between creation (app/dashboard/roaster/new/page.tsx,
 // blank/no initialCoffee) and editing (components/roaster/CanonicalLotChain.tsx,
 // pre-filled from the real row). Only the submit button label and the

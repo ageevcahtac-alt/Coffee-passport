@@ -14,4 +14,7 @@ for path in / /auth/login /auth/reset-password /auth/callback /dashboard/cafe /d
  echo "$path"
  curl --max-time 15 -sI "https://147.45.102.186$path" | head -8
 done
+echo /api/health
+curl --fail-with-body --max-time 30 -sS https://147.45.102.186/api/health
+echo
 git rev-parse HEAD

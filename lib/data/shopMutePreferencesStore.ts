@@ -126,7 +126,7 @@ export function purgeMutedShopsForUser(userId: string): void {
   write(read().filter((record) => record.userId !== userId));
 }
 
-// ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — muteShop/
+// docs/reports/ANONYMOUS_DATA_CLAIM_AND_CAFE_RECIPE_IMPLEMENTATION.md — muteShop/
 // unmuteShop only ever attempt the Supabase write `if (isAuthenticated)`,
 // so an anonymous guest's mute list is local-only, tagged under this
 // device's anon id, and would otherwise become invisible the moment

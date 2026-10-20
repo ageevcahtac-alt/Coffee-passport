@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { hasRevealedTasting } from './blindTastingGate';
 import type { TastingRecord } from '@/lib/types/coffee';
 
-// Blind-tasting spoiler protection (COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md,
+// Blind-tasting spoiler protection (docs/reports/COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md,
 // C1): community tastings and the roaster's own reference profile must
 // never be fetched (not just never rendered) until this exact guest has
 // already saved a tasting for this exact (lot, shop) pair — otherwise the
