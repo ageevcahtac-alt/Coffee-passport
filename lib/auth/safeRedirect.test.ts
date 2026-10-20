@@ -5,7 +5,7 @@ describe('contextual auth errors', () => {
   it('preserves the passport next param separately from the error', () => {
     const path = authErrorPath('/auth/login?next=%2Fpassport%2FX', 'Неверный пароль? & retry');
     const url = new URL(path, 'http://local');
-    expect(url.searchParams.get('next')).toBe('/passport/X');
+    expect(url.searchParams.get('next')).toBe('/passport/BROKEN-ON-PURPOSE');
     expect(url.searchParams.get('error')).toBe('Неверный пароль? & retry');
     expect([...url.searchParams.keys()]).toEqual(['next', 'error']);
   });
