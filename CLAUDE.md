@@ -67,3 +67,93 @@ always defined by commits, never by calendar days).
 - Never hand-edit `.last_audit` to a hash that isn't real `HEAD` output
   from this repo; the whole mechanism depends on it being an exact,
   verifiable git commit hash.
+
+---
+
+## Стек и архитектура
+
+Next.js 14.2.35 (App Router, Server Actions, API routes, `middleware.ts`) +
+React 18 + TypeScript 5 + Tailwind CSS 4 (токены — `tailwind.config.ts`,
+`app/globals.css`, обоснование — `DESIGN.md`). Данные и вход — Supabase
+(`@supabase/supabase-js`, `@supabase/ssr`), доступ к таблицам регулирует RLS;
+ORM и прямого драйвера PostgreSQL нет. Схема — только SQL-миграции
+`supabase/migrations/NNNN_*.sql` (сейчас 0001…0032), сид —
+`supabase/seed/seed.sql`. Тесты — Vitest 2 (`vitest.config.ts`, алиас `@/*`).
+Node 20.11.0 (`render.yaml`). Пилотный обжарщик — XO Coffee; интеграции с
+XO COFFEE Admin (`lib/integrations/xoAdmin.ts`, исходящая) и XO Store
+(`app/api/integrations/xo-store/lots`, входящая, `lib/integrations/xoStoreAuth.ts`).
+
+Слои: страницы/роуты `app/**` → проверки доступа `lib/auth/*` → хранилища
+данных `lib/data/*`, `lib/journey/*`, `lib/orders/*` → клиенты Supabase
+`lib/supabase/*`. Автоматической проверки границ слоёв нет.
+
+README описывает раннюю стадию (magic link) и устарел — вход в коде по
+email/паролю (`app/auth/actions.ts`). Верить коду, а не README.
+
+## Команды (проверены 2026-10-20)
+
+| Что | Команда | Результат |
+|---|---|---|
+| Тесты | `npm test` (`vitest run`) | 33 файла, 281 тест — зелёные |
+| Типы | `npx tsc --noEmit` | без ошибок |
+| Сборка | `npm run build` | обязательна перед аудитом (см. выше) |
+| Lint | `npm run lint` | **не работает**: ESLint не настроен, `next lint` спрашивает конфиг интерактивно. Не считать линтер пройденным. |
+| Локально | `npm run dev` | `.env.local` по образцу `.env.example` |
+
+## Жёсткие гейты
+
+CI с тестами нет (см. ниже), поэтому «CI-проверка» сейчас — только локальный `npm test`.
+
+| # | Правило | Якорь в коде | Проверка | Почему (разбор) |
+|---|---|---|---|---|
+| 1 | `SUPABASE_SERVICE_ROLE_KEY` и `XO_*_SECRET` — только на сервере, никогда `NEXT_PUBLIC_`, без тихого отката на anon-ключ | `lib/supabase/adminClient.ts`, guard `window` в `lib/integrations/xoAdmin.ts` | нет | `COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md` |
+| 2 | `/admin` и `/api/admin/**` — за Basic Auth | `middleware.ts`, `lib/auth/requireAdminBasicAuth.ts` | `app/admin/layout.test.ts`, `app/api/admin/partner-requests/route.test.ts` | миграция `0028_partner_requests_lockdown.sql` |
+| 3 | API кабинетов берёт `cafe_id`/`roaster_id` из профиля сессии, а не из запроса | `lib/auth/requireStaffApi.ts`, `requireStaffRole.ts` | `app/api/cafe/roastery-orders/route.test.ts`, `app/api/roaster/production/route.test.ts` | комментарии в `lib/integrations/xoAdmin.ts` |
+| 4 | Любой `next=` в redirect — только через `safeNextPath`; callback редиректит на публичный хост, не на `Host` запроса | `lib/auth/safeRedirect.ts`, `app/auth/callback/route.ts` | `lib/auth/safeRedirect.test.ts`, `app/auth/callback/route.test.ts` | `deploy/timeweb/DOMAIN_CHANGELOG.md` (редирект на `https://localhost:3000`, фикс `856f42f`) |
+| 5 | Интеграции и cron закрыты, если секрет не задан (fail-closed, 401 / `admin_unavailable`) | `lib/integrations/xoStoreAuth.ts`, `xoAdmin.ts`, `app/api/cron/*` | `app/api/integrations/xo-store/lots/route.test.ts` | `P23_XO_STORE_READ_ONLY_INTEGRATION_BOUNDARY.md` |
+| 6 | Схема и RLS меняются только новой миграцией `supabase/migrations/NNNN_*.sql`, старые не редактировать | `supabase/migrations/` | нет | уточнить: разбор инцидента не найден |
+| 7 | `NEXT_PUBLIC_*` вшиваются при сборке: после их смены нужна пересборка | `deploy/timeweb/rebuild-public-env.sh` | `deploy/timeweb/check-browser-network.cjs` (вручную) | `DOMAIN_CHANGELOG.md`, раздел «Next.js public environment rebuild» |
+
+## Анти-паттерны этого проекта
+
+| Нельзя | Почему | Вместо |
+|---|---|---|
+| Читать `supabase/password coffee pasport/` | там секреты владельца (папка в `.gitignore`) | не открывать вообще |
+| `localhost` / внутренний Docker-хост в `NEXT_PUBLIC_SUPABASE_URL` | в браузере у пользователей не работает (`.env.example`) | публичный HTTPS-адрес `…/supabase` |
+| Считать, что шлюз Supabase — Kong | на сервере работает **Envoy** (`api-gw`) | см. `DOMAIN_CHANGELOG.md` |
+| Анонимный OpenAPI-корень как проверка доступности | Envoy его закрывает | `/supabase/auth/v1/health`, REST-запрос к `lots` |
+| `npm install` при деплое | в `package.json` Supabase-пакеты указаны как `latest` | `npm ci` по lockfile |
+| Деплой из грязного дерева на сервере | `update-app.sh` падает на `git status --porcelain` | коммит → push → `update-app.sh` |
+
+## CI
+
+| Workflow | Что делает | Блокирует merge? |
+|---|---|---|
+| `.github/workflows/events-cron.yml` | ежедневно 03:00 UTC: POST в `/api/cron/events-archive`, `events-aggregate`, `cafe-menu-expire` с `EVENTS_CRON_SECRET`; секреты репо `APP_URL`, `EVENTS_CRON_SECRET` | нет (это планировщик) |
+
+Workflow с lint/тестами/сборкой на PR **нет**.
+
+## Деплой
+
+- Прод сейчас — свой сервер Timeweb: `https://147.45.102.186`, приложение в
+  `/opt/coffee-passport/app`, systemd-юнит `coffee-passport`, перед ним Nginx;
+  Supabase развёрнут сам (docker compose, Envoy), публичный API — `/supabase`.
+- Обновление: `deploy/timeweb/update-app.sh` (на сервере: `git pull --ff-only
+  origin fix/pre-pilot-shortlist` → `npm run build` → restart → curl ключевых страниц).
+- Проверка здоровья: отдельного `/health` в приложении нет. Сейчас:
+  `curl -sI https://147.45.102.186/` и `…/supabase/auth/v1/health`;
+  полный набор — `deploy/timeweb/check-server.sh`.
+- Логи: `journalctl -u coffee-passport -n 200` (юнит из скриптов; команда не
+  проверена), журналы операций — `/opt/coffee-passport/logs/`.
+- Перед изменениями на сервере — бэкап в `/opt/coffee-passport/backups/<дата>` (так делают все скрипты).
+- Домен `coffeepassport.ru` ещё не активирован (ждёт смены DNS A-записи);
+  активация — `deploy/timeweb/activate-domain.sh`.
+- `render.yaml` (Render, ветка `main`, autoDeploy) остался от прежнего хостинга.
+- История и план переезда: `deploy/timeweb/DOMAIN_CHANGELOG.md`, `docs/audits/TIMEWEB_MIGRATION_PLAN.md`.
+
+## Где что лежит
+
+- Клиенты Supabase: `lib/supabase/server.ts` (сессия), `browserClient.ts`, `publicServerClient.ts`, `adminClient.ts` (service role).
+- Проверки доступа: `lib/auth/*`. Хранилища данных: `lib/data/*`, `lib/journey/*`.
+- Общие компоненты UI: `components/shared/`, по ролям — `components/{cafe,roaster,barista,admin,…}`.
+- Бэклог: `PRODUCT_BACKLOG.md`. Аудиты: `docs/audits/`, а также много отчётов в корне репо.
