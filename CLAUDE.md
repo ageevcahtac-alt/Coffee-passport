@@ -77,7 +77,7 @@ React 18 + TypeScript 5 + Tailwind CSS 4 (токены — `tailwind.config.ts`,
 `app/globals.css`, обоснование — `DESIGN.md`). Данные и вход — Supabase
 (`@supabase/supabase-js`, `@supabase/ssr`), доступ к таблицам регулирует RLS;
 ORM и прямого драйвера PostgreSQL нет. Схема — только SQL-миграции
-`supabase/migrations/NNNN_*.sql` (сейчас 0001…0032), сид —
+`supabase/migrations/NNNN_*.sql` (сейчас 0001…0033; на прод накатываются вручную через `docker exec supabase-db psql -U postgres`, таблицы учёта нет), сид —
 `supabase/seed/seed.sql`. Тесты — Vitest 2 (`vitest.config.ts`, алиас `@/*`).
 Node 22 (на сервере `v22.23.3`, в CI — 22). Пилотный обжарщик — XO Coffee; интеграции с
 XO COFFEE Admin (`lib/integrations/xoAdmin.ts`, исходящая) и XO Store
@@ -94,7 +94,7 @@ email/паролю (`app/auth/actions.ts`). Верить коду, а не READM
 
 | Что | Команда | Результат |
 |---|---|---|
-| Тесты | `npm test` (`vitest run`) | 35 файлов, 290 тестов — зелёные |
+| Тесты | `npm test` (`vitest run`) | 36 файлов, 293 теста — зелёные |
 | Типы | `npx tsc --noEmit` | без ошибок |
 | Сборка | `npm run build` | обязательна перед аудитом (см. выше) |
 | Lint | `npm run lint` | ESLint Strict (`next/core-web-vitals`, `.eslintrc.json`) через `scripts/lint-baseline.mjs`: 8 старых предупреждений заморожены в `eslint-baseline.json`, любая новая находка (и предупреждение тоже) — красный. Исправил старую → `npm run lint -- --update`. Добавлять записи в baseline руками нельзя. |
@@ -113,6 +113,7 @@ email/паролю (`app/auth/actions.ts`). Верить коду, а не READM
 | 5 | Интеграции и cron закрыты, если секрет не задан (fail-closed, 401 / `admin_unavailable`) | `lib/integrations/xoStoreAuth.ts`, `xoAdmin.ts`, `app/api/cron/*` | `app/api/integrations/xo-store/lots/route.test.ts` | `docs/reports/P23_XO_STORE_READ_ONLY_INTEGRATION_BOUNDARY.md` |
 | 6 | Схема и RLS меняются только новой миграцией `supabase/migrations/NNNN_*.sql`, старые не редактировать | `supabase/migrations/` | нет | профилактическое правило, инцидента не было |
 | 7 | `NEXT_PUBLIC_*` вшиваются при сборке: после их смены нужна пересборка | `deploy/timeweb/rebuild-public-env.sh` | `deploy/timeweb/check-browser-network.cjs` (вручную) | `DOMAIN_CHANGELOG.md`, раздел «Next.js public environment rebuild» |
+| 8 | Security definer RPC, которые зовёт cron, исполняет только `service_role`; никаких `grant execute … to anon, authenticated` | `supabase/migrations/0033_cron_rpc_service_role_only.sql` | `supabase/cronRpcGrants.test.ts` | 2026-10-20: анонимный ключ вызывал `/rpc/events_archive_expired` в обход секрета крона (HTTP 200) |
 
 ## Анти-паттерны этого проекта
 
