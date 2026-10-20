@@ -129,7 +129,7 @@ email/паролю (`app/auth/actions.ts`). Верить коду, а не READM
 
 | Workflow | Что делает | Блокирует merge? |
 |---|---|---|
-| `.github/workflows/ci.yml` | job `check`: `npm ci` → тесты → `tsc --noEmit` → lint (baseline) → `next build` с подставными `NEXT_PUBLIC_*`; на каждом PR и push в `main` / `fix/pre-pilot-shortlist` | да — required check `check` в защите веток `main` и `fix/pre-pilot-shortlist` |
+| `.github/workflows/ci.yml` | job `check`: `npm ci` → тесты → `tsc --noEmit` → lint (baseline) → `next build` с подставными `NEXT_PUBLIC_*`; на каждом PR и push в `main` / `fix/pre-pilot-shortlist` | должен: защита веток `main` и `fix/pre-pilot-shortlist` с required check `check` **ещё не включена** (GitHub → Settings → Branches) |
 | `.github/workflows/events-cron.yml` | ежедневно 03:00 UTC: POST в `/api/cron/events-archive`, `events-aggregate`, `cafe-menu-expire` с `EVENTS_CRON_SECRET`; секреты репо `APP_URL`, `EVENTS_CRON_SECRET` | нет (планировщик). **Падает каждый запуск**: в репо не задан `APP_URL`, на сервере — `EVENTS_CRON_SECRET` |
 
 ## Деплой
