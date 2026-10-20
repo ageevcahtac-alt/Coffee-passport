@@ -3,13 +3,13 @@ name: CI
 # Merge gate for every PR: tests, typecheck, lint (frozen baseline, see
 # scripts/lint-baseline.mjs) and a production build. Also runs on pushes to
 # main and to the branch production currently deploys from
-# (fix/pre-pilot-shortlist, see CLAUDE.md "Деплой"). Docs-only changes skip it.
+# (fix/pre-pilot-shortlist, see CLAUDE.md "Деплой"). No path filters: the
+# check is required by branch protection, and a skipped required check
+# would block docs-only PRs forever (public repo, Actions minutes are free).
 on:
   pull_request:
-    paths-ignore: ['**.md', 'docs/**']
   push:
     branches: [main, fix/pre-pilot-shortlist]
-    paths-ignore: ['**.md', 'docs/**']
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -26,8 +26,8 @@ jobs:
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
       NEXT_TELEMETRY_DISABLED: '1'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22 # same major as the Timeweb server
           cache: npm
