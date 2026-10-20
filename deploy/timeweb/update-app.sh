@@ -3,6 +3,7 @@ set -euo pipefail
 cd /opt/coffee-passport/app
 test -z "$(git status --porcelain)"
 git pull --ff-only origin fix/pre-pilot-shortlist
+npm ci --no-audit --no-fund
 npm run build
 systemctl restart coffee-passport
 for attempt in $(seq 1 20); do
