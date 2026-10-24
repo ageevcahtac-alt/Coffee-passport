@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { PILOT_STAFF_PASSWORD, PILOT_STAFF_ROLES, type PilotStaffRole } from '@/lib/auth/pilotStaff'
 import { authErrorPath, safeNextPath } from '@/lib/auth/safeRedirect'
+import type { ProfileRole } from '@/lib/types/database'
 
 export async function signInWithPassword(formData: FormData) {
   const supabase = await createClient()
@@ -17,7 +18,7 @@ export async function signInWithPassword(formData: FormData) {
   // bounces back to where the guest actually was, not always /auth/login.
   const errorRedirect = safeNextPath(String(formData.get('errorRedirect') || '/auth/login'))
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   })
@@ -26,8 +27,29 @@ export async function signInWithPassword(formData: FormData) {
     redirect(authErrorPath(errorRedirect, error.message))
   }
 
+  // The form's default landings ('/' from /auth/login, '/journey' from the
+  // homepage) are the enthusiast's diary. A staff account arriving with one
+  // of those goes to its own cabinet instead; an explicit `next` (QR
+  // passport, requireStaffRole's bounce back to a dashboard) still wins.
+  let destination = next
+  if ((next === '/' || next === '/journey') && data?.user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', data.user.id)
+      .maybeSingle()
+    destination = (profile && STAFF_DASHBOARD[profile.role as ProfileRole]) || next
+  }
+
   revalidatePath('/', 'layout')
-  redirect(next)
+  redirect(destination)
+}
+
+const STAFF_DASHBOARD: Partial<Record<ProfileRole, string>> = {
+  admin: '/dashboard/admin',
+  roaster_admin: '/dashboard/roaster',
+  cafe_admin: '/dashboard/cafe',
+  barista: '/dashboard/barista',
 }
 
 export async function signUpWithPassword(formData: FormData) {

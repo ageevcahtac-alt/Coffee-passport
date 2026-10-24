@@ -30,3 +30,6 @@ next-env.d.ts
 # agent runs: prompts, codex logs, reports (may echo env/output); health report
 /.agents/runs/
 /.agents/health/last.json
+
+# owner cabinet credentials (local only)
+/.secrets/
