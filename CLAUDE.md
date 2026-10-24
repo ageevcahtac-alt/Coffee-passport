@@ -134,6 +134,8 @@ email/паролю (`app/auth/actions.ts`). Верить коду, а не READM
 |---|---|---|
 | `.github/workflows/ci.yml` | job `check`: `npm ci` → тесты → `tsc --noEmit` → lint (baseline) → `next build` с подставными `NEXT_PUBLIC_*`; на каждом PR и push в `main` / `fix/pre-pilot-shortlist` | да: ruleset `protect-prod` на `main` и `fix/pre-pilot-shortlist` — required check `check`, запрет force push и удаления; PR не обязателен, но прямой push без зелёного `check` не пройдёт |
 | `.github/workflows/health.yml` (`site-health`) | каждый час, вручную и на PR с правкой проверки: `scripts/health/check.mjs` по `vars.PROD_URL` — маршруты и тексты из `.agents/health.config.json`, `/api/health` с `"status":"ok"`; при поломке (не на PR) открывает issue. Без `PROD_URL` — зелёный пропуск | нет |
+| `.github/workflows/deploy.yml` | push в `fix/pre-pilot-shortlist` и вручную: `update-app.sh` на сервере по SSH, сверка HEAD, ожидание `/api/health` `"status":"ok"` | нет (после merge); красный = прод не обновился или нездоров |
+| `.github/workflows/server-ops.yml` | только вручную, только чтение: логи (с фильтром секретов), `ss -tlnp`, `df -h`, контейнеры | нет |
 | `.github/workflows/events-cron.yml` | ежедневно 03:00 UTC: POST в `/api/cron/events-archive`, `events-aggregate`, `cafe-menu-expire` с `EVENTS_CRON_SECRET`; секреты репо `APP_URL`, `EVENTS_CRON_SECRET` | нет (планировщик). Работает с 2026-10-20. Секрет на сервере — `/opt/coffee-passport/secrets/events_cron_secret` и `.env.local`; в GitHub ставить через bash `gh secret set EVENTS_CRON_SECRET < файл`, не через `\|` из PowerShell 5.1 (дописывает перевод строки → 401 / битый URL) |
 
 ## Деплой
@@ -141,14 +143,19 @@ email/паролю (`app/auth/actions.ts`). Верить коду, а не READM
 - Прод — свой сервер Timeweb: `https://147.45.102.186`, приложение в
   `/opt/coffee-passport/app`, systemd-юнит `coffee-passport`, перед ним Nginx;
   Supabase развёрнут сам (docker compose, Envoy), публичный API — `/supabase`.
-  Автодеплоя нет: push сам ничего не выкатывает.
+  Выкатка — workflow `deploy` (после каждого push/merge в ветку прода и вручную).
 - **Временно** прод обновляется с ветки `fix/pre-pilot-shortlist`, не с `main`.
   Сервер не переключать без плана: `docs/DEPLOY_MAIN_SWITCH.md`.
-- Обновление: по SSH `root@147.45.102.186` запустить `deploy/timeweb/update-app.sh`
-  (`git pull --ff-only` → `npm ci` → `npm run build` → restart → curl страниц и `/api/health`).
+- **Сервер — только через GitHub Actions. Локальный `ssh` не использовать:** с компьютера владельца сервер
+  недоступен (весь трафик идёт через AmneziaVPN, 2026-10-24). Ключ — `secrets.DEPLOY_SSH_KEY` (ed25519,
+  `coffee-passport-deploy-gha`), отпечатки хоста — `secrets.DEPLOY_KNOWN_HOSTS`, проверка хоста включена.
+- Обновление: `gh workflow run deploy` (и автоматически на push в `fix/pre-pilot-shortlist`) — запускает на
+  сервере `deploy/timeweb/update-app.sh` (`git pull --ff-only` → `npm ci` → `npm run build` → restart → curl),
+  сверяет HEAD сервера с коммитом и ждёт `/api/health` с `"status":"ok"` до 5 минут, иначе красный.
 - Проверка здоровья: `curl -sS https://147.45.102.186/api/health` → `200
   {"status":"ok","db":"ok",…}`, при недоступной БД — `503`. Полный набор — `deploy/timeweb/check-server.sh`.
-- Логи (проверено): `ssh root@147.45.102.186 "journalctl -u coffee-passport -n 200 --no-pager | grep -v -iE 'token=|secret=|key=|password=|bearer|apikey'"`.
+- Логи и диагностика: `gh workflow run server-ops [-f lines=200]` — только чтение: хвост `journalctl -u coffee-passport`
+  с фильтром секретов, `ss -tlnp`, `df -h`, `docker ps -a`, HEAD приложения. Вывод — `gh run view <id> --log`.
   Шум: `Failed to parse body as FormData` / `Failed to find Server Action "x"` — POST от сканеров (в Nginx пути `/wp-admin/…`), не регрессия.
   Журналы операций — `/opt/coffee-passport/logs/`.
 - Перед изменениями на сервере — бэкап в `/opt/coffee-passport/backups/<дата>` (так делают все скрипты).
