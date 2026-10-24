@@ -28,6 +28,19 @@ async function login(page, email, password, from = '/auth/login') {
     page.waitForURL((url) => url.pathname !== from || url.searchParams.has('error'), { timeout: 30000 }),
     page.click('form button[type="submit"]'),
   ]);
+  return settle(page);
+}
+
+// Вход ведёт цепочкой редиректов (форма → кабинет → requireStaffRole → смена пароля): первый
+// сменившийся адрес — ещё не итог. Итог — адрес, на котором страница затихла.
+async function settle(page) {
+  let url = page.url();
+  for (let i = 0; i < 10; i++) {
+    await page.waitForLoadState('networkidle');
+    await page.waitForTimeout(500);
+    if (page.url() === url) break;
+    url = page.url();
+  }
   return new URL(page.url());
 }
 
@@ -81,7 +94,7 @@ async function step(browser, label, fn) {
           page.waitForURL((url) => url.pathname !== '/auth/change-password' || url.searchParams.has('error'), { timeout: 30000 }),
           page.getByRole('button', { name: 'Сохранить и войти' }).click(),
         ]);
-        const after = new URL(page.url());
+        const after = await settle(page);
         if (after.pathname !== '/dashboard/barista') throw new Error(`после смены пароля — ${after.pathname}`);
         pass('barista first login', 'временный пароль -> /auth/change-password -> свой пароль -> /dashboard/barista');
       });
