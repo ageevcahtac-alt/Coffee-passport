@@ -23,6 +23,7 @@
     { "path": "/dashboard/cafe", "mustContain": ["Войти или создать аккаунт"] },
     { "path": "/dashboard/roaster", "mustContain": ["Войти или создать аккаунт"] },
     { "path": "/dashboard/barista", "mustContain": ["Войти или создать аккаунт"] },
-    { "path": "/admin", "status": 401 }
+    { "path": "/admin", "status": 401 },
+    { "path": "/no-such-route-424242" }
   ]
 }
