@@ -35,7 +35,7 @@ async function tasteAndSave(page) {
   await page.getByRole('button', { name: 'Эспрессо', exact: true }).click();
   await page.getByRole('button', { name: 'Далее', exact: true }).click();
   await page.getByRole('heading', { name: 'Расскажите о чашке' }).waitFor();
-  await page.getByRole('button', { name: '4 из 5' }).first().click();
+  await page.getByRole('radio', { name: '4 из 5' }).first().click();
   await page.getByRole('button', { name: 'Далее — работа бариста' }).click();
   await page.getByRole('heading', { name: 'Работа бариста' }).waitFor();
   await page.getByLabel('Не указан').check();
@@ -82,8 +82,10 @@ const scenarios = [
       // Свой контекст на оценку: слепой путь не должен унаследовать отметку «профиль открыт».
       const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
       const page = await context.newPage();
+      let loggedIn = false;
       try {
         await login(page);
+        loggedIn = true;
         const status = await scenario.run(page);
         const ok = status === 201;
         if (!ok) failed++;
@@ -91,7 +93,8 @@ const scenarios = [
       } catch (error) {
         failed++;
         console.log(`FAIL оценка ${scenario.label}: ${error.message.split('\n')[0]} (на ${new URL(page.url()).pathname})`);
-        if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/fail-${index + 1}.png`, fullPage: true });
+        // До входа на экране форма с email — такой кадр в артефакт не кладём.
+        if (loggedIn && process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/fail-${index + 1}.png`, fullPage: true });
       }
       await context.close();
     }
