@@ -51,6 +51,16 @@ export async function changeTemporaryPassword(formData: FormData) {
   }
   if (failed) backWithError(next, 'Не удалось сохранить пароль. Выберите другой пароль и попробуйте ещё раз.')
 
+  // GoTrue ends the account's sessions on an admin password change — sign in
+  // again with the new password so the barista lands in the cabinet, not on
+  // the login form.
+  const { error: signInError } = await supabase.auth.signInWithPassword({ email: user.email ?? '', password })
+  if (signInError) {
+    redirect(
+      `/auth/login?next=${encodeURIComponent(next)}&error=${encodeURIComponent('Пароль сохранён. Войдите с новым паролем.')}`
+    )
+  }
+
   revalidatePath('/', 'layout')
   redirect(next)
 }

@@ -4,11 +4,14 @@ import { changeTemporaryPassword } from './actions';
 const mocks = vi.hoisted(() => ({
   user: vi.fn(),
   updateUserById: vi.fn(),
+  signIn: vi.fn(),
   redirect: vi.fn(),
   revalidate: vi.fn(),
 }));
 vi.mock('@/lib/supabase/server', () => ({
-  createClient: () => ({ auth: { getUser: async () => ({ data: { user: mocks.user() } }) } }),
+  createClient: () => ({
+    auth: { getUser: async () => ({ data: { user: mocks.user() } }), signInWithPassword: mocks.signIn },
+  }),
 }));
 vi.mock('@/lib/supabase/adminClient', () => ({
   createAdminSupabaseClient: () => ({ auth: { admin: { updateUserById: mocks.updateUserById } } }),
@@ -30,8 +33,26 @@ describe('changeTemporaryPassword', () => {
       throw new Error(path);
     });
     mocks.updateUserById.mockReset().mockResolvedValue({ data: { user: {} }, error: null });
-    mocks.user.mockReset().mockReturnValue({ id: 'u1', app_metadata: { must_change_password: true } });
+    mocks.user.mockReset().mockReturnValue({ id: 'u1', email: 'anna@example.com', app_metadata: { must_change_password: true } });
+    mocks.signIn.mockReset().mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
     vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  // Prod run 40112929720: the admin password change ended the session and the
+  // barista landed on /auth/login instead of the cabinet.
+  it('signs the barista back in with the new password so the cabinet opens without a second login', async () => {
+    await expect(
+      changeTemporaryPassword(form({ password: NEW_PASSWORD, confirmation: NEW_PASSWORD, next: '/dashboard/barista' }))
+    ).rejects.toThrow('/dashboard/barista');
+    expect(mocks.signIn).toHaveBeenCalledWith({ email: 'anna@example.com', password: NEW_PASSWORD });
+    expect(mocks.updateUserById.mock.invocationCallOrder[0]).toBeLessThan(mocks.signIn.mock.invocationCallOrder[0]);
+  });
+
+  it('if the fresh sign-in fails, sends to login with an explanation instead of a silent bounce', async () => {
+    mocks.signIn.mockResolvedValue({ data: { user: null }, error: { message: 'x' } });
+    await expect(
+      changeTemporaryPassword(form({ password: NEW_PASSWORD, confirmation: NEW_PASSWORD, next: '/dashboard/barista' }))
+    ).rejects.toThrow(/^\/auth\/login\?next=%2Fdashboard%2Fbarista&error=/);
   });
 
   it('sets the new password and clears the flag in one admin call, then opens the cabinet', async () => {

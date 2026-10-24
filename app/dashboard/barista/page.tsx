@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { useLots } from '@/lib/data/useLots';
 import { useCafeMenuLotIds } from '@/lib/data/useCafeMenu';
-import { syncCafeMenuFromSupabase } from '@/lib/data/cafeMenuStore';
+import { syncBaristaDashboard } from '@/lib/data/baristaDashboardSync';
 import { useBrewingRecipes } from '@/lib/data/useBrewingRecipes';
 import { addRecipeAsDraft, publishRecipe, updateBrewingRecipe, deleteBrewingRecipe } from '@/lib/data/brewingRecipesStore';
 import { useBaristaProfiles } from '@/lib/data/useBaristaProfiles';
@@ -23,7 +23,7 @@ export default function BaristaDashboardPage() {
   const barista = useBaristaProfiles().find((candidate) => candidate.id === baristaId);
   const shop = cafeId ? getCoffeeShopById(cafeId) : undefined;
   useEffect(() => {
-    void syncCafeMenuFromSupabase(cafeId ?? '');
+    void syncBaristaDashboard(cafeId ?? '');
   }, [cafeId]);
   const lots = useLots();
   const menuLotIds = useCafeMenuLotIds(cafeId ?? '');
