@@ -1,0 +1,11 @@
+name: keyscan-temp
+on: { pull_request: { paths: [.github/workflows/keyscan-temp.yml] } }
+permissions: { contents: read }
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          ssh-keyscan -T 20 -t ed25519,ecdsa,rsa 147.45.102.186 2>/dev/null | sort > kh
+          echo "=== known_hosts"; cat kh
+          echo "=== fingerprints"; ssh-keygen -lf kh
