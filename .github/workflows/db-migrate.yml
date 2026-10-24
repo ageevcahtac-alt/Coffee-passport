@@ -1,0 +1,82 @@
+name: db-migrate
+on:
+  workflow_dispatch:
+    inputs:
+      migration:
+        description: "Migration filename, e.g. 0034_checkins_profile_seen_before_tasting.sql"
+        required: true
+        type: string
+      verify_table:
+        description: "Optional public table to verify (requires verify_column)"
+        required: false
+        type: string
+      verify_column:
+        description: "Optional column to verify (requires verify_table)"
+        required: false
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: db-migrate
+  cancel-in-progress: false
+jobs:
+  migrate:
+    if: github.ref == 'refs/heads/fix/pre-pilot-shortlist' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MIGRATION: ${{ inputs.migration }}
+      VERIFY_TABLE: ${{ inputs.verify_table }}
+      VERIFY_COLUMN: ${{ inputs.verify_column }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: validate input
+        id: validate
+        shell: bash
+        run: |
+          [[ "$MIGRATION" =~ ^[0-9]{4}_[a-z0-9_]+\.sql$ ]] || { echo '::error::Invalid migration filename'; exit 1; }
+          [ -f "supabase/migrations/$MIGRATION" ] || { echo '::error::Migration file not found'; exit 1; }
+          if [[ -n "$VERIFY_TABLE" || -n "$VERIFY_COLUMN" ]]; then
+            [[ "$VERIFY_TABLE" =~ ^[a-z_][a-z0-9_]*$ && "$VERIFY_COLUMN" =~ ^[a-z_][a-z0-9_]*$ ]] || { echo '::error::Provide both valid verify_table and verify_column identifiers'; exit 1; }
+          fi
+      - uses: ./.github/actions/ssh-setup
+        id: ssh
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      - name: backup
+        shell: bash
+        run: |
+          ssh prod "bash -s -- '${MIGRATION:0:4}'" <<'REMOTE'
+          set -euo pipefail
+          umask 077
+          mkdir -p /opt/coffee-passport/backups /opt/coffee-passport/logs
+          backup="/opt/coffee-passport/backups/$(date -u +%Y%m%dT%H%M%S%NZ)-db-before-$1.dump"
+          # Database diagnostics can contain private data; keep them on the server.
+          docker exec supabase-db pg_dump -U postgres -d postgres -Fc > "$backup" 2> "$backup.stderr" || { echo 'Backup failed; inspect private server diagnostics'; exit 1; }
+          [ -s "$backup" ] || { echo 'Backup is empty'; exit 1; }
+          printf '%s %s bytes\n' "$backup" "$(stat -c %s "$backup")"
+          REMOTE
+      - name: apply
+        shell: bash
+        run: |
+          # Never expose SQL errors, notices or returned data in public Actions logs.
+          ssh prod "umask 077; docker exec -i supabase-db psql -U postgres -d postgres -v ON_ERROR_STOP=1 -1 -X -q > /opt/coffee-passport/logs/db-migrate-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.private.log 2>&1" < "supabase/migrations/$MIGRATION" || { echo '::error::Migration failed; inspect private server diagnostics'; exit 1; }
+      - name: schema
+        if: env.VERIFY_TABLE != '' && env.VERIFY_COLUMN != ''
+        shell: bash
+        run: |
+          ssh prod "bash -s -- '$VERIFY_TABLE' '$VERIFY_COLUMN' '$GITHUB_RUN_ID' '$GITHUB_RUN_ATTEMPT'" <<'REMOTE'
+          set -euo pipefail
+          umask 077
+          diagnostics="/opt/coffee-passport/logs/db-migrate-$3-$4.private.log"
+          docker exec supabase-db psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -P pager=off -c "\d public.$1" 2>> "$diagnostics" || { echo 'Schema inspection failed; inspect private server diagnostics'; exit 1; }
+          count=$(docker exec supabase-db psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -tA -c "select count(*) from information_schema.columns where table_schema='public' and table_name='$1' and column_name='$2'" 2>> "$diagnostics") || { echo 'Column verification failed; inspect private server diagnostics'; exit 1; }
+          [[ "$count" == '1' ]] || { echo 'Expected column not found'; exit 1; }
+          REMOTE
+      - name: journal
+        if: always() && steps.validate.outcome == 'success' && steps.ssh.outcome == 'success'
+        env:
+          RESULT: ${{ job.status }}
+        run: |
+          ssh prod "umask 077; mkdir -p /opt/coffee-passport/logs; printf '%s %s %s %s\n' \"\$(date -u +%Y-%m-%dT%H:%M:%SZ)\" '$MIGRATION' '$GITHUB_SHA' '$RESULT' >> /opt/coffee-passport/logs/db-migrate.log"
