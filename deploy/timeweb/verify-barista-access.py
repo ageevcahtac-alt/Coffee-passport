@@ -112,7 +112,14 @@ def others_snapshot(cafe_id, guest_id):
     shop = quote(cafe_id)
     snapshot = {}
     for table, columns in SNAPSHOT_COLUMNS.items():
-        _, rows = call('GET', f'/rest/v1/{table}?select={columns}&shop_id=eq.{shop}&guest_id=neq.{guest_id}')
+        rows, offset = [], 0
+        while True:  # постранично и по id: лимит строк PostgREST не обрежет снимок молча
+            _, page = call('GET', f'/rest/v1/{table}?select={columns}&shop_id=eq.{shop}&guest_id=neq.{guest_id}'
+                                  f'&order=id&limit=1000&offset={offset}')
+            rows += page
+            if len(page) < 1000:
+                break
+            offset += 1000
         snapshot[table] = {row['id']: json.dumps(row, sort_keys=True) for row in rows}
     return snapshot
 
@@ -120,7 +127,13 @@ def others_snapshot(cafe_id, guest_id):
 def compare_others(before, now):
     # Строки, которые были до прогона, не изменились и не пропали. Новые строки — это настоящие
     # продажи и списания, прошедшие во время прогона: их не трогаем и не считаем сбоем.
-    changed = {table: sum(1 for row_id, mark in rows.items() if now[table].get(row_id) != mark)
+    # Гость с новой реальной операцией за время прогона законно меняет свой абонемент и статус — его строки
+    # не считаются сбоем. Пропавшая строка — сбой всегда.
+    new_tx = set(now['loyalty_transactions']) - set(before['loyalty_transactions'])
+    active = {json.loads(now['loyalty_transactions'][tx_id])['guest_id'] for tx_id in new_tx}
+    changed = {table: sum(1 for row_id, mark in rows.items()
+                          if row_id not in now[table]
+                          or (now[table][row_id] != mark and json.loads(mark)['guest_id'] not in active))
                for table, rows in before.items()}
     added = {table: len(set(now[table]) - set(rows)) for table, rows in before.items()}
     sizes = {table: len(rows) for table, rows in before.items()}
