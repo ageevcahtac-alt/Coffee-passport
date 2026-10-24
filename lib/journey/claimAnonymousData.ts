@@ -1,6 +1,7 @@
 'use client';
 
 import { claimAnonymousTastings } from '@/lib/journey/store';
+import { claimShopLotsForUser } from '@/lib/journey/shopLotsStore';
 import { claimEnthusiastRecipesForUser } from '@/lib/data/brewingRecipesStore';
 import { claimEquipmentForUser } from '@/lib/data/equipmentStore';
 import { claimKitchenRecipesForUser } from '@/lib/data/kitchenRecipesStore';
@@ -45,6 +46,8 @@ import { claimNotificationPreferenceForUser } from '@/lib/data/notificationPrefe
 // already correct; it just hasn't reached another device yet," never data
 // loss.
 export async function claimAnonymousUserData(anonUserId: string, realUserId: string): Promise<void> {
+  // Local-only and synchronous — the deferred-cupping list (journey «Не попробован»).
+  claimShopLotsForUser(anonUserId, realUserId);
   await Promise.allSettled([
     claimAnonymousTastings(anonUserId, realUserId),
     claimEnthusiastRecipesForUser(anonUserId, realUserId),

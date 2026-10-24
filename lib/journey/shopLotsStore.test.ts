@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TastingRecord } from '@/lib/types/coffee';
-import { getShopLotIds, saveShopLot, untastedShopLotIds } from './shopLotsStore';
+import { claimShopLotsForUser, getShopLotIds, saveShopLot, untastedShopLotIds } from './shopLotsStore';
 import {
   parsePassportEntry,
   resolvePassportView,
@@ -52,6 +52,20 @@ describe('shopLotsStore', () => {
     saveShopLot('user-a', 'lot-2');
     const records = [tasting('lot-1', 'user-a'), tasting('lot-2', 'user-b')];
     expect(untastedShopLotIds('user-a', records)).toEqual(['lot-2']);
+  });
+
+  it('moves anonymous store lots to the account on sign-in, without duplicates', () => {
+    saveShopLot('anon', 'lot-1');
+    saveShopLot('anon', 'lot-2');
+    saveShopLot('user-a', 'lot-2');
+    claimShopLotsForUser('anon', 'user-a');
+    expect(getShopLotIds('user-a').sort()).toEqual(['lot-1', 'lot-2']);
+    expect(getShopLotIds('anon')).toEqual([]);
+  });
+
+  it('claimAnonymousUserData claims store lots too', () => {
+    const claim = fs.readFileSync(path.join(__dirname, 'claimAnonymousData.ts'), 'utf8');
+    expect(claim).toMatch(/claimShopLotsForUser\(anonUserId, realUserId\)/);
   });
 
   it('survives broken storage', () => {

@@ -33,6 +33,25 @@ export function saveShopLot(userId: string, lotId: string): void {
   }
 }
 
+// Sign-in on this device (lib/journey/claimAnonymousData.ts): the guest's
+// anonymous store lots move to the account, an already-saved lot stays once.
+export function claimShopLotsForUser(anonUserId: string, realUserId: string): void {
+  if (!anonUserId || !realUserId || anonUserId === realUserId) return;
+  try {
+    const entries = read();
+    const owned = new Set(entries.filter((entry) => entry.userId === realUserId).map((entry) => entry.lotId));
+    const next = entries.flatMap((entry) => {
+      if (entry.userId !== anonUserId) return [entry];
+      if (owned.has(entry.lotId)) return [];
+      owned.add(entry.lotId);
+      return [{ ...entry, userId: realUserId }];
+    });
+    window.localStorage.setItem(KEY, JSON.stringify(next));
+  } catch {
+    // Storage unavailable — nothing to move.
+  }
+}
+
 // Newest first.
 export function getShopLotIds(userId: string): string[] {
   if (!userId) return [];
