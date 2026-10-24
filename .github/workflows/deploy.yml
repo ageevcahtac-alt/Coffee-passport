@@ -20,29 +20,49 @@ jobs:
     env:
       PROD_URL: ${{ vars.PROD_URL }}
       HEALTH_EXPECT: '"status":"ok"'
-      SECRET_FILTER: 'token=|secret=|key=|password=|bearer|apikey'
+      PROD_BRANCH: fix/pre-pilot-shortlist
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: superseded?
+        id: fresh
+        run: |
+          # Сервер тянет вершину ветки прода. Если она ушла дальше этого push, выкатку сделает
+          # прогон нового push (deploy-prod сериализует) — этот пропускаем, без лишнего рестарта.
+          head=$(git ls-remote origin "refs/heads/$PROD_BRANCH" | cut -f1)
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$head" != "$GITHUB_SHA" ]; then
+            echo "::notice::ветка прода уже на $head, этот прогон ($GITHUB_SHA) пропущен"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: ./.github/actions/ssh-setup
+        if: steps.fresh.outputs.skip != 'true'
         with:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
       - name: update-app.sh on server
+        if: steps.fresh.outputs.skip != 'true'
         run: |
           set -o pipefail
-          ssh prod 'bash /opt/coffee-passport/app/deploy/timeweb/update-app.sh' 2>&1 | grep -v -iE "$SECRET_FILTER"
+          # Копия скрипта: update-app.sh делает git pull самого себя, а bash читает файл по ходу выполнения.
+          ssh prod 'f=$(mktemp) && cp /opt/coffee-passport/app/deploy/timeweb/update-app.sh "$f" && bash "$f"; rc=$?; rm -f "$f"; exit $rc' 2>&1 | node scripts/ops/redact.mjs
       - name: deployed commit
+        if: steps.fresh.outputs.skip != 'true'
         run: |
           deployed=$(ssh prod 'git -C /opt/coffee-passport/app rev-parse HEAD')
           echo "server HEAD: $deployed"
-          if [ "$GITHUB_REF" = "refs/heads/fix/pre-pilot-shortlist" ] && [ "$deployed" != "$GITHUB_SHA" ]; then
-            echo "::error::на сервере $deployed, ожидался $GITHUB_SHA"; exit 1
+          git fetch -q origin "$PROD_BRANCH"
+          # На сервере этот коммит или более новый с ветки прода (push во время выкатки).
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" "$deployed" 2>/dev/null && [ "$GITHUB_REF" = "refs/heads/$PROD_BRANCH" ]; then
+            echo "::error::на сервере $deployed, ожидался $GITHUB_SHA или новее"; exit 1
           fi
       - name: wait for /api/health
+        if: steps.fresh.outputs.skip != 'true'
         run: |
           [ -n "$PROD_URL" ] || { echo "::error::PROD_URL не задан"; exit 1; }
-          for i in $(seq 1 30); do
-            body=$(curl -sS --max-time 30 "$PROD_URL/api/health" || true)
+          end=$((SECONDS + 300)); i=0
+          while [ $SECONDS -lt $end ]; do
+            i=$((i + 1))
+            body=$(curl -sS --max-time 15 "$PROD_URL/api/health" 2>&1 || true)
             echo "try $i: $body"
             if printf '%s' "$body" | grep -qF "$HEALTH_EXPECT"; then echo "health ok"; exit 0; fi
             sleep 10

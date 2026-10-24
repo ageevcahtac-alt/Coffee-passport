@@ -16,7 +16,6 @@ jobs:
     timeout-minutes: 10
     env:
       LINES: ${{ inputs.lines }}
-      SECRET_FILTER: 'token=|secret=|key=|password=|bearer|apikey'
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/ssh-setup
@@ -29,7 +28,7 @@ jobs:
       - name: app logs
         run: |
           set -o pipefail
-          ssh prod "journalctl -u coffee-passport -n $LINES --no-pager" | grep -v -iE "$SECRET_FILTER"
+          ssh prod "journalctl -u coffee-passport -n $LINES --no-pager" | node scripts/ops/redact.mjs
       - name: listening ports
         run: ssh prod 'ss -tlnp'
       - name: disk
