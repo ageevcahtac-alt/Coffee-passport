@@ -21,6 +21,9 @@ import { CoffeeShopProfileCard } from '@/components/coffee/CoffeeShopProfileCard
 import { TastingRecordCard } from '@/components/coffee/TastingRecordCard';
 import { TastingDetailModal } from '@/components/coffee/TastingDetailModal';
 import { TastePassportCard } from '@/components/coffee/TastePassportCard';
+import { UntastedShopLots, type UntastedShopLot } from '@/components/coffee/UntastedShopLots';
+import { untastedShopLotIds } from '@/lib/journey/shopLotsStore';
+import { getRoasterById } from '@/lib/data/roasters';
 import type { TastingRecord } from '@/lib/types/coffee';
 
 export default function JourneyPage() {
@@ -98,6 +101,19 @@ export default function JourneyPage() {
   // localStorage-backed reads elsewhere in this app.
   if (!ready || !userId) return null;
 
+  // Opened via "Я в магазине", cupping deferred — see lib/journey/shopLotsStore.ts.
+  const untastedLots: UntastedShopLot[] = [];
+  for (const lotId of untastedShopLotIds(userId, records)) {
+    const lot = getMergedLotById(lotId);
+    if (lot) {
+      untastedLots.push({
+        lotId,
+        lotName: lot.name,
+        roasterName: getRoasterById(lot.roasterId)?.name ?? lot.roasterId,
+      });
+    }
+  }
+
   return (
     <main className="min-h-dvh flex flex-col px-6 py-16">
       <BarUpdatesPanel />
@@ -127,6 +143,13 @@ export default function JourneyPage() {
           📝 Мои каппинги
         </Link>
       </div>
+
+      {untastedLots.length > 0 && (
+        <div className="max-w-md mx-auto w-full mb-6">
+          <p className="section-label mb-4">Отложенный каппинг</p>
+          <UntastedShopLots lots={untastedLots} />
+        </div>
+      )}
 
       {records.length > 0 && (
         <div className="max-w-md mx-auto w-full mb-6">

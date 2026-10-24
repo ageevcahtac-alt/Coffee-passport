@@ -48,8 +48,9 @@ import { TasteHistoryPreview } from '@/components/coffee/TasteHistoryPreview';
 import type { LotStatus } from '@/lib/types/database';
 import { BREWING_METHODS, type Lot } from '@/lib/types/coffee';
 import { hasRevealedTasting } from './blindTastingGate';
-import { resolvePassportView, shouldMarkProfileSeen, type PassportEntry } from './passportView';
+import { parsePassportEntry, resolvePassportView, shouldMarkProfileSeen, type PassportEntry } from './passportView';
 import { markLotProfileSeen } from '@/lib/journey/profileSeenFlag';
+import { saveShopLot } from '@/lib/journey/shopLotsStore';
 
 // Phase 4.5.8 — Coffee is the identity/description of the coffee itself;
 // Canonical Lot is a specific release. The local Lot object's own
@@ -182,7 +183,8 @@ function LotPassportView({ params }: { params: { lotId: string } }) {
   // Entry path picked right after the scan — "Я в кофейне" (blind cupping,
   // the flow above) or "Я в магазине" (canonical lot straight away). Same
   // re-asked-per-visit component state as the shop pick; see passportView.ts.
-  const [entry, setEntry] = useState<PassportEntry | null>(null);
+  // The journey's "Пройти каппинг" preselects the blind path with ?entry=cafe.
+  const [entry, setEntry] = useState<PassportEntry | null>(() => parsePassportEntry(searchParams.get('entry')));
 
   // Community Layer (docs/reports/COMMUNITY_LAYER_PRODUCT_AUDIT.md) — anonymized, opt-in
   // shared tastings for this exact Lot, keyed by its public_id (the same id
@@ -295,11 +297,15 @@ function LotPassportView({ params }: { params: { lotId: string } }) {
   });
 
   // The store path shows the roaster's profile before any cupping — remember
-  // that so a later tasting of this lot is saved as profile_seen_before_tasting.
+  // that so a later tasting of this lot is saved as profile_seen_before_tasting,
+  // and keep the lot in the journey as "Не попробован" (deferred cupping).
   const resolvedLotId = lot?.id;
   useEffect(() => {
-    if (resolvedLotId && shouldMarkProfileSeen(view)) markLotProfileSeen(resolvedLotId);
-  }, [resolvedLotId, view]);
+    if (resolvedLotId && shouldMarkProfileSeen(view)) {
+      markLotProfileSeen(resolvedLotId);
+      saveShopLot(currentUserId, resolvedLotId);
+    }
+  }, [resolvedLotId, view, currentUserId]);
 
   // Warms the cafe-menu cache for LotRemovalCountdown below — nothing else
   // on this page reads it yet.

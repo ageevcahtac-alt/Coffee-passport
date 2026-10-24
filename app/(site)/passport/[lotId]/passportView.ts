@@ -14,6 +14,12 @@ import type { LotStatus } from '@/lib/types/database';
 //            is stamped profile_seen_before_tasting (see profileSeenFlag.ts).
 export type PassportEntry = 'cafe' | 'shop';
 
+// ?entry=cafe|shop preselects the path — the journey's "Пройти каппинг" for a
+// lot saved from the store path links straight into the blind one.
+export function parsePassportEntry(value: string | null): PassportEntry | null {
+  return value === 'cafe' || value === 'shop' ? value : null;
+}
+
 export type PassportView = 'preview' | 'choice' | 'lot-info' | 'location' | 'draft' | 'blind-lock' | 'revealed';
 
 export interface PassportViewInput {
