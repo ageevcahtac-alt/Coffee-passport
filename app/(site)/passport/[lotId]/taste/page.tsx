@@ -25,6 +25,7 @@ import { markJustRevealed } from '@/lib/journey/revealFlag';
 import { markPinJustActivated } from '@/lib/journey/mapFlag';
 import { consumePendingShop, markPendingShop } from '@/lib/journey/pendingShopFlag';
 import { consumePendingRoaster, markPendingRoaster } from '@/lib/journey/pendingRoasterFlag';
+import { hasSeenLotProfile } from '@/lib/journey/profileSeenFlag';
 import { getMergedLotById } from '@/lib/data/lotsStore';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { useCurrentUser } from '@/lib/auth/currentUser';
@@ -173,6 +174,9 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
         // Sharing is explicit opt-in only ("never automatic", same rule as
         // BrewingRecipe.isPublic); this form has no consent control.
         isPublic: false,
+        // Store path ("Я в магазине") opened the lot's profile before this
+        // cupping — see passportView.ts / profileSeenFlag.ts.
+        profileSeenBeforeTasting: hasSeenLotProfile(lot.id),
         ...pendingTasteValues,
       },
       userId
