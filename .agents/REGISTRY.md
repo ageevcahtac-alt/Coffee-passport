@@ -16,6 +16,7 @@
 |---|---|---|---|---|---|
 | 2026-10-24 | main (Claude) | codex | 20261024-agents-install: оркестрация, раннер, site-health | fix | 2 |
 | 2026-10-24 | main (Claude) | codex | 20261024-deploy-actions: deploy и server-ops через Actions, фильтр секретов | fix | 2 |
+| 2026-10-24 | main (Claude) | codex | 20261024-1430-owner-cabinets: вход staff в свой кабинет, учётки владельца в проде | fix | 2 (PR #9) + 1 (PR #10) |
 
 ## Замены
 | дата | агент | было → стало | причина |

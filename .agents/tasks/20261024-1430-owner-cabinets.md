@@ -25,3 +25,17 @@
 
 ## НЕ трогать
 `EnthusiastAuthForm.tsx`, регистрацию (`signUpWithPassword`), главную, `/admin` и Basic Auth, миграции.
+
+## Итог 20261024-1430-owner-cabinets
+Запланировано: 1–5 выше.
+Написал: Claude — `app/auth/actions.ts`, `app/auth/actions.test.ts`, `.gitignore`, `deploy/timeweb/provision-cabinets.py`, `.github/workflows/provision-cabinets.yml`, `scripts/ops/verify-cabinet-login.cjs`.
+Ревью: Codex, PR #9 — раундов 2/2, PR #10 — 1/2
+  принято (р1): cleanup обрывался на первой ошибке из-за `bash -e` → `set +e` + `|| rc=1` в `provision-cabinets.yml`
+  принято (р1): путь временного файла публиковался после `scp` → вывод пути до `scp`
+  свои находки: в проде `coffee_shops` пустая (inspect), `profiles.cafe_id` — текст без FK → PR #10: проверка кофейни по формату id с предупреждением
+Проверки: actions.test.ts — 4 новых теста красные до фикса, 13 passed после; tsc 0; lint ok; CI check success (PR #9, #10)
+  provision-cabinets inspect: run 40091315930 — roasters `roaster-north`, `roaster-xo`; coffee_shops []
+  provision-cabinets apply: run 40091681995 — 5× PASS (admin → /dashboard/admin, roaster → /dashboard/roaster, cafe → /dashboard/cafe, энтузиаст /auth/login → /, энтузиаст / → /journey, все HTTP 200); временный энтузиаст удалён; в логе 0 совпадений с паролями и email
+  секреты CABINET_* удалены; site-health run 40091802034 — `checked 79 urls, pages 18, fails 0`
+Merge: PR #9 (1f40d6a), PR #10 (42ec6ae) → `fix/pre-pilot-shortlist`, deploy success; `main` перемотан
+Результат: done
