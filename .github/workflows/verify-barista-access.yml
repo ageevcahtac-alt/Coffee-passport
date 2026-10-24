@@ -90,10 +90,10 @@ jobs:
           import json, os
           tmp = os.environ['RUNNER_TEMP']
           out = dict(line.split('=', 1) for line in open(f'{tmp}/prepare.out').read().splitlines()
-                     if line.split('=', 1)[0] in ('BARISTA_STATE', 'GUEST_ID', 'SUBSCRIPTION_ID', 'OTHERS'))
+                     if line.split('=', 1)[0] in ('BARISTA_STATE', 'GUEST_ID', 'SUBSCRIPTION_ID'))
           base = json.load(open(f'{tmp}/base.json'))
           base.update(barista_state=out['BARISTA_STATE'], guest_id=out['GUEST_ID'],
-                      subscription_id=out['SUBSCRIPTION_ID'], others=json.loads(out['OTHERS']))
+                      subscription_id=out['SUBSCRIPTION_ID'])
           base['guest']['id'] = out['GUEST_ID']
           json.dump(base, open(f'{tmp}/flow.json', 'w'))
           PY
@@ -136,7 +136,7 @@ jobs:
           remote="${{ steps.remote.outputs.path }}"
           if [ -n "$remote" ]; then
             ssh prod "python3 $remote purge" < "$RUNNER_TEMP/base.json" || rc=1
-            ssh prod "rm -f $remote" || rc=1
+            ssh prod "rm -f $remote $remote.others.json" || rc=1
           fi
           rm -f "$RUNNER_TEMP"/*.json "$RUNNER_TEMP"/*.out || rc=1
           exit $rc

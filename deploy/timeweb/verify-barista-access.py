@@ -15,7 +15,7 @@ Email и пароли приходят только JSON-ом на stdin и ни
              и чтение loyalty_transactions по shop_id, как lib/data/loyalty.ts).
              expect=absent: гостя и его строк нет нигде. В обоих — чужие строки как в снимке.
              stdin: cafe_id, barista{email}, guest{email}, cafe{email,password}, amount, guest_id,
-             subscription_id, others
+             subscription_id. Снимок чужих строк — файл <скрипт>.others.json от prepare.
   purge    — удалить временного гостя и все его строки лояльности (stdin: guest{email})
 """
 import json
@@ -27,6 +27,7 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 ENV_FILE = Path('/opt/coffee-passport/app/.env.local')
+SNAPSHOT_FILE = Path(sys.argv[0] + '.others.json')
 GUEST_EMAIL_RE = re.compile(r'barista-verify-guest-\d+@example\.com')
 NOMINAL = 1000
 LOYALTY_TABLES = ('loyalty_transactions', 'subscriptions', 'guest_shop_statuses')
@@ -99,17 +100,34 @@ def guest_email(payload):
     return email
 
 
+SNAPSHOT_COLUMNS = {
+    'loyalty_transactions': 'id,guest_id,type,net_amount,subscription_id',
+    'subscriptions': 'id,guest_id,current_balance,status,updated_at',
+    'guest_shop_statuses': 'id,guest_id,visits_count,total_spent,updated_at',
+}
+
+
 def others_snapshot(cafe_id, guest_id):
-    # Чужие строки этой кофейни (всё, кроме временного гостя): должны совпасть до и после.
+    # Чужие строки этой кофейни (всё, кроме временного гостя), построчно: id -> отпечаток.
     shop = quote(cafe_id)
-    not_guest = f'&guest_id=neq.{guest_id}' if guest_id else ''
     snapshot = {}
-    for table in LOYALTY_TABLES:
-        _, rows = call('GET', f'/rest/v1/{table}?select=id&shop_id=eq.{shop}{not_guest}')
-        snapshot[table] = len(rows)
-    _, subs = call('GET', f'/rest/v1/subscriptions?select=current_balance&shop_id=eq.{shop}{not_guest}')
-    snapshot['subscriptions_balance'] = round(sum(float(row['current_balance']) for row in subs), 2)
+    for table, columns in SNAPSHOT_COLUMNS.items():
+        _, rows = call('GET', f'/rest/v1/{table}?select={columns}&shop_id=eq.{shop}&guest_id=neq.{guest_id}')
+        snapshot[table] = {row['id']: json.dumps(row, sort_keys=True) for row in rows}
     return snapshot
+
+
+def compare_others(before, now):
+    # Строки, которые были до прогона, не изменились и не пропали. Новые строки — это настоящие
+    # продажи и списания, прошедшие во время прогона: их не трогаем и не считаем сбоем.
+    changed = {table: sum(1 for row_id, mark in rows.items() if now[table].get(row_id) != mark)
+               for table, rows in before.items()}
+    added = {table: len(set(now[table]) - set(rows)) for table, rows in before.items()}
+    sizes = {table: len(rows) for table, rows in before.items()}
+    expect('other guests untouched', not any(changed.values()),
+           f'строк до прогона {json.dumps(sizes, sort_keys=True)}; изменились или пропали '
+           f'{json.dumps(changed, sort_keys=True)}; новые (реальные операции во время прогона) '
+           f'{json.dumps(added, sort_keys=True)}')
 
 
 def barista_state(cafe_id, email):
@@ -149,7 +167,12 @@ def prepare(payload):
                    prefer='return=representation')
     print(f'temp guest: subscription id={subs[0]["id"]} balance={subs[0]["current_balance"]}')
     print(f'SUBSCRIPTION_ID={subs[0]["id"]}')
-    print('OTHERS=' + json.dumps(others_snapshot(cafe_id, guest_id), sort_keys=True))
+    # Построчный снимок чужих строк (id гостей, балансы) остаётся на сервере рядом со скриптом —
+    # в лог Actions идут только счётчики. Workflow удаляет файл вместе со скриптом.
+    others = others_snapshot(cafe_id, guest_id)
+    SNAPSHOT_FILE.write_text(json.dumps(others))
+    SNAPSHOT_FILE.chmod(0o600)
+    print('others: ' + json.dumps({table: len(rows) for table, rows in others.items()}, sort_keys=True))
 
 
 def check(payload):
@@ -197,9 +220,7 @@ def check(payload):
         expect('guest account removed', guest_user is None, 'absent' if guest_user is None else f'id={guest_user["id"]}')
         expect('cafe cabinet no longer sees it', len(cafe_rows) == 0, f'{len(cafe_rows)} строк глазами кофейни')
 
-    now = others_snapshot(cafe_id, guest_id)
-    before = payload['others']
-    expect('other guests untouched', now == before, f'до {json.dumps(before, sort_keys=True)} после {json.dumps(now, sort_keys=True)}')
+    compare_others(json.loads(SNAPSHOT_FILE.read_text()), others_snapshot(cafe_id, guest_id))
     if failures:
         sys.exit(f'FAIL: {len(failures)} проверок не прошли')
 
