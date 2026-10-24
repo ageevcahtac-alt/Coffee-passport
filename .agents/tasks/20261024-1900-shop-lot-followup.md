@@ -24,3 +24,16 @@
 
 ## НЕ трогать
 UI кабинетов (`app/dashboard/**`, `components/cafe|roaster|barista/**`), вход (`app/auth/**`, `middleware.ts`), старые миграции, остальное в путешествии (карта, трофеи, история оценок).
+
+## Итог 20261024-1900-shop-lot-followup
+Запланировано: 1–6 выше.
+Написал: Claude — `deploy/timeweb/verify-checkin-delivery.py`, `scripts/ops/verify-checkin-delivery.cjs`, `.github/workflows/verify-checkin-delivery.yml` (PR #15); `lib/journey/shopLotsStore.ts`(+test), `components/coffee/UntastedShopLots.tsx`(+test), `app/(site)/journey/page.tsx`, `app/(site)/passport/[lotId]/{page.tsx,passportView.ts}`, `lib/journey/claimAnonymousData.ts` (PR #18). Codex — `supabase/migrations/0035_checkins_roaster_view_profile_seen.sql`, `supabase/checkinsRoasterViewProfileSeen.test.ts` (PR #17).
+Ревью: PR #15 — Codex 2/2; PR #17 — code-reviewer 1/2 (accept); PR #18 — Codex 2/2
+  принято: звезда оценки — role radio → `verify-checkin-delivery.cjs`; скриншот только после входа → там же; отложенные лоты терялись после входа → `claimShopLotsForUser` в `shopLotsStore.ts` + `claimAnonymousData.ts`
+  отклонено: «проверка обжарщика всегда падает: во view нет флага» — это и есть дефект прода, найден проверкой, чинится 0035
+Проверки: verify-checkin-delivery run 40097448652: 2× оценка HTTP 201; кофейня 2/2 ['false','true'] PASS; обжарщик 2/2 ['нет поля','нет поля'] FAIL; после уборки — энтузиаст удалён, 0 строк в базе и обоих кабинетах; в логе 0 совпадений с email/паролями
+  тесты UI: до правки 2 failed | 4 passed, затем claim 2 failed | 6 passed; после — lib/journey 84 passed; tsc 0; lint ok; build ok; CI check pass (#15, #17, #18)
+  0035: code-reviewer — supabase/ 11 passed, три поломки → красные
+  deploy 40099452340 success (8c5f995), /api/health {"status":"ok","db":"ok"}; site-health 40099615945 `checked 79 urls, pages 18, fails 0`
+Merge: PR #15, #17, #18 → `fix/pre-pilot-shortlist`; секреты CABINET_* удалены
+Результат: partial — 0035 не накатана на прод (запуск db-migrate отклонён классификатором разрешений); после наката — повторить verify-checkin-delivery, ожидается обжарщик 2/2 ['false','true']

@@ -19,6 +19,7 @@
 | 2026-10-24 | main (Claude) | codex | 20261024-1430-owner-cabinets: вход staff в свой кабинет, учётки владельца в проде | fix | 2 (PR #9) + 1 (PR #10) |
 
 | 2026-10-24 | main (Claude) + codex | codex + code-reviewer | 20261024-1600-shop-lot-path: путь «магазин» после QR, флаг profile_seen_before_tasting, db-migrate | fix | 2 (PR #13) + 1 (PR #12) |
+| 2026-10-24 | main (Claude) + codex | codex + code-reviewer | 20261024-1900-shop-lot-followup: проверка доставки оценок на проде, 0035 (флаг в кабинете обжарщика), отложенный каппинг в путешествии | fix | 2 (PR #15) + 1 (PR #17) + 2 (PR #18) |
 
 ## Замены
 | дата | агент | было → стало | причина |
