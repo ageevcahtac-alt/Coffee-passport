@@ -15,8 +15,11 @@ const RULES = [
   [/(\w+:\/\/)[^\s/:@]+:[^\s/@]+@/g, '$1***:***@'],
   // Bearer / Basic
   [/\b(bearer|basic)\s+[\w.~+/=-]{8,}/gi, '$1 ***'],
-  // name=value, name: value, "name": "value" (в т.ч. SUPABASE_SERVICE_ROLE_KEY=…, XO_*_SECRET=…)
-  [new RegExp(String.raw`((?:[\w-]*(?:${NAMES}))["']?\s*[:=]\s*["']?)[^\s"',;}&]+`, 'gi'), '$1***'],
+  // "name": "value" — до закрывающей кавычки (внутри бывают пробелы, запятые, \")
+  [new RegExp(String.raw`((?:[\w-]*(?:${NAMES}))["']?\s*[:=]\s*)(["'])(?:\\.|(?!\2).)*\2`, 'gi'), '$1$2***$2'],
+  // name=value, name: value без кавычек (SUPABASE_SERVICE_ROLE_KEY=…, Cookie: a=1; b=2) — до конца
+  // строки или `&` (query string): в значении бывают пробелы и `;`, лишнее скрыть лучше, чем недоскрыть
+  [new RegExp(String.raw`((?:[\w-]*(?:${NAMES}))["']?\s*[:=]\s*)(?!["'\s])[^&\n]+`, 'gi'), '$1***'],
 ];
 
 export function redact(line) {

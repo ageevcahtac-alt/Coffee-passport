@@ -22,6 +22,12 @@ describe('redact', () => {
     ['password: fake-password', 'password: ***'],
     ['{"apikey": "fake-key"}', '{"apikey": "***"}'],
     ['postgres://u:fake@db:5432/x', 'postgres://***:***@db:5432/x'],
+    // ревью Codex, раунд 2: значение не обрывается на пробеле, `;` и `,`
+    ['Cookie: session=fake-session; other=fake-other', 'Cookie: ***'],
+    ['password: fake password with spaces', 'password: ***'],
+    ['{"access_token":"fake,secret","user":"u1"}', '{"access_token":"***","user":"u1"}'],
+    ['{"token":"fake\\"quoted"}', '{"token":"***"}'],
+    ['GET /api/x?token=fake-query-token&a=1 200', 'GET /api/x?token=***&a=1 200'],
   ])('exact output for %s', (line, want) => {
     expect(redact(line)).toBe(want);
   });

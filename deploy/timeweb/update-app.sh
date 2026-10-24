@@ -17,9 +17,10 @@ for path in / /auth/login /auth/reset-password /auth/callback /dashboard/cafe /d
 done
 echo /api/health
 # До 5 минут: первый 503 сразу после рестарта не должен ронять выкатку (set -e).
-for attempt in $(seq 1 15); do
+health_deadline=$((SECONDS + 300))
+while :; do
  if curl --fail-with-body --max-time 10 -sS https://147.45.102.186/api/health; then echo; break; fi
- echo; [ "$attempt" -eq 15 ] && exit 1
+ echo; [ "$SECONDS" -ge "$health_deadline" ] && exit 1
  sleep 10
 done
 git rev-parse HEAD
