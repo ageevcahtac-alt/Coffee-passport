@@ -73,8 +73,9 @@ jobs:
         id: remote
         run: |
           remote=$(ssh prod 'mktemp /tmp/provision-cabinets.XXXXXX')
-          scp -q deploy/timeweb/provision-cabinets.py "prod:$remote"
+          # Путь — до scp: если загрузка упадёт, cleanup всё равно удалит файл.
           echo "path=$remote" >> "$GITHUB_OUTPUT"
+          scp -q deploy/timeweb/provision-cabinets.py "prod:$remote"
       - name: inspect
         run: ssh prod "python3 ${{ steps.remote.outputs.path }} inspect" < "$RUNNER_TEMP/accounts.json"
       - name: apply
@@ -115,10 +116,17 @@ jobs:
           )
           node scripts/ops/verify-cabinet-login.cjs "$RUNNER_TEMP/pw/node_modules/playwright"
       - name: cleanup
-        if: always() && steps.remote.outputs.path != ''
+        if: always()
         run: |
-          if [ -f "$RUNNER_TEMP/temp.json" ]; then
-            ssh prod "python3 ${{ steps.remote.outputs.path }} temp-delete" < "$RUNNER_TEMP/temp.json"
+          # Без -e: каждая команда уборки выполняется, даже если предыдущая упала; итог — по худшей.
+          set +e
+          rc=0
+          remote="${{ steps.remote.outputs.path }}"
+          if [ -n "$remote" ]; then
+            if [ -f "$RUNNER_TEMP/temp.json" ]; then
+              ssh prod "python3 $remote temp-delete" < "$RUNNER_TEMP/temp.json" || rc=1
+            fi
+            ssh prod "rm -f $remote" || rc=1
           fi
-          ssh prod "rm -f ${{ steps.remote.outputs.path }}"
-          rm -f "$RUNNER_TEMP/accounts.json" "$RUNNER_TEMP/temp.json"
+          rm -f "$RUNNER_TEMP/accounts.json" "$RUNNER_TEMP/temp.json" || rc=1
+          exit $rc
