@@ -36,4 +36,6 @@ UI кабинетов (`app/dashboard/**`, `components/cafe|roaster|barista/**`)
   0035: code-reviewer — supabase/ 11 passed, три поломки → красные
   deploy 40099452340 success (8c5f995), /api/health {"status":"ok","db":"ok"}; site-health 40099615945 `checked 79 urls, pages 18, fails 0`
 Merge: PR #15, #17, #18 → `fix/pre-pilot-shortlist`; секреты CABINET_* удалены
-Результат: partial — 0035 не накатана на прод (запуск db-migrate отклонён классификатором разрешений); после наката — повторить verify-checkin-delivery, ожидается обжарщик 2/2 ['false','true']
+  0035 на проде: db-migrate run 40100860969 success (запустил владелец), `checkins_roaster_view.profile_seen_before_tasting | boolean`
+  повтор verify-checkin-delivery run 40101010926: 2× оценка HTTP 201; кофейня 2/2 ['false','true'] PASS; обжарщик 2/2 ['false','true'] PASS; после уборки — энтузиаст удалён, 0 строк в базе и обоих кабинетах; в логе 0 совпадений с email/паролями; CABINET_* удалены
+Результат: done
