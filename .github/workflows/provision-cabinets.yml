@@ -1,0 +1,132 @@
+name: provision-cabinets
+# Учётки владельца в кабинеты (админ, обжарщик, кофейня) через Supabase Admin API на сервере.
+# Только вручную. mode=inspect — ничего не меняет: список обжарщиков/кофеен и есть ли учётки.
+# mode=apply — создать/обновить учётки с подтверждённым email, назначить роль и привязку,
+# затем войти каждой через настоящую форму на проде (и временным энтузиастом, которого job удаляет).
+# Секреты временные, удаляются сразу после прогона: CABINET_OWNER_EMAIL,
+# CABINET_ADMIN_PASSWORD, CABINET_ROASTER_PASSWORD, CABINET_CAFE_PASSWORD.
+# Email и пароли в лог не попадают: GitHub маскирует секреты, производные email маскируются явно.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "inspect | apply"
+        default: inspect
+      roaster_slug:
+        description: "roasters.slug для учётки обжарщика (для apply)"
+        default: ""
+permissions:
+  contents: read
+concurrency:
+  group: provision-cabinets
+  cancel-in-progress: false
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      MODE: ${{ inputs.mode }}
+      ROASTER_SLUG: ${{ inputs.roaster_slug }}
+      CAFE_SLUG: shop-xo-vsevolozhsk
+      PROD_URL: ${{ vars.PROD_URL }}
+      OWNER_EMAIL: ${{ secrets.CABINET_OWNER_EMAIL }}
+      ADMIN_PASSWORD: ${{ secrets.CABINET_ADMIN_PASSWORD }}
+      ROASTER_PASSWORD: ${{ secrets.CABINET_ROASTER_PASSWORD }}
+      CAFE_PASSWORD: ${{ secrets.CABINET_CAFE_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: validate input
+        run: |
+          case "$MODE" in inspect|apply) ;; *) echo "::error::mode: inspect | apply"; exit 1;; esac
+          [[ "$OWNER_EMAIL" == *@* ]] || { echo "::error::CABINET_OWNER_EMAIL не задан"; exit 1; }
+          if [ "$MODE" = apply ]; then
+            [[ "$ROASTER_SLUG" =~ ^[a-z0-9-]+$ ]] || { echo "::error::roaster_slug обязателен для apply"; exit 1; }
+            [ -n "$PROD_URL" ] || { echo "::error::PROD_URL не задан"; exit 1; }
+          fi
+      - name: payload
+        run: |
+          umask 077
+          python3 - <<'PY'
+          import json, os
+          local, domain = os.environ['OWNER_EMAIL'].split('@', 1)
+          email = lambda suffix: f'{local}+{suffix}@{domain}'
+          apply = os.environ['MODE'] == 'apply'
+          accounts = [
+              {'label': 'admin', 'email': email('admin'), 'role': 'admin', 'password': os.environ['ADMIN_PASSWORD']},
+              {'label': 'roaster', 'email': email('roaster'), 'role': 'roaster_admin',
+               'roaster_id': os.environ['ROASTER_SLUG'], 'password': os.environ['ROASTER_PASSWORD']},
+              {'label': 'cafe', 'email': email('cafe'), 'role': 'cafe_admin',
+               'cafe_id': os.environ['CAFE_SLUG'], 'password': os.environ['CAFE_PASSWORD']},
+          ]
+          for account in accounts:
+              print(f"::add-mask::{account['email']}")
+              if not apply:
+                  account.pop('password')
+          with open(os.environ['RUNNER_TEMP'] + '/accounts.json', 'w') as out:
+              json.dump({'accounts': accounts}, out)
+          PY
+      - uses: ./.github/actions/ssh-setup
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      - name: upload provision script
+        id: remote
+        run: |
+          remote=$(ssh prod 'mktemp /tmp/provision-cabinets.XXXXXX')
+          # Путь — до scp: если загрузка упадёт, cleanup всё равно удалит файл.
+          echo "path=$remote" >> "$GITHUB_OUTPUT"
+          scp -q deploy/timeweb/provision-cabinets.py "prod:$remote"
+      - name: inspect
+        run: ssh prod "python3 ${{ steps.remote.outputs.path }} inspect" < "$RUNNER_TEMP/accounts.json"
+      - name: apply
+        if: inputs.mode == 'apply'
+        run: ssh prod "python3 ${{ steps.remote.outputs.path }} apply" < "$RUNNER_TEMP/accounts.json"
+      - name: playwright
+        if: inputs.mode == 'apply'
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
+          npm init -y > /dev/null
+          npm install --silent --no-audit --no-fund playwright@1.48.2
+          npx playwright install --with-deps chromium > /dev/null
+      - name: temp enthusiast
+        if: inputs.mode == 'apply'
+        run: |
+          umask 077
+          password=$(openssl rand -base64 33 | tr -d '/+=\n')
+          echo "::add-mask::$password"
+          email="cabinet-verify-${GITHUB_RUN_ID}@example.com"
+          printf '{"email":"%s","password":"%s"}' "$email" "$password" > "$RUNNER_TEMP/temp.json"
+          ssh prod "python3 ${{ steps.remote.outputs.path }} temp-create" < "$RUNNER_TEMP/temp.json"
+      - name: login through the form on prod
+        if: inputs.mode == 'apply'
+        run: |
+          export LOGIN_CHECKS=$(python3 - <<'PY'
+          import json, os
+          accounts = {a['label']: a for a in json.load(open(os.environ['RUNNER_TEMP'] + '/accounts.json'))['accounts']}
+          temp = json.load(open(os.environ['RUNNER_TEMP'] + '/temp.json'))
+          checks = [
+              {**accounts['admin'], 'from': '/auth/login', 'expect': '/dashboard/admin'},
+              {**accounts['roaster'], 'from': '/auth/login', 'expect': '/dashboard/roaster'},
+              {**accounts['cafe'], 'from': '/auth/login', 'expect': '/dashboard/cafe'},
+              {**temp, 'label': 'enthusiast', 'from': '/auth/login', 'expect': '/'},
+              {**temp, 'label': 'enthusiast', 'from': '/', 'expect': '/journey'},
+          ]
+          print(json.dumps([{k: c[k] for k in ('label', 'email', 'password', 'from', 'expect')} for c in checks]))
+          PY
+          )
+          node scripts/ops/verify-cabinet-login.cjs "$RUNNER_TEMP/pw/node_modules/playwright"
+      - name: cleanup
+        if: always()
+        run: |
+          # Без -e: каждая команда уборки выполняется, даже если предыдущая упала; итог — по худшей.
+          set +e
+          rc=0
+          remote="${{ steps.remote.outputs.path }}"
+          if [ -n "$remote" ]; then
+            if [ -f "$RUNNER_TEMP/temp.json" ]; then
+              ssh prod "python3 $remote temp-delete" < "$RUNNER_TEMP/temp.json" || rc=1
+            fi
+            ssh prod "rm -f $remote" || rc=1
+          fi
+          rm -f "$RUNNER_TEMP/accounts.json" "$RUNNER_TEMP/temp.json" || rc=1
+          exit $rc

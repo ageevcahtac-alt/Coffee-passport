@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { signInWithPassword, signUpWithPassword } from './actions';
 
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), redirect: vi.fn(), revalidate: vi.fn() }));
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), redirect: vi.fn(), revalidate: vi.fn(), profile: vi.fn() }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ auth: {
   signInWithPassword: mocks.auth, signUp: mocks.auth,
-} }) }));
+}, from: () => ({ select: () => ({ eq: () => ({ maybeSingle: mocks.profile }) }) }) }) }));
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }));
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidate }));
 
@@ -37,4 +37,46 @@ describe('password actions return usable contextual errors', () => {
       expect(mocks.revalidate).toHaveBeenCalledWith('/', 'layout');
     });
   }
+});
+
+describe('login lands staff accounts in their own cabinet', () => {
+  beforeEach(() => {
+    mocks.auth.mockReset().mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
+    mocks.profile.mockReset();
+    mocks.redirect.mockReset().mockImplementation((path: string) => { throw new Error(path); });
+    mocks.revalidate.mockReset();
+  });
+  const login = (next?: string) => {
+    const form = new FormData();
+    form.set('email', 'owner@example.test');
+    form.set('password', 'fake-password');
+    if (next) form.set('next', next);
+    return signInWithPassword(form);
+  };
+  for (const [role, path] of [
+    ['admin', '/dashboard/admin'],
+    ['roaster_admin', '/dashboard/roaster'],
+    ['cafe_admin', '/dashboard/cafe'],
+    ['barista', '/dashboard/barista'],
+  ] as const) {
+    it(`${role} from the default landing goes to ${path}`, async () => {
+      mocks.profile.mockResolvedValue({ data: { role }, error: null });
+      await expect(login('/journey')).rejects.toThrow(path);
+      await expect(login('/')).rejects.toThrow(path);
+      await expect(login()).rejects.toThrow(path);
+    });
+  }
+  it('enthusiast keeps the default landing', async () => {
+    mocks.profile.mockResolvedValue({ data: { role: 'enthusiast' }, error: null });
+    await expect(login('/journey')).rejects.toThrow(/^\/journey$/);
+  });
+  it('profile lookup failure keeps the default landing', async () => {
+    mocks.profile.mockResolvedValue({ data: null, error: { message: 'boom' } });
+    await expect(login('/journey')).rejects.toThrow(/^\/journey$/);
+  });
+  it('an explicit next wins over the role cabinet', async () => {
+    mocks.profile.mockResolvedValue({ data: { role: 'cafe_admin' }, error: null });
+    await expect(login('/passport/X')).rejects.toThrow(/^\/passport\/X$/);
+    expect(mocks.profile).not.toHaveBeenCalled();
+  });
 });
