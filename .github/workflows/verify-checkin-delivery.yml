@@ -1,0 +1,123 @@
+name: verify-checkin-delivery
+# Доходят ли оценки гостя до кабинетов — на проде, через настоящий интерфейс.
+# Только вручную. Временный энтузиаст делает две оценки одного лота обжарщика в кофейне
+# shop-xo-vsevolozhsk: слепую и после «Я в магазине». Затем вход учётками кофейни и
+# обжарщика: обе оценки видны, profile_seen_before_tasting false и true. Затем уборка
+# (оценки и энтузиаст удаляются) и та же проверка: в кабинетах 0 строк.
+# Секреты временные, удаляются сразу после прогона: CABINET_CAFE_EMAIL, CABINET_CAFE_PASSWORD,
+# CABINET_ROASTER_EMAIL, CABINET_ROASTER_PASSWORD. В лог не попадают (маска GitHub).
+on:
+  workflow_dispatch:
+    inputs:
+      roaster_slug:
+        description: "roasters.slug обжарщика, чей лот оценивается"
+        default: roaster-xo
+permissions:
+  contents: read
+concurrency:
+  group: verify-checkin-delivery
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ROASTER_SLUG: ${{ inputs.roaster_slug }}
+      CAFE_ID: shop-xo-vsevolozhsk
+      PROD_URL: ${{ vars.PROD_URL }}
+      CAFE_EMAIL: ${{ secrets.CABINET_CAFE_EMAIL }}
+      CAFE_PASSWORD: ${{ secrets.CABINET_CAFE_PASSWORD }}
+      ROASTER_EMAIL: ${{ secrets.CABINET_ROASTER_EMAIL }}
+      ROASTER_PASSWORD: ${{ secrets.CABINET_ROASTER_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: validate input
+        run: |
+          [[ "$ROASTER_SLUG" =~ ^[a-z0-9-]+$ ]] || { echo "::error::roaster_slug: a-z0-9-"; exit 1; }
+          [ -n "$PROD_URL" ] || { echo "::error::PROD_URL не задан"; exit 1; }
+          for name in CAFE_EMAIL CAFE_PASSWORD ROASTER_EMAIL ROASTER_PASSWORD; do
+            [ -n "${!name}" ] || { echo "::error::секрет CABINET_$name не задан"; exit 1; }
+          done
+      - name: payloads
+        run: |
+          umask 077
+          password=$(openssl rand -base64 33 | tr -d '/+=\n')
+          echo "::add-mask::$password"
+          python3 - "$password" <<'PY'
+          import json, os, sys
+          temp = {'email': f"checkin-verify-{os.environ['GITHUB_RUN_ID']}@example.com", 'password': sys.argv[1]}
+          base = {
+              'roaster_slug': os.environ['ROASTER_SLUG'], 'cafe_id': os.environ['CAFE_ID'], 'temp': temp,
+              'cafe': {'email': os.environ['CAFE_EMAIL'], 'password': os.environ['CAFE_PASSWORD']},
+              'roaster': {'email': os.environ['ROASTER_EMAIL'], 'password': os.environ['ROASTER_PASSWORD']},
+          }
+          tmp = os.environ['RUNNER_TEMP']
+          json.dump(base, open(f'{tmp}/base.json', 'w'))
+          json.dump(temp, open(f'{tmp}/temp.json', 'w'))
+          PY
+      - uses: ./.github/actions/ssh-setup
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      - name: upload verify script
+        id: remote
+        run: |
+          remote=$(ssh prod 'mktemp /tmp/verify-checkin-delivery.XXXXXX')
+          # Путь — до scp: если загрузка упадёт, cleanup всё равно удалит файл.
+          echo "path=$remote" >> "$GITHUB_OUTPUT"
+          scp -q deploy/timeweb/verify-checkin-delivery.py "prod:$remote"
+      - name: playwright
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
+          npm init -y > /dev/null
+          npm install --silent --no-audit --no-fund playwright@1.48.2
+          npx playwright install --with-deps chromium > /dev/null
+      - name: prepare (lot, temp enthusiast)
+        run: |
+          ssh prod "python3 ${{ steps.remote.outputs.path }} prepare" < "$RUNNER_TEMP/base.json" | tee "$RUNNER_TEMP/prepare.out"
+          grep -q '^temp enthusiast: created' "$RUNNER_TEMP/prepare.out"
+          echo "LOT_ID=$(sed -n 's/^LOT_ID=//p' "$RUNNER_TEMP/prepare.out")" >> "$GITHUB_ENV"
+      - name: two tastings through the UI on prod
+        env:
+          TEMP_JSON: ${{ runner.temp }}/temp.json
+          SHOTS_DIR: ${{ runner.temp }}/shots
+        run: |
+          mkdir -p "$SHOTS_DIR"
+          node scripts/ops/verify-checkin-delivery.cjs "$RUNNER_TEMP/pw/node_modules/playwright"
+      - name: cabinets before cleanup
+        if: always() && steps.remote.outputs.path != ''
+        run: |
+          python3 -c "import json,os; p=json.load(open(os.environ['RUNNER_TEMP']+'/base.json')); p.update(expect='present', lot=os.environ.get('LOT_ID','')); json.dump(p, open(os.environ['RUNNER_TEMP']+'/present.json','w'))"
+          set -o pipefail
+          ssh prod "python3 ${{ steps.remote.outputs.path }} check" < "$RUNNER_TEMP/present.json" | tee "$RUNNER_TEMP/present.out"
+      - name: cleanup (tastings and temp enthusiast)
+        if: always() && steps.remote.outputs.path != ''
+        run: ssh prod "python3 ${{ steps.remote.outputs.path }} purge" < "$RUNNER_TEMP/base.json"
+      - name: cabinets after cleanup
+        if: always() && steps.remote.outputs.path != ''
+        run: |
+          ids=$(sed -n 's/^ids: //p' "$RUNNER_TEMP/present.out" 2>/dev/null)
+          [ -n "$ids" ] || { echo "::error::нет id оценок из проверки до уборки"; exit 1; }
+          IDS="$ids" python3 -c "import json,os; p=json.load(open(os.environ['RUNNER_TEMP']+'/base.json')); p.update(expect='absent', ids=os.environ['IDS'].split(',')); json.dump(p, open(os.environ['RUNNER_TEMP']+'/absent.json','w'))"
+          ssh prod "python3 ${{ steps.remote.outputs.path }} check" < "$RUNNER_TEMP/absent.json"
+      - name: failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-checkin-delivery-shots
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: ignore
+          retention-days: 3
+      - name: cleanup
+        if: always()
+        run: |
+          # Без -e: каждая команда уборки выполняется, даже если предыдущая упала; итог — по худшей.
+          set +e
+          rc=0
+          remote="${{ steps.remote.outputs.path }}"
+          if [ -n "$remote" ]; then
+            ssh prod "python3 $remote purge" < "$RUNNER_TEMP/base.json" || rc=1
+            ssh prod "rm -f $remote" || rc=1
+          fi
+          rm -f "$RUNNER_TEMP"/*.json || rc=1
+          exit $rc
