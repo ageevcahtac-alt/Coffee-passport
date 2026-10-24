@@ -29,6 +29,13 @@ export async function requireStaffRole(role: ProfileRole, nextPath: string): Pro
     redirect(`/auth/login?next=${encodeURIComponent(nextPath)}`);
   }
 
+  // A login the cafe created with a temporary password
+  // (app/api/cafe/staff/barista-accounts) opens nothing until its owner
+  // sets their own password.
+  if (user.app_metadata?.must_change_password === true) {
+    redirect(`/auth/change-password?next=${encodeURIComponent(nextPath)}`);
+  }
+
   const { data: profile } = await supabase
     .from('profiles')
     .select('role, cafe_id, roaster_id, barista_id, display_name')

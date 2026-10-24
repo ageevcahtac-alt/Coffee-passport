@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCafeStaff } from '@/lib/data/useCafeStaff';
 import { useShopCheckins } from '@/lib/data/useShopCheckins';
 import { StaffCard } from '@/components/cafe/StaffCard';
+import { BaristaAccountForm } from '@/components/cafe/BaristaAccountForm';
 import { useStaffSession } from '@/lib/auth/staffSession';
 
 export default function CafeTeamPage() {
@@ -16,6 +17,8 @@ export default function CafeTeamPage() {
 
   return (
     <>
+      <BaristaAccountForm />
+
       <div className="flex items-start justify-between gap-4 mb-8">
         <p className="section-label flex-1">Команда</p>
         <Link

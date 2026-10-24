@@ -9,16 +9,18 @@ import { BARISTAS } from './baristas';
 // on top of the static BARISTAS roster — same "localStorage cache + best-
 // effort Supabase write-through" shape as brewingRecipesStore.ts, backed by
 // public.barista_profiles (see supabase/migrations/0015_barista_profiles.sql).
-// A barista's id/name/coffeeShopId still come from BARISTAS (there is no
-// self-service "create a new barista" flow yet — see lib/data/staff.ts for
-// that gap); this store only ever overlays the profile fields on top.
+// A seed barista's id/name/coffeeShopId still come from BARISTAS; this store
+// only overlays the profile fields on top. A barista the cafe created from
+// its cabinet (app/api/cafe/staff/barista-accounts) has no seed entry — the
+// synced row's name/coffeeShopId make it a full roster entry instead.
 
 const STORAGE_KEY = 'coffee-passport:barista-profiles';
 
 let cache: Barista[] | null = null;
 const listeners = new Set<() => void>();
 
-type ProfileFields = Pick<Barista, 'favoriteOrigin' | 'favoriteBrewMethod' | 'avatarUrl'>;
+type ProfileFields = Pick<Barista, 'favoriteOrigin' | 'favoriteBrewMethod' | 'avatarUrl'> &
+  Partial<Pick<Barista, 'name' | 'coffeeShopId'>>;
 
 function readOverrides(): Record<string, ProfileFields> {
   if (typeof window === 'undefined') return {};
@@ -41,10 +43,22 @@ function writeOverrides(overrides: Record<string, ProfileFields>) {
 
 function computeAll(): Barista[] {
   const overrides = readOverrides();
-  return BARISTAS.map((barista) => {
+  const seeded = BARISTAS.map((barista) => {
     const override = overrides[barista.id];
-    return override ? { ...barista, ...override } : barista;
+    return override
+      ? {
+          ...barista,
+          favoriteOrigin: override.favoriteOrigin,
+          favoriteBrewMethod: override.favoriteBrewMethod,
+          avatarUrl: override.avatarUrl,
+        }
+      : barista;
   });
+  const seedIds = new Set(BARISTAS.map((barista) => barista.id));
+  const created = Object.entries(overrides)
+    .filter(([id, override]) => !seedIds.has(id) && override.name && override.coffeeShopId)
+    .map(([id, override]) => ({ ...override, id, name: override.name!, coffeeShopId: override.coffeeShopId! }));
+  return [...seeded, ...created];
 }
 
 function read(): Barista[] {
@@ -79,6 +93,8 @@ function rowToProfileFields(row: BaristaProfileRow): ProfileFields {
     favoriteOrigin: row.favorite_origin,
     favoriteBrewMethod: row.favorite_brew_method as Barista['favoriteBrewMethod'],
     avatarUrl: row.avatar_url,
+    name: row.name,
+    coffeeShopId: row.coffee_shop_id,
   };
 }
 
@@ -109,6 +125,8 @@ export async function syncBaristaProfilesFromSupabase(): Promise<void> {
 export function saveBaristaProfile(barista: Barista): void {
   const overrides = readOverrides();
   overrides[barista.id] = {
+    name: barista.name,
+    coffeeShopId: barista.coffeeShopId,
     favoriteOrigin: barista.favoriteOrigin,
     favoriteBrewMethod: barista.favoriteBrewMethod,
     avatarUrl: barista.avatarUrl,
