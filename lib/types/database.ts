@@ -158,6 +158,10 @@ export type CheckinRow = {
   // Tastings — see 0026_checkins_community_sharing.sql. Defaults false,
   // same "never automatic" rule as BrewingRecipe.isPublic.
   is_public: boolean;
+  // Guest opened the lot's profile before cupping (store path) — see
+  // supabase/migrations/0034_checkins_profile_seen_before_tasting.sql.
+  // Optional on read: older rows have no value until 0034 backfills false.
+  profile_seen_before_tasting?: boolean;
   created_at: string;
 };
 export type CheckinInsert = CheckinRow;

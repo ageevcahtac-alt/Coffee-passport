@@ -67,6 +67,7 @@ function normalizeRecord(record: TastingRecord): TastingRecord {
     aftertaste: record.aftertaste ?? null,
     isPublic: record.isPublic ?? false,
     referenceTasteProfileId: record.referenceTasteProfileId ?? null,
+    profileSeenBeforeTasting: record.profileSeenBeforeTasting ?? false,
   };
 }
 
@@ -153,6 +154,7 @@ export function rowToRecord(row: CheckinRow): TastingRecord {
     isPublic: row.is_public ?? false,
     createdAt: row.created_at,
     referenceTasteProfileId: row.reference_taste_profile_ref ?? null,
+    profileSeenBeforeTasting: row.profile_seen_before_tasting ?? false,
   };
 }
 
@@ -196,6 +198,7 @@ export function recordToRow(record: TastingRecord): CheckinRow {
     is_public: record.isPublic,
     created_at: record.createdAt,
     reference_taste_profile_ref: record.referenceTasteProfileId ?? null,
+    profile_seen_before_tasting: record.profileSeenBeforeTasting ?? false,
   };
 }
 

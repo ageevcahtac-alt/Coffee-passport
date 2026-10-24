@@ -490,6 +490,10 @@ export interface TastingRecord {
   // before this field existed — both cases fall back to the lot's current
   // active profile, identical to today's behavior.
   referenceTasteProfileId?: string | null;
+  // The guest opened this lot's full profile from the store path before
+  // cupping it (see lib/journey/profileSeenFlag.ts) — false for the blind
+  // coffee-shop path and every tasting recorded before this existed.
+  profileSeenBeforeTasting?: boolean;
 }
 
 // =========================================================

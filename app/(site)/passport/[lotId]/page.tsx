@@ -48,6 +48,8 @@ import { TasteHistoryPreview } from '@/components/coffee/TasteHistoryPreview';
 import type { LotStatus } from '@/lib/types/database';
 import { BREWING_METHODS, type Lot } from '@/lib/types/coffee';
 import { hasRevealedTasting } from './blindTastingGate';
+import { resolvePassportView, shouldMarkProfileSeen, type PassportEntry } from './passportView';
+import { markLotProfileSeen } from '@/lib/journey/profileSeenFlag';
 
 // Phase 4.5.8 — Coffee is the identity/description of the coffee itself;
 // Canonical Lot is a specific release. The local Lot object's own
@@ -177,6 +179,10 @@ function LotPassportView({ params }: { params: { lotId: string } }) {
   // defaults to the scanned lot's own roasterId until the guest corrects it.
   const [selectedShopId, setSelectedShopId] = useState<string | null>(null);
   const [selectedRoasterId, setSelectedRoasterId] = useState<string | null>(null);
+  // Entry path picked right after the scan — "Я в кофейне" (blind cupping,
+  // the flow above) or "Я в магазине" (canonical lot straight away). Same
+  // re-asked-per-visit component state as the shop pick; see passportView.ts.
+  const [entry, setEntry] = useState<PassportEntry | null>(null);
 
   // Community Layer (docs/reports/COMMUNITY_LAYER_PRODUCT_AUDIT.md) — anonymized, opt-in
   // shared tastings for this exact Lot, keyed by its public_id (the same id
@@ -280,6 +286,21 @@ function LotPassportView({ params }: { params: { lotId: string } }) {
     };
   }, [canonicalLotId, latestRoastProfile?.referenceRoastProfileId]);
 
+  const view = resolvePassportView({
+    isPreview,
+    entry,
+    shopId: selectedShopId,
+    hasTastingHere: hasRevealedTastingHere,
+    canonicalStatus,
+  });
+
+  // The store path shows the roaster's profile before any cupping — remember
+  // that so a later tasting of this lot is saved as profile_seen_before_tasting.
+  const resolvedLotId = lot?.id;
+  useEffect(() => {
+    if (resolvedLotId && shouldMarkProfileSeen(view)) markLotProfileSeen(resolvedLotId);
+  }, [resolvedLotId, view]);
+
   // Warms the cafe-menu cache for LotRemovalCountdown below — nothing else
   // on this page reads it yet.
   useEffect(() => {
@@ -325,7 +346,7 @@ function LotPassportView({ params }: { params: { lotId: string } }) {
   // FarmerRevealCard) — every other use of `lot` on this page is unaffected.
   const displayLot = withCanonicalCoffeeOverlay(lot, canonicalCoffee);
 
-  if (isPreview) {
+  if (view === 'preview') {
     return (
       <main className="min-h-dvh flex flex-col px-6 py-16">
         <div className="max-w-md mx-auto w-full mb-6 rounded-md border border-dashed border-gold-400 bg-gold-50 px-4 py-3">
@@ -361,6 +382,105 @@ function LotPassportView({ params }: { params: { lotId: string } }) {
         <div className="max-w-md mx-auto w-full mt-10">
           <p className="section-label mb-4">Экстракция</p>
           <ExtractionTab lot={lot} currentUserId={currentUserId} currentUserName="Вы" />
+        </div>
+      </main>
+    );
+  }
+
+  if (view === 'choice') {
+    return (
+      <main className="min-h-dvh flex flex-col px-6 py-16">
+        <div className="max-w-md mx-auto w-full">
+          <p className="text-xs uppercase tracking-widest2 text-ink-400 font-body mb-2">{roaster.name}</p>
+          <h1 className="font-display text-3xl leading-[1.1] text-ink-900 mb-3">{lot.name}</h1>
+          <p className="text-sm text-ink-500 mb-8">Где вы сейчас?</p>
+          <div className="flex flex-col gap-3">
+            <button
+              type="button"
+              onClick={() => setEntry('cafe')}
+              className="w-full text-left rounded-md bg-ink-900 text-parchment-100 px-5 py-5
+                         hover:bg-ink-800 transition-colors"
+            >
+              <span className="flex items-center gap-2 font-body font-medium text-base">
+                <LockIcon className="w-4 h-4 text-gold-400" />
+                Я в кофейне — пройти слепой каппинг
+              </span>
+              <span className="block text-xs text-parchment-300 mt-1.5 leading-relaxed">
+                Сначала ваша оценка, потом профиль обжарщика и сравнение.
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setEntry('shop')}
+              className="w-full text-left rounded-md border border-ink-200 bg-parchment-100 text-ink-900 px-5 py-5
+                         hover:bg-parchment-300 transition-colors"
+            >
+              <span className="block font-body font-medium text-base">Я в магазине — узнать о лоте</span>
+              <span className="block text-xs text-ink-500 mt-1.5 leading-relaxed">
+                Ферма, описание и вкусовой профиль от обжарщика. Каппинг можно пройти позже.
+              </span>
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (view === 'lot-info') {
+    return (
+      <main className="min-h-dvh flex flex-col px-6 py-16">
+        <FarmerRevealCard lot={displayLot} animate={false} />
+
+        <div className="max-w-md mx-auto w-full mt-10">
+          <LotPassport lot={displayLot} roaster={roaster} />
+        </div>
+
+        <div className="max-w-md mx-auto w-full mt-8">
+          <ProducerRoasterCard lot={displayLot} />
+        </div>
+
+        {roastIntent && (
+          <div className="max-w-md mx-auto w-full mt-8">
+            <RoastIntentCard profile={roastIntent} />
+          </div>
+        )}
+
+        <div className="max-w-md mx-auto w-full mt-8">
+          <RoastProfileSummaryCard lot={lot} roaster={roaster} profile={latestRoastProfile} />
+        </div>
+
+        <div className="max-w-md mx-auto w-full mt-10 rounded-md border border-ink-200 bg-parchment-100 p-5">
+          <p className="section-label mb-3">Каппинг</p>
+          {canonicalStatus === 'draft' ? (
+            <p className="text-sm text-ink-500">
+              Обжарщик ещё готовит паспорт этого лота — каппинг откроется позже.
+            </p>
+          ) : (
+            <>
+              <p className="text-sm text-ink-700 mb-4 leading-relaxed">
+                Заварили этот кофе? Оцените его — оценка сохранится с пометкой, что профиль вы видели до
+                дегустации.
+              </p>
+              <Link
+                href={`/passport/${lot.id}/taste`}
+                className="inline-flex items-center justify-center w-full rounded-md bg-ink-900
+                           text-parchment-100 font-body font-medium text-sm px-6 py-4
+                           hover:bg-ink-800 transition-colors"
+              >
+                Пройти каппинг
+              </Link>
+            </>
+          )}
+        </div>
+
+        <div className="max-w-md mx-auto w-full mt-6 text-center">
+          <button
+            type="button"
+            onClick={() => setEntry(null)}
+            className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900"
+          >
+            Назад к выбору
+          </button>
         </div>
       </main>
     );
