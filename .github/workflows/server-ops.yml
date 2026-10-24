@@ -1,0 +1,40 @@
+name: server-ops
+# Диагностика прода, только чтение: хвост логов приложения (с фильтром секретов),
+# ss -tlnp, df -h, статус контейнеров. Команд, меняющих сервер, здесь быть не должно.
+# Запуск: gh workflow run server-ops [-f lines=200]
+on:
+  workflow_dispatch:
+    inputs:
+      lines:
+        description: "Строк лога (1–2000)"
+        default: "200"
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      LINES: ${{ inputs.lines }}
+      SECRET_FILTER: 'token=|secret=|key=|password=|bearer|apikey'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/ssh-setup
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      - name: validate input
+        run: |
+          [[ "$LINES" =~ ^[0-9]+$ ]] && [ "$LINES" -ge 1 ] && [ "$LINES" -le 2000 ] || { echo "::error::lines: 1–2000"; exit 1; }
+      - name: app logs
+        run: |
+          set -o pipefail
+          ssh prod "journalctl -u coffee-passport -n $LINES --no-pager" | grep -v -iE "$SECRET_FILTER"
+      - name: listening ports
+        run: ssh prod 'ss -tlnp'
+      - name: disk
+        run: ssh prod 'df -h'
+      - name: containers
+        run: ssh prod "docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'"
+      - name: app service
+        run: ssh prod 'systemctl is-active coffee-passport; git -C /opt/coffee-passport/app rev-parse HEAD'
