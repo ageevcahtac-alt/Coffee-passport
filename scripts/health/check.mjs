@@ -29,7 +29,7 @@ async function hit(url) {
 function internalLinks(html, pageUrl) {
   const out = new Set();
   for (const m of html.matchAll(/(?:href|src)=["']([^"'#]+)["']/g)) {
-    const raw = m[1];
+    const raw = m[1].replace(/&amp;/g, '&');  // атрибуты в HTML экранированы: &amp; → &
     if (/^(mailto:|tel:|javascript:|data:)/.test(raw)) continue;
     let u; try { u = new URL(raw, pageUrl); } catch { continue; }
     if (u.origin === new URL(base).origin) out.add(u.href.split('#')[0]);

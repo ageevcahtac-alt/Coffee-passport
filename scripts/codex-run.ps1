@@ -23,7 +23,9 @@ $timeoutSec = if ($env:CODEX_TIMEOUT) { [int]$env:CODEX_TIMEOUT } else { 3600 }
 
 $dir = Join-Path '.agents/runs' $Id
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
-$n = @(Get-ChildItem -LiteralPath $dir -Filter 'prompt-*.md' -File).Count + 1
+# Номер = максимальный существующий + 1: при пропуске в нумерации старые prompt/log/report не перезаписываются.
+$nums = @(Get-ChildItem -LiteralPath $dir -Filter 'prompt-*.md' -File | ForEach-Object { if ($_.BaseName -match '^prompt-(\d+)$') { [int]$Matches[1] } })
+$n = if ($nums.Count) { ($nums | Measure-Object -Maximum).Maximum + 1 } else { 1 }
 $promptCopy = Join-Path $dir "prompt-$n.md"
 $log = Join-Path $dir "codex-$n.log"
 $report = Join-Path $dir "report-$n.md"
