@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error — .mjs без типов
 import { redact } from './redact.mjs';
 
 describe('redact', () => {
