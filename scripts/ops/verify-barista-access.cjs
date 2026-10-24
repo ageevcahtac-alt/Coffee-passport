@@ -28,7 +28,26 @@ async function login(page, email, password, from = '/auth/login') {
     page.waitForURL((url) => url.pathname !== from || url.searchParams.has('error'), { timeout: 30000 }),
     page.click('form button[type="submit"]'),
   ]);
-  return new URL(page.url());
+  return settle(page);
+}
+
+// Вход ведёт цепочкой редиректов (форма → кабинет → requireStaffRole → смена пароля): первый
+// сменившийся адрес — ещё не итог. Итог — адрес, на котором страница затихла.
+// Затихла = адрес не менялся 3 с подряд; не затихла за 30 с — ошибка, а не промежуточный адрес.
+async function settle(page) {
+  const deadline = Date.now() + 30000;
+  let url = page.url();
+  let stableSince = Date.now();
+  while (Date.now() - stableSince < 3000) {
+    if (Date.now() > deadline) throw new Error(`адрес не затих за 30 с (последний ${new URL(url).pathname})`);
+    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForTimeout(250);
+    if (page.url() !== url) {
+      url = page.url();
+      stableSince = Date.now();
+    }
+  }
+  return new URL(url);
 }
 
 async function step(browser, label, fn) {
@@ -73,7 +92,11 @@ async function step(browser, label, fn) {
       });
 
       await step(browser, 'barista first login', async (page) => {
-        const landed = await login(page, flow.barista.email, flow.barista.temp_password);
+        let landed = await login(page, flow.barista.email, flow.barista.temp_password);
+        // Прямое ожидание нужного адреса — на случай редиректа позже окна settle(); настоящий баг
+        // (вход сразу в кабинет) всё равно упадёт по таймауту ниже.
+        await page.waitForURL((url) => url.pathname === '/auth/change-password', { timeout: 20000 }).catch(() => {});
+        landed = new URL(page.url());
         if (landed.pathname !== '/auth/change-password') throw new Error(`временный пароль привёл на ${landed.pathname}`);
         await page.fill('#new-password', flow.barista.password);
         await page.fill('#new-password-confirmation', flow.barista.password);
@@ -81,7 +104,7 @@ async function step(browser, label, fn) {
           page.waitForURL((url) => url.pathname !== '/auth/change-password' || url.searchParams.has('error'), { timeout: 30000 }),
           page.getByRole('button', { name: 'Сохранить и войти' }).click(),
         ]);
-        const after = new URL(page.url());
+        const after = await settle(page);
         if (after.pathname !== '/dashboard/barista') throw new Error(`после смены пароля — ${after.pathname}`);
         pass('barista first login', 'временный пароль -> /auth/change-password -> свой пароль -> /dashboard/barista');
       });
