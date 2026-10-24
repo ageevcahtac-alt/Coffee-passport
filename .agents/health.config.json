@@ -1,0 +1,28 @@
+{
+  "baseUrl": "http://localhost:3000",
+  "prodUrl": "https://147.45.102.186",
+  "maxMs": 3000,
+  "timeoutMs": 15000,
+  "maxLinks": 300,
+  "checkLinks": true,
+  "pages": [
+    { "path": "/api/health", "mustContain": ["\"status\":\"ok\"", "\"db\":\"ok\""] },
+    { "path": "/", "mustContain": ["Coffee Passport", "Every lot, tasted and remembered."] },
+    { "path": "/auth/login", "mustContain": ["Войти или создать аккаунт"] },
+    { "path": "/auth/reset-password" },
+    { "path": "/recipes", "mustContain": ["Рецепты сообщества"] },
+    { "path": "/top-recipes", "mustContain": ["Избранное платформы"] },
+    { "path": "/map" },
+    { "path": "/journey" },
+    { "path": "/journey/cuppings" },
+    { "path": "/loyalty" },
+    { "path": "/scan" },
+    { "path": "/coffee-kitchen" },
+    { "path": "/coffee-kitchen/recipes" },
+    { "path": "/coffee-kitchen/equipment" },
+    { "path": "/dashboard/cafe", "mustContain": ["Войти или создать аккаунт"] },
+    { "path": "/dashboard/roaster", "mustContain": ["Войти или создать аккаунт"] },
+    { "path": "/dashboard/barista", "mustContain": ["Войти или создать аккаунт"] },
+    { "path": "/admin", "status": 401 }
+  ]
+}

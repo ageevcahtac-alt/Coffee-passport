@@ -1,0 +1,47 @@
+name: site-health
+# Проверка прода: страницы, внутренние ссылки, /api/health ("status":"ok").
+# Маршруты и обязательные тексты — .agents/health.config.json, скрипт — scripts/health/check.mjs.
+# Адрес прода — переменная репозитория PROD_URL (Settings → Secrets and variables → Actions → Variables).
+# Без PROD_URL job пропускает проверку и выходит зелёным, issue не открывает.
+# Issue при поломке — только для запусков по расписанию и вручную, не для PR.
+on:
+  schedule:
+    - cron: "0 * * * *"   # каждый час
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/health.yml
+      - scripts/health/**
+      - .agents/health.config.json
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: site-health-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PROD_URL: ${{ vars.PROD_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: skip without PROD_URL
+        if: env.PROD_URL == ''
+        run: echo "::notice::PROD_URL не задан — проверка прода пропущена"
+      - name: check prod
+        if: env.PROD_URL != ''
+        run: |
+          set -o pipefail
+          node scripts/health/check.mjs --base "$PROD_URL" | tee health.txt
+      - name: open issue on failure
+        if: failure() && github.event_name != 'pull_request'
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          title="site-health FAIL $(date -u '+%F %H:%M')"
+          body="$(tail -n 60 health.txt 2>/dev/null || echo 'нет вывода проверки')"
+          gh issue create --title "$title" --label health --body "$body" || \
+            gh issue create --title "$title" --body "$body"

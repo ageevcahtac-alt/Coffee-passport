@@ -1,5 +1,7 @@
 # Project rules — Coffee Passport
 
+@.claude/ORCHESTRATION.md
+
 ## Audit Checkpoints ("Контрольные аудиты")
 
 This project uses a checkpoint file, `.last_audit`, to track the last
@@ -131,6 +133,7 @@ email/паролю (`app/auth/actions.ts`). Верить коду, а не READM
 | Workflow | Что делает | Блокирует merge? |
 |---|---|---|
 | `.github/workflows/ci.yml` | job `check`: `npm ci` → тесты → `tsc --noEmit` → lint (baseline) → `next build` с подставными `NEXT_PUBLIC_*`; на каждом PR и push в `main` / `fix/pre-pilot-shortlist` | да: ruleset `protect-prod` на `main` и `fix/pre-pilot-shortlist` — required check `check`, запрет force push и удаления; PR не обязателен, но прямой push без зелёного `check` не пройдёт |
+| `.github/workflows/health.yml` (`site-health`) | каждый час, вручную и на PR с правкой проверки: `scripts/health/check.mjs` по `vars.PROD_URL` — маршруты и тексты из `.agents/health.config.json`, `/api/health` с `"status":"ok"`; при поломке (не на PR) открывает issue. Без `PROD_URL` — зелёный пропуск | нет |
 | `.github/workflows/events-cron.yml` | ежедневно 03:00 UTC: POST в `/api/cron/events-archive`, `events-aggregate`, `cafe-menu-expire` с `EVENTS_CRON_SECRET`; секреты репо `APP_URL`, `EVENTS_CRON_SECRET` | нет (планировщик). Работает с 2026-10-20. Секрет на сервере — `/opt/coffee-passport/secrets/events_cron_secret` и `.env.local`; в GitHub ставить через bash `gh secret set EVENTS_CRON_SECRET < файл`, не через `\|` из PowerShell 5.1 (дописывает перевод строки → 401 / битый URL) |
 
 ## Деплой
