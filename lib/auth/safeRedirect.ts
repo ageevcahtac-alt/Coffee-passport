@@ -14,6 +14,9 @@ export function safeNextPath(next: string | null | undefined): string {
   if (!next.startsWith('/')) return '/'
   if (next.startsWith('//')) return '/'
   if (next.includes('://')) return '/'
+  // Browsers treat `\` as `/` and drop tabs/newlines, so `/\evil.example`
+  // would land on another host just like `//evil.example`.
+  if (/[\\\u0000-\u001f\u007f]/.test(next)) return '/'
   return next
 }
 

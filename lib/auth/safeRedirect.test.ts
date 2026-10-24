@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { authErrorPath } from './safeRedirect';
+import { authErrorPath, safeNextPath } from './safeRedirect';
 
 describe('contextual auth errors', () => {
   it('preserves the passport next param separately from the error', () => {
@@ -14,5 +14,17 @@ describe('contextual auth errors', () => {
     const url = new URL(authErrorPath(target, 'bad password'), 'http://local');
     expect(url.origin).toBe('http://local');
     expect(url.pathname).toBe('/');
+  });
+});
+
+describe('safeNextPath rejects paths a browser resolves to another host', () => {
+  const backslash = String.fromCharCode(92);
+  for (const next of [`/${backslash}evil.example`, `/${backslash}/evil.example`, '/\tevil', '/\nevil', '//evil.example']) {
+    it(`${JSON.stringify(next)} -> /`, () => {
+      expect(safeNextPath(next)).toBe('/');
+    });
+  }
+  it('keeps ordinary in-app paths with a query', () => {
+    expect(safeNextPath('/dashboard/barista?tab=loyalty')).toBe('/dashboard/barista?tab=loyalty');
   });
 });
