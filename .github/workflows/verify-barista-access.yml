@@ -1,0 +1,142 @@
+name: verify-barista-access
+# Доступ бариста и списание баллов — на проде, через настоящий интерфейс.
+# Только вручную. Кофейня shop-xo-vsevolozhsk добавляет бариста (email + временный пароль) →
+# бариста входит, меняет пароль, попадает в кабинет; экран скана открывается → временный гость
+# с абонементом 1000 ₽ → бариста находит его по коду и списывает сумму чека → баланс изменился →
+# кабинет кофейни видит операцию. Затем уборка гостя и та же проверка: его строк нет, чужие не изменились.
+# Учётка бариста остаётся (это доступ владельца). reset_barista=true — удалить её и пройти добавление заново.
+# Секреты временные, удаляются сразу после прогона: CABINET_CAFE_EMAIL, CABINET_CAFE_PASSWORD,
+# CABINET_BARISTA_EMAIL, CABINET_BARISTA_PASSWORD. Временный пароль бариста и пароль гостя
+# генерируются в job. В лог не попадают (маска GitHub).
+on:
+  workflow_dispatch:
+    inputs:
+      reset_barista:
+        description: "true — удалить прежнюю учётку бариста этой кофейни и добавить заново"
+        default: "false"
+permissions:
+  contents: read
+concurrency:
+  group: verify-barista-access
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RESET_BARISTA: ${{ inputs.reset_barista }}
+      CAFE_ID: shop-xo-vsevolozhsk
+      AMOUNT: "317"
+      PROD_URL: ${{ vars.PROD_URL }}
+      CAFE_EMAIL: ${{ secrets.CABINET_CAFE_EMAIL }}
+      CAFE_PASSWORD: ${{ secrets.CABINET_CAFE_PASSWORD }}
+      BARISTA_EMAIL: ${{ secrets.CABINET_BARISTA_EMAIL }}
+      BARISTA_PASSWORD: ${{ secrets.CABINET_BARISTA_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: validate input
+        run: |
+          case "$RESET_BARISTA" in true|false) ;; *) echo "::error::reset_barista: true | false"; exit 1;; esac
+          [ -n "$PROD_URL" ] || { echo "::error::PROD_URL не задан"; exit 1; }
+          for name in CAFE_EMAIL CAFE_PASSWORD BARISTA_EMAIL BARISTA_PASSWORD; do
+            [ -n "${!name}" ] || { echo "::error::секрет CABINET_$name не задан"; exit 1; }
+          done
+          [ "${#BARISTA_PASSWORD}" -ge 20 ] || { echo "::error::пароль бариста короче 20 символов"; exit 1; }
+      - name: payloads
+        run: |
+          umask 077
+          temp_password=$(openssl rand -base64 24 | tr -d '/+=\n')
+          guest_password=$(openssl rand -base64 33 | tr -d '/+=\n')
+          echo "::add-mask::$temp_password"
+          echo "::add-mask::$guest_password"
+          python3 - "$temp_password" "$guest_password" <<'PY'
+          import json, os, sys
+          run = os.environ['GITHUB_RUN_ID']
+          base = {
+              'cafe_id': os.environ['CAFE_ID'],
+              'reset_barista': os.environ['RESET_BARISTA'] == 'true',
+              'amount': int(os.environ['AMOUNT']),
+              'cafe': {'email': os.environ['CAFE_EMAIL'], 'password': os.environ['CAFE_PASSWORD']},
+              'barista': {'email': os.environ['BARISTA_EMAIL'], 'password': os.environ['BARISTA_PASSWORD'],
+                          'temp_password': sys.argv[1]},
+              'guest': {'email': f'barista-verify-guest-{run}@example.com', 'password': sys.argv[2],
+                        'display_name': f'Проверка бариста {run}'},
+          }
+          json.dump(base, open(os.environ['RUNNER_TEMP'] + '/base.json', 'w'))
+          PY
+      - uses: ./.github/actions/ssh-setup
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      - name: upload verify script
+        id: remote
+        run: |
+          remote=$(ssh prod 'mktemp /tmp/verify-barista-access.XXXXXX')
+          # Путь — до scp: если загрузка упадёт, cleanup всё равно удалит файл.
+          echo "path=$remote" >> "$GITHUB_OUTPUT"
+          scp -q deploy/timeweb/verify-barista-access.py "prod:$remote"
+      - name: playwright
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
+          npm init -y > /dev/null
+          npm install --silent --no-audit --no-fund playwright@1.48.2
+          npx playwright install --with-deps chromium > /dev/null
+      - name: prepare (barista state, temp guest with balance)
+        run: |
+          set -o pipefail
+          ssh prod "python3 ${{ steps.remote.outputs.path }} prepare" < "$RUNNER_TEMP/base.json" | tee "$RUNNER_TEMP/prepare.out"
+          grep -q '^temp guest: created' "$RUNNER_TEMP/prepare.out"
+          python3 - <<'PY'
+          import json, os
+          tmp = os.environ['RUNNER_TEMP']
+          out = dict(line.split('=', 1) for line in open(f'{tmp}/prepare.out').read().splitlines()
+                     if line.split('=', 1)[0] in ('BARISTA_STATE', 'GUEST_ID', 'SUBSCRIPTION_ID', 'OTHERS'))
+          base = json.load(open(f'{tmp}/base.json'))
+          base.update(barista_state=out['BARISTA_STATE'], guest_id=out['GUEST_ID'],
+                      subscription_id=out['SUBSCRIPTION_ID'], others=json.loads(out['OTHERS']))
+          base['guest']['id'] = out['GUEST_ID']
+          json.dump(base, open(f'{tmp}/flow.json', 'w'))
+          PY
+      - name: barista access and redeem through the UI on prod
+        env:
+          FLOW_JSON: ${{ runner.temp }}/flow.json
+          SHOTS_DIR: ${{ runner.temp }}/shots
+        run: |
+          mkdir -p "$SHOTS_DIR"
+          node scripts/ops/verify-barista-access.cjs "$RUNNER_TEMP/pw/node_modules/playwright"
+      - name: database before cleanup
+        if: always() && steps.remote.outputs.path != ''
+        run: |
+          [ -f "$RUNNER_TEMP/flow.json" ] || { echo "::error::prepare не дошёл до гостя"; exit 1; }
+          python3 -c "import json,os; p=json.load(open(os.environ['RUNNER_TEMP']+'/flow.json')); p['expect']='present'; json.dump(p, open(os.environ['RUNNER_TEMP']+'/present.json','w'))"
+          ssh prod "python3 ${{ steps.remote.outputs.path }} check" < "$RUNNER_TEMP/present.json"
+      - name: cleanup (temp guest and its loyalty rows)
+        if: always() && steps.remote.outputs.path != ''
+        run: ssh prod "python3 ${{ steps.remote.outputs.path }} purge" < "$RUNNER_TEMP/base.json"
+      - name: database after cleanup
+        if: always() && steps.remote.outputs.path != ''
+        run: |
+          [ -f "$RUNNER_TEMP/flow.json" ] || { echo "::error::prepare не дошёл до гостя"; exit 1; }
+          python3 -c "import json,os; p=json.load(open(os.environ['RUNNER_TEMP']+'/flow.json')); p['expect']='absent'; json.dump(p, open(os.environ['RUNNER_TEMP']+'/absent.json','w'))"
+          ssh prod "python3 ${{ steps.remote.outputs.path }} check" < "$RUNNER_TEMP/absent.json"
+      - name: failure screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-barista-access-shots
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: ignore
+          retention-days: 3
+      - name: cleanup
+        if: always()
+        run: |
+          # Без -e: каждая команда уборки выполняется, даже если предыдущая упала; итог — по худшей.
+          set +e
+          rc=0
+          remote="${{ steps.remote.outputs.path }}"
+          if [ -n "$remote" ]; then
+            ssh prod "python3 $remote purge" < "$RUNNER_TEMP/base.json" || rc=1
+            ssh prod "rm -f $remote" || rc=1
+          fi
+          rm -f "$RUNNER_TEMP"/*.json "$RUNNER_TEMP"/*.out || rc=1
+          exit $rc
