@@ -16,6 +16,7 @@ stdin для inspect/apply: {"accounts": [{"label", "email", "password"?, "role"
 "roaster_id"?, "cafe_id"?}]}
 """
 import json
+import re
 import sys
 from pathlib import Path
 from urllib.error import HTTPError
@@ -110,8 +111,15 @@ def apply(accounts):
             sys.exit(f'FAIL {account["label"]}: роль неизвестна или пароль короче 20 символов')
         if account['role'] == 'roaster_admin' and account.get('roaster_id') not in roasters:
             sys.exit(f'FAIL {account["label"]}: обжарщика {account.get("roaster_id")!r} нет в roasters')
-        if account['role'] == 'cafe_admin' and account.get('cafe_id') not in shops:
-            sys.exit(f'FAIL {account["label"]}: кофейни {account.get("cafe_id")!r} нет в coffee_shops')
+        if account['role'] == 'cafe_admin':
+            # profiles.cafe_id — текстовый id без внешнего ключа (0007), кабинет кофейни берёт кофейню
+            # из lib/data/coffeeShopSeed.ts. Каноническая таблица coffee_shops (0022) в проде может быть
+            # ещё пустой — это не мешает привязке, только предупреждаем.
+            if not re.fullmatch(r'shop-[a-z0-9-]+', account.get('cafe_id') or ''):
+                sys.exit(f'FAIL {account["label"]}: cafe_id {account.get("cafe_id")!r} не похож на id кофейни')
+            if account['cafe_id'] not in shops:
+                print(f'note {account["label"]}: {account["cafe_id"]} нет в coffee_shops (таблица не заполнена), '
+                      'привязка — по profiles.cafe_id')
     for account in accounts:
         user, action = upsert_user(account['email'], account['password'])
         profile = set_profile(user['id'], account['role'], account.get('roaster_id'), account.get('cafe_id'))
