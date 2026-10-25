@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminSupabaseClient } from '@/lib/supabase/adminClient'
 import { safeNextPath } from '@/lib/auth/safeRedirect'
+import { baristaCardExists, grantPendingBaristaRights } from '@/lib/auth/grantBaristaRights'
 import {
   TEMPORARY_PASSWORD_EXPIRED_MESSAGE,
   pendingBaristaBinding,
@@ -18,15 +19,20 @@ function backWithError(next: string, error: string): never {
   redirect(`/auth/change-password?next=${encodeURIComponent(next)}&error=${encodeURIComponent(error)}`)
 }
 
+function toLogin(next: string, error: string): never {
+  redirect(`/auth/login?next=${encodeURIComponent(next)}&error=${encodeURIComponent(error)}`)
+}
+
 // First sign-in of a login the cafe created (or re-issued) with a temporary
 // password (see app/api/cafe/staff/barista-accounts/route.ts). Only an account
 // that still carries the flag can use this — it is not a general "change
 // password without the old one" — and only within the 72 hours.
 //
-// Barista rights are granted here, from the binding the cafe left in
-// app_metadata: first profiles.role = 'barista', then one admin call sets the
-// password and clears the flag. If that call fails the rights are taken back,
-// so the temporary password never ends up holding them.
+// Order matters: first one admin call sets the own password and clears the
+// flag, only then barista rights are granted from the binding the cafe left in
+// app_metadata (lib/auth/grantBaristaRights.ts). So a temporary password never
+// holds the rights, even for a moment. If the grant fails after the password
+// is saved, the next login with the own password finishes it (app/auth/actions.ts).
 export async function changeTemporaryPassword(formData: FormData) {
   const next = safeNextPath(String(formData.get('next') || '/'))
   const password = String(formData.get('password') || '')
@@ -41,7 +47,7 @@ export async function changeTemporaryPassword(formData: FormData) {
   if (temporary === 'none') redirect(next)
   if (temporary === 'expired') {
     await supabase.auth.signOut()
-    redirect(`/auth/login?next=${encodeURIComponent(next)}&error=${encodeURIComponent(TEMPORARY_PASSWORD_EXPIRED_MESSAGE)}`)
+    toLogin(next, TEMPORARY_PASSWORD_EXPIRED_MESSAGE)
   }
 
   if (password.length < MIN_LENGTH || password.length > MAX_LENGTH) {
@@ -59,24 +65,8 @@ export async function changeTemporaryPassword(formData: FormData) {
 
   // A login created before the binding existed already has its profile.
   const binding = pendingBaristaBinding(user)
-  if (binding) {
-    const card = await admin
-      .from('barista_profiles')
-      .select('id')
-      .eq('id', binding.baristaId)
-      .eq('coffee_shop_id', binding.cafeId)
-      .maybeSingle()
-    if (card.error || !card.data) {
-      backWithError(next, 'Кофейня удалила эту учётку. Попросите её создать доступ заново.')
-    }
-    const granted = await admin.from('profiles').upsert(
-      { id: user.id, role: 'barista', cafe_id: binding.cafeId, roaster_id: null, barista_id: binding.baristaId },
-      { onConflict: 'id' }
-    )
-    if (granted.error) {
-      console.error('[change-password] grant failed:', granted.error.message)
-      backWithError(next, saveFailed)
-    }
+  if (binding && !(await baristaCardExists(admin, binding))) {
+    backWithError(next, 'Кофейня удалила эту учётку. Попросите её создать доступ заново.')
   }
 
   let failed = false
@@ -92,20 +82,19 @@ export async function changeTemporaryPassword(formData: FormData) {
   } catch {
     failed = true
   }
-  if (failed) {
-    if (binding) await admin.from('profiles').update({ role: 'enthusiast', cafe_id: null, barista_id: null }).eq('id', user.id)
-    backWithError(next, saveFailed)
+  if (failed) backWithError(next, saveFailed)
+
+  if (binding) {
+    const granted = await grantPendingBaristaRights(admin, user.id, binding)
+    if (granted === 'reissued') toLogin(next, 'Кофейня только что выдала новый временный пароль. Войдите с ним.')
+    if (granted !== 'granted') toLogin(next, 'Пароль сохранён, но кабинет не открылся. Войдите с новым паролем ещё раз.')
   }
 
   // GoTrue ends the account's sessions on an admin password change — sign in
   // again with the new password so the barista lands in the cabinet, not on
   // the login form.
   const { error: signInError } = await supabase.auth.signInWithPassword({ email: user.email ?? '', password })
-  if (signInError) {
-    redirect(
-      `/auth/login?next=${encodeURIComponent(next)}&error=${encodeURIComponent('Пароль сохранён. Войдите с новым паролем.')}`
-    )
-  }
+  if (signInError) toLogin(next, 'Пароль сохранён. Войдите с новым паролем.')
 
   revalidatePath('/', 'layout')
   redirect(next)

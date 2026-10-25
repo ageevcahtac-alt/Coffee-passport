@@ -5,6 +5,22 @@ const mocks = vi.hoisted(() => ({ auth: vi.fn(), redirect: vi.fn(), revalidate: 
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ auth: {
   signInWithPassword: mocks.auth, signUp: mocks.auth, signOut: mocks.signOut,
 }, from: () => ({ select: () => ({ eq: () => ({ maybeSingle: mocks.profile }) }) }) }) }));
+const admin = vi.hoisted(() => ({ upserts: [] as unknown[] }));
+vi.mock('@/lib/supabase/adminClient', () => ({
+  createAdminSupabaseClient: () => ({
+    auth: { admin: { getUserById: async () => ({ data: { user: { app_metadata: { must_change_password: false } } }, error: null }) } },
+    from: () => {
+      const builder = {
+        select: () => builder,
+        eq: () => builder,
+        maybeSingle: async () => ({ data: { id: 'barista-x' }, error: null }),
+        upsert: async (row: unknown) => (admin.upserts.push(row), { error: null }),
+        update: () => ({ eq: async () => ({ error: null }) }),
+      };
+      return builder;
+    },
+  }),
+}));
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }));
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidate }));
 
@@ -111,5 +127,18 @@ describe('login with a temporary password the cafe issued', () => {
     mocks.auth.mockReset().mockResolvedValue({ data: { user: userWith('2099-01-01T00:00:00.000Z') }, error: null });
     await expect(login()).rejects.toThrow('/auth/change-password?next=%2Fdashboard%2Fbarista');
     expect(mocks.signOut).not.toHaveBeenCalled();
+  });
+
+  // The password change saved the own password but the grant failed: the next
+  // login with that own password finishes it and opens the cabinet.
+  it('finishes a pending barista grant on login with the own password', async () => {
+    admin.upserts.length = 0;
+    mocks.auth.mockReset().mockResolvedValue({
+      data: { user: { id: 'u1', app_metadata: { must_change_password: false, cafe_id: 'shop-x', barista_id: 'barista-x' } } },
+      error: null,
+    });
+    mocks.profile.mockResolvedValueOnce({ data: { role: 'enthusiast' } }).mockResolvedValue({ data: { role: 'barista' } });
+    await expect(login()).rejects.toThrow('/dashboard/barista');
+    expect(admin.upserts).toEqual([{ id: 'u1', role: 'barista', cafe_id: 'shop-x', roaster_id: null, barista_id: 'barista-x' }]);
   });
 });

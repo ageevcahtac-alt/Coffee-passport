@@ -319,10 +319,24 @@ describe('PATCH /api/cafe/staff/barista-accounts (new temporary password)', () =
     const demote = writes('profiles', 'update');
     expect(demote.map((call) => [call.payload, call.filters])).toEqual([
       [{ role: 'enthusiast', cafe_id: null, barista_id: null }, [['id', 'u-active']]],
+      [{ role: 'enthusiast', cafe_id: null, barista_id: null }, [['id', 'u-active']]],
     ]);
     const passwordSet = calls.findIndex((call) => call.op === 'updateUserById');
     expect(calls.indexOf(demote[0])).toBeLessThan(passwordSet);
     expect(updateUserById).toHaveBeenCalledWith('u-active', { password: PASSWORD, app_metadata: expectedMetadata('barista-active') });
+  });
+
+  // Codex review PR #25: a password change running concurrently may grant the
+  // role after PATCH read the profile as "not a barista" — PATCH takes the
+  // rights away regardless, and again after the flag is set.
+  it('takes rights away even from a login that looked pending, and again after the flag is set', async () => {
+    signInAs('cafe_admin');
+    const response = await PATCH(patch({ baristaId: 'barista-expired', temporaryPassword: PASSWORD }));
+    expect(response.status).toBe(200);
+    const order = calls
+      .filter((call) => call.op === 'updateUserById' || (call.table === 'profiles' && call.op === 'update'))
+      .map((call) => (call.op === 'updateUserById' ? 'password' : `demote:${call.filters[0][1]}`));
+    expect(order).toEqual(['demote:u-expired', 'password', 'demote:u-expired']);
   });
 
   it('restores barista rights when the password update fails', async () => {

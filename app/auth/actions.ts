@@ -5,7 +5,9 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { PILOT_STAFF_PASSWORD, PILOT_STAFF_ROLES, type PilotStaffRole } from '@/lib/auth/pilotStaff'
 import { authErrorPath, safeNextPath } from '@/lib/auth/safeRedirect'
-import { TEMPORARY_PASSWORD_EXPIRED_MESSAGE, temporaryPasswordState } from '@/lib/auth/temporaryPassword'
+import { TEMPORARY_PASSWORD_EXPIRED_MESSAGE, pendingBaristaBinding, temporaryPasswordState } from '@/lib/auth/temporaryPassword'
+import { grantPendingBaristaRights } from '@/lib/auth/grantBaristaRights'
+import { createAdminSupabaseClient } from '@/lib/supabase/adminClient'
 import type { ProfileRole } from '@/lib/types/database'
 
 export async function signInWithPassword(formData: FormData) {
@@ -38,6 +40,20 @@ export async function signInWithPassword(formData: FormData) {
   if (temporary === 'active') {
     const target = next === '/' || next === '/journey' ? '/dashboard/barista' : next
     redirect(`/auth/change-password?next=${encodeURIComponent(target)}`)
+  }
+
+  // Own password already set, but the barista grant after it did not go
+  // through (app/auth/change-password/actions.ts): finish it now.
+  const binding = data?.user ? pendingBaristaBinding(data.user) : null
+  if (binding && data?.user) {
+    const { data: current } = await supabase.from('profiles').select('role').eq('id', data.user.id).maybeSingle()
+    if (current?.role !== 'barista') {
+      try {
+        await grantPendingBaristaRights(createAdminSupabaseClient(), data.user.id, binding)
+      } catch (error) {
+        console.error('[login] pending barista grant failed:', error instanceof Error ? error.message : 'unknown')
+      }
+    }
   }
 
   // The form's default landings ('/' from /auth/login, '/journey' from the

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   cards: [] as { id: string; coffee_shop_id: string }[],
   failProfiles: false,
   order: 0,
+  fresh: { must_change_password: false } as Record<string, unknown>,
 }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: () => ({
@@ -20,7 +21,12 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 vi.mock('@/lib/supabase/adminClient', () => ({
   createAdminSupabaseClient: () => ({
-    auth: { admin: { updateUserById: mocks.updateUserById } },
+    auth: {
+      admin: {
+        updateUserById: mocks.updateUserById,
+        getUserById: async () => ({ data: { user: { id: 'u1', app_metadata: mocks.fresh } }, error: null }),
+      },
+    },
     from: (table: string) => {
       const filters: Record<string, unknown> = {};
       const write = (op: string) => (payload: unknown) => {
@@ -72,6 +78,7 @@ describe('changeTemporaryPassword', () => {
     mocks.writes.length = 0;
     mocks.cards = [{ id: 'barista-anna', coffee_shop_id: 'shop-xo-vsevolozhsk' }];
     mocks.failProfiles = false;
+    mocks.fresh = { must_change_password: false };
     mocks.signOut.mockReset().mockResolvedValue({ error: null });
     mocks.user.mockReset().mockReturnValue({ id: 'u1', email: 'anna@example.com', app_metadata: PENDING });
     mocks.signIn.mockReset().mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
@@ -105,7 +112,9 @@ describe('changeTemporaryPassword', () => {
     });
   });
 
-  it('grants barista rights from the pending binding before the password is set', async () => {
+  // Codex review PR #25: rights granted before the password change left a
+  // window where the temporary password already held them.
+  it('grants barista rights only AFTER the own password replaced the temporary one', async () => {
     await expect(
       changeTemporaryPassword(form({ password: NEW_PASSWORD, confirmation: NEW_PASSWORD, next: '/dashboard/barista' }))
     ).rejects.toThrow('/dashboard/barista');
@@ -118,18 +127,38 @@ describe('changeTemporaryPassword', () => {
       barista_id: 'barista-anna',
     });
     const passwordSet = mocks.writes.find((write) => write.op === 'updateUserById');
-    expect(grant!.order).toBeLessThan(passwordSet!.order);
+    expect(passwordSet!.order).toBeLessThan(grant!.order);
   });
 
-  it('takes the rights back when the password cannot be saved', async () => {
+  it('grants nothing when the password cannot be saved', async () => {
     mocks.updateUserById.mockResolvedValueOnce({ data: { user: null }, error: { status: 422, code: 'weak_password' } });
     await expect(
       changeTemporaryPassword(form({ password: NEW_PASSWORD, confirmation: NEW_PASSWORD, next: '/dashboard/barista' }))
     ).rejects.toThrow(/^\/auth\/change-password\?/);
+    expect(mocks.writes.filter((write) => write.table === 'profiles')).toEqual([]);
+  });
+
+  // Codex review PR #25: the cafe re-issued a temporary password between our
+  // password change and the grant — the new temporary password must not end
+  // up holding barista rights.
+  it('takes the rights back when a re-issue landed between the password change and the grant', async () => {
+    mocks.fresh = { must_change_password: true };
+    await expect(
+      changeTemporaryPassword(form({ password: NEW_PASSWORD, confirmation: NEW_PASSWORD, next: '/dashboard/barista' }))
+    ).rejects.toThrow(/^\/auth\/login\?next=%2Fdashboard%2Fbarista&error=/);
     expect(mocks.writes.filter((write) => write.table === 'profiles').map((write) => write.payload)).toEqual([
       { id: 'u1', role: 'barista', cafe_id: 'shop-xo-vsevolozhsk', roaster_id: null, barista_id: 'barista-anna' },
       { role: 'enthusiast', cafe_id: null, barista_id: null },
     ]);
+    expect(mocks.signIn).not.toHaveBeenCalled();
+  });
+
+  it('if the grant fails after the password is saved, sends to login (the next login finishes the grant)', async () => {
+    mocks.failProfiles = true;
+    await expect(
+      changeTemporaryPassword(form({ password: NEW_PASSWORD, confirmation: NEW_PASSWORD, next: '/dashboard/barista' }))
+    ).rejects.toThrow(/^\/auth\/login\?next=%2Fdashboard%2Fbarista&error=/);
+    expect(mocks.signIn).not.toHaveBeenCalled();
   });
 
   it('refuses when the barista card no longer belongs to that cafe', async () => {

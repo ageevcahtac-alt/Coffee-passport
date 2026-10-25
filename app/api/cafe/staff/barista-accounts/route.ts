@@ -208,13 +208,13 @@ export async function PATCH(request: Request) {
   if (!user) return fail(404, 'no_account', 'У этого бариста нет учётки. Создайте её кнопкой «+ Добавить сотрудника».');
 
   // Rights go first: from here until the new password is replaced, nothing
-  // in the database answers to this login as a barista.
-  if (activeId) {
-    const demoted = await admin.from('profiles').update(NO_RIGHTS).eq('id', user.id);
-    if (demoted.error) {
-      console.error('[barista-accounts] demote failed:', demoted.error.message);
-      return fail(500, 'reissue_failed', 'Не удалось выдать пароль.');
-    }
+  // in the database answers to this login as a barista. Always, not only
+  // when the profile read above said "barista": a password change running
+  // right now may grant the role after that read.
+  const demoted = await admin.from('profiles').update(NO_RIGHTS).eq('id', user.id);
+  if (demoted.error) {
+    console.error('[barista-accounts] demote failed:', demoted.error.message);
+    return fail(500, 'reissue_failed', 'Не удалось выдать пароль.');
   }
 
   const metadata = pendingBaristaMetadata(cafeId, baristaId);
@@ -224,6 +224,14 @@ export async function PATCH(request: Request) {
     if (error.code === 'weak_password') return fail(400, 'invalid_password', 'Пароль слишком простой. Выберите другой.');
     console.error('[barista-accounts] reissue failed:', error.code ?? error.status ?? 'unknown');
     return fail(500, 'reissue_failed', 'Не удалось выдать пароль.');
+  }
+
+  // And once more after the flag is on: a grant that slipped in between
+  // (lib/auth/grantBaristaRights.ts) cannot outlive the new temporary password.
+  const settled = await admin.from('profiles').update(NO_RIGHTS).eq('id', user.id);
+  if (settled.error) {
+    console.error('[barista-accounts] demote after reissue failed:', settled.error.message);
+    return fail(500, 'reissue_failed', 'Не удалось выдать пароль. Попробуйте ещё раз.');
   }
 
   return NextResponse.json({ baristaId, email: user.email ?? '', expiresAt: metadata.temporary_password_expires_at });
