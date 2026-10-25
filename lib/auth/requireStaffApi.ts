@@ -23,6 +23,19 @@ export async function requireStaffApi(
     };
   }
 
+  // A login with the cafe's temporary password does nothing until its owner
+  // sets their own (lib/auth/temporaryPassword.ts) — refused here, not only in
+  // the cabinet UI.
+  if (user.app_metadata?.must_change_password === true) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: 'Сначала задайте свой пароль.', code: 'password_change_required' },
+        { status: 403 }
+      ),
+    };
+  }
+
   const { data: profile } = await supabase
     .from('profiles')
     .select('role, cafe_id, roaster_id, barista_id, display_name')

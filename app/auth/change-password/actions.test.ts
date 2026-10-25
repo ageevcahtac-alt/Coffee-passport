@@ -7,19 +7,52 @@ const mocks = vi.hoisted(() => ({
   signIn: vi.fn(),
   redirect: vi.fn(),
   revalidate: vi.fn(),
+  signOut: vi.fn(),
+  writes: [] as { table: string; op: string; payload: unknown; order: number }[],
+  cards: [] as { id: string; coffee_shop_id: string }[],
+  failProfiles: false,
+  order: 0,
 }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: () => ({
-    auth: { getUser: async () => ({ data: { user: mocks.user() } }), signInWithPassword: mocks.signIn },
+    auth: { getUser: async () => ({ data: { user: mocks.user() } }), signInWithPassword: mocks.signIn, signOut: mocks.signOut },
   }),
 }));
 vi.mock('@/lib/supabase/adminClient', () => ({
-  createAdminSupabaseClient: () => ({ auth: { admin: { updateUserById: mocks.updateUserById } } }),
+  createAdminSupabaseClient: () => ({
+    auth: { admin: { updateUserById: mocks.updateUserById } },
+    from: (table: string) => {
+      const filters: Record<string, unknown> = {};
+      const write = (op: string) => (payload: unknown) => {
+        mocks.writes.push({ table, op, payload, order: ++mocks.order });
+        const result = { error: mocks.failProfiles && table === 'profiles' ? { message: 'boom' } : null };
+        // upsert(...) is awaited directly, update(...).eq(...) one step later.
+        return Object.assign(Promise.resolve(result), { eq: () => Promise.resolve(result) });
+      };
+      const builder = {
+        select: () => builder,
+        eq: (column: string, value: unknown) => ((filters[column] = value), builder),
+        maybeSingle: async () => ({
+          data: mocks.cards.find((card) => Object.entries(filters).every(([k, v]) => (card as Record<string, unknown>)[k] === v)) ?? null,
+          error: null,
+        }),
+        upsert: write('upsert'),
+        update: write('update'),
+      };
+      return builder;
+    },
+  }),
 }));
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }));
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidate }));
 
 const NEW_PASSWORD = 'my-own-password-2026';
+const PENDING = {
+  must_change_password: true,
+  temporary_password_expires_at: '2099-01-01T00:00:00.000Z',
+  cafe_id: 'shop-xo-vsevolozhsk',
+  barista_id: 'barista-anna',
+};
 
 function form(fields: Record<string, string>) {
   const data = new FormData();
@@ -32,8 +65,15 @@ describe('changeTemporaryPassword', () => {
     mocks.redirect.mockReset().mockImplementation((path: string) => {
       throw new Error(path);
     });
-    mocks.updateUserById.mockReset().mockResolvedValue({ data: { user: {} }, error: null });
-    mocks.user.mockReset().mockReturnValue({ id: 'u1', email: 'anna@example.com', app_metadata: { must_change_password: true } });
+    mocks.updateUserById.mockReset().mockImplementation(async () => {
+      mocks.writes.push({ table: 'auth.users', op: 'updateUserById', payload: null, order: ++mocks.order });
+      return { data: { user: {} }, error: null };
+    });
+    mocks.writes.length = 0;
+    mocks.cards = [{ id: 'barista-anna', coffee_shop_id: 'shop-xo-vsevolozhsk' }];
+    mocks.failProfiles = false;
+    mocks.signOut.mockReset().mockResolvedValue({ error: null });
+    mocks.user.mockReset().mockReturnValue({ id: 'u1', email: 'anna@example.com', app_metadata: PENDING });
     mocks.signIn.mockReset().mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
@@ -61,8 +101,58 @@ describe('changeTemporaryPassword', () => {
     ).rejects.toThrow('/dashboard/barista');
     expect(mocks.updateUserById).toHaveBeenCalledWith('u1', {
       password: NEW_PASSWORD,
-      app_metadata: { must_change_password: false },
+      app_metadata: { must_change_password: false, temporary_password_expires_at: null },
     });
+  });
+
+  it('grants barista rights from the pending binding before the password is set', async () => {
+    await expect(
+      changeTemporaryPassword(form({ password: NEW_PASSWORD, confirmation: NEW_PASSWORD, next: '/dashboard/barista' }))
+    ).rejects.toThrow('/dashboard/barista');
+    const grant = mocks.writes.find((write) => write.table === 'profiles');
+    expect(grant?.payload).toEqual({
+      id: 'u1',
+      role: 'barista',
+      cafe_id: 'shop-xo-vsevolozhsk',
+      roaster_id: null,
+      barista_id: 'barista-anna',
+    });
+    const passwordSet = mocks.writes.find((write) => write.op === 'updateUserById');
+    expect(grant!.order).toBeLessThan(passwordSet!.order);
+  });
+
+  it('takes the rights back when the password cannot be saved', async () => {
+    mocks.updateUserById.mockResolvedValueOnce({ data: { user: null }, error: { status: 422, code: 'weak_password' } });
+    await expect(
+      changeTemporaryPassword(form({ password: NEW_PASSWORD, confirmation: NEW_PASSWORD, next: '/dashboard/barista' }))
+    ).rejects.toThrow(/^\/auth\/change-password\?/);
+    expect(mocks.writes.filter((write) => write.table === 'profiles').map((write) => write.payload)).toEqual([
+      { id: 'u1', role: 'barista', cafe_id: 'shop-xo-vsevolozhsk', roaster_id: null, barista_id: 'barista-anna' },
+      { role: 'enthusiast', cafe_id: null, barista_id: null },
+    ]);
+  });
+
+  it('refuses when the barista card no longer belongs to that cafe', async () => {
+    mocks.cards = [];
+    await expect(
+      changeTemporaryPassword(form({ password: NEW_PASSWORD, confirmation: NEW_PASSWORD, next: '/dashboard/barista' }))
+    ).rejects.toThrow(/^\/auth\/change-password\?/);
+    expect(mocks.updateUserById).not.toHaveBeenCalled();
+    expect(mocks.writes).toEqual([]);
+  });
+
+  it('an expired temporary password (72 h) changes nothing and ends the session', async () => {
+    mocks.user.mockReturnValue({
+      id: 'u1',
+      email: 'anna@example.com',
+      app_metadata: { ...PENDING, temporary_password_expires_at: '2020-01-01T00:00:00.000Z' },
+    });
+    await expect(
+      changeTemporaryPassword(form({ password: NEW_PASSWORD, confirmation: NEW_PASSWORD, next: '/dashboard/barista' }))
+    ).rejects.toThrow(/^\/auth\/login\?next=%2Fdashboard%2Fbarista&error=.*72/);
+    expect(mocks.signOut).toHaveBeenCalled();
+    expect(mocks.updateUserById).not.toHaveBeenCalled();
+    expect(mocks.writes).toEqual([]);
   });
 
   it('rejects a short or mismatched password without touching the account', async () => {

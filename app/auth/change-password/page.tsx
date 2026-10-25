@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { safeNextPath } from '@/lib/auth/safeRedirect';
+import { TEMPORARY_PASSWORD_EXPIRED_MESSAGE, temporaryPasswordState } from '@/lib/auth/temporaryPassword';
+import { signOut } from '@/app/auth/actions';
 import { changeTemporaryPassword } from './actions';
 
 export const dynamic = 'force-dynamic';
@@ -20,7 +22,25 @@ export default async function ChangePasswordPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) redirect(`/auth/login?next=${encodeURIComponent(next)}`);
-  if (user.app_metadata?.must_change_password !== true) redirect(next);
+  const temporary = temporaryPasswordState(user);
+  if (temporary === 'none') redirect(next);
+
+  if (temporary === 'expired') {
+    return (
+      <main className="min-h-dvh flex items-center justify-center bg-parchment-200 px-6">
+        <div className="w-full max-w-sm rounded-md border border-ink-200 bg-parchment-100 p-6">
+          <p className="text-xs uppercase tracking-widest text-ink-400">Coffee Passport</p>
+          <h1 className="mt-3 mb-4 font-display text-3xl text-ink-900">Пароль истёк</h1>
+          <p role="alert" className="mb-5 text-sm text-rating">{TEMPORARY_PASSWORD_EXPIRED_MESSAGE}</p>
+          <form action={signOut}>
+            <button type="submit" className="rounded-md bg-ink-900 px-5 py-3 text-sm font-medium text-parchment-100">
+              Выйти
+            </button>
+          </form>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-dvh flex items-center justify-center bg-parchment-200 px-6">

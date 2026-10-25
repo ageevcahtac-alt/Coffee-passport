@@ -4,6 +4,10 @@ name: verify-barista-access
 # бариста входит, меняет пароль, попадает в кабинет; экран скана открывается → временный гость
 # с абонементом 1000 ₽ → бариста находит его по коду и списывает сумму чека → баланс изменился →
 # кабинет кофейни видит операцию. Затем уборка гостя и та же проверка: его строк нет, чужие не изменились.
+# Временный бариста прогона (barista-verify-temp-<run>@example.com): кофейня создаёт его одной кнопкой
+# «+ Добавить сотрудника» → он сразу виден в форме оценки гостя, гость его оценивает → API (RPC лояльности)
+# отклоняет его действия до смены пароля → срок временного пароля в прошлое, вход отклонён → кофейня
+# выдаёт новый → бариста меняет пароль → оценка видна в его кабинете. Уборка удаляет его вместе с гостем.
 # Учётка бариста остаётся (это доступ владельца). reset_barista=true — удалить её и пройти добавление заново.
 # Секреты временные, удаляются сразу после прогона: CABINET_CAFE_EMAIL, CABINET_CAFE_PASSWORD,
 # CABINET_BARISTA_EMAIL, CABINET_BARISTA_PASSWORD. Временный пароль бариста и пароль гостя
@@ -47,9 +51,13 @@ jobs:
           umask 077
           temp_password=$(openssl rand -base64 24 | tr -d '/+=\n')
           guest_password=$(openssl rand -base64 33 | tr -d '/+=\n')
-          echo "::add-mask::$temp_password"
-          echo "::add-mask::$guest_password"
-          python3 - "$temp_password" "$guest_password" <<'PY'
+          staff_temp=$(openssl rand -base64 24 | tr -d '/+=\n')
+          staff_temp2=$(openssl rand -base64 24 | tr -d '/+=\n')
+          staff_password=$(openssl rand -base64 33 | tr -d '/+=\n')
+          for secret in "$temp_password" "$guest_password" "$staff_temp" "$staff_temp2" "$staff_password"; do
+            echo "::add-mask::$secret"
+          done
+          python3 - "$temp_password" "$guest_password" "$staff_temp" "$staff_temp2" "$staff_password" <<'PY'
           import json, os, sys
           run = os.environ['GITHUB_RUN_ID']
           base = {
@@ -61,6 +69,9 @@ jobs:
                           'temp_password': sys.argv[1]},
               'guest': {'email': f'barista-verify-guest-{run}@example.com', 'password': sys.argv[2],
                         'display_name': f'Проверка бариста {run}'},
+              'temp_barista': {'email': f'barista-verify-temp-{run}@example.com', 'name': f'Новый бариста {run}',
+                               'note': f'Отзыв проверки {run}', 'temp_password': sys.argv[3],
+                               'temp_password2': sys.argv[4], 'password': sys.argv[5]},
           }
           json.dump(base, open(os.environ['RUNNER_TEMP'] + '/base.json', 'w'))
           PY
@@ -90,20 +101,37 @@ jobs:
           import json, os
           tmp = os.environ['RUNNER_TEMP']
           out = dict(line.split('=', 1) for line in open(f'{tmp}/prepare.out').read().splitlines()
-                     if line.split('=', 1)[0] in ('BARISTA_STATE', 'GUEST_ID', 'SUBSCRIPTION_ID'))
+                     if line.split('=', 1)[0] in ('BARISTA_STATE', 'GUEST_ID', 'SUBSCRIPTION_ID', 'LOT_ID'))
           base = json.load(open(f'{tmp}/base.json'))
           base.update(barista_state=out['BARISTA_STATE'], guest_id=out['GUEST_ID'],
-                      subscription_id=out['SUBSCRIPTION_ID'])
+                      subscription_id=out['SUBSCRIPTION_ID'], lot_id=out['LOT_ID'])
           base['guest']['id'] = out['GUEST_ID']
           json.dump(base, open(f'{tmp}/flow.json', 'w'))
           PY
-      - name: barista access and redeem through the UI on prod
+      - name: new staff login, guest rating form (UI on prod)
         env:
           FLOW_JSON: ${{ runner.temp }}/flow.json
           SHOTS_DIR: ${{ runner.temp }}/shots
         run: |
           mkdir -p "$SHOTS_DIR"
-          node scripts/ops/verify-barista-access.cjs "$RUNNER_TEMP/pw/node_modules/playwright"
+          node scripts/ops/verify-barista-access.cjs "$RUNNER_TEMP/pw/node_modules/playwright" create
+      - name: API refuses barista actions before password change; temporary password expires
+        run: |
+          set -o pipefail
+          ssh prod "python3 ${{ steps.remote.outputs.path }} gate" < "$RUNNER_TEMP/flow.json" | tee "$RUNNER_TEMP/gate.out"
+          python3 - <<'PY'
+          import json, os
+          tmp = os.environ['RUNNER_TEMP']
+          card = [l.split('=', 1)[1] for l in open(f'{tmp}/gate.out').read().splitlines() if l.startswith('TEMP_BARISTA_ID=')]
+          flow = json.load(open(f'{tmp}/flow.json'))
+          flow['temp_barista_id'] = card[0]
+          json.dump(flow, open(f'{tmp}/flow.json', 'w'))
+          PY
+      - name: expired password, new temporary password, rating in cabinet, redeem (UI on prod)
+        env:
+          FLOW_JSON: ${{ runner.temp }}/flow.json
+          SHOTS_DIR: ${{ runner.temp }}/shots
+        run: node scripts/ops/verify-barista-access.cjs "$RUNNER_TEMP/pw/node_modules/playwright" main
       - name: database before cleanup
         if: always() && steps.remote.outputs.path != ''
         run: |

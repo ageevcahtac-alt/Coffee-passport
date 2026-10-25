@@ -74,12 +74,6 @@ export default function StaffDetailPage({ params }: { params: { id: string } }) 
 
         <div className="flex flex-wrap gap-x-4 gap-y-2 mt-10">
           <Link
-            href={`/dashboard/cafe/staff/${member.id}/edit`}
-            className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900"
-          >
-            Редактировать
-          </Link>
-          <Link
             href="/dashboard/cafe/team"
             className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900"
           >

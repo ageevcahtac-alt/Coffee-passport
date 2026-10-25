@@ -1,4 +1,4 @@
-import { getBaristaById } from '@/lib/data/baristas';
+import { getMergedBaristaById } from '@/lib/data/baristaProfileStore';
 import { formatTastingDate } from '@/lib/utils/date';
 import { StarRating } from '@/components/coffee/StarRating';
 import type { TastingRecord } from '@/lib/types/coffee';
@@ -7,7 +7,7 @@ import type { TastingRecord } from '@/lib/types/coffee';
 // (components/cafe/GuestFeedback.tsx) and the full paginated archive
 // (app/dashboard/cafe/(hub)/analytics/page.tsx).
 export function ServiceReviewCard({ record }: { record: TastingRecord }) {
-  const barista = getBaristaById(record.baristaId);
+  const barista = getMergedBaristaById(record.baristaId);
 
   return (
     <div className="border-t border-ink-100 pt-4 first:border-t-0 first:pt-0">

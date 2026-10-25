@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { PILOT_STAFF_PASSWORD, PILOT_STAFF_ROLES, type PilotStaffRole } from '@/lib/auth/pilotStaff'
 import { authErrorPath, safeNextPath } from '@/lib/auth/safeRedirect'
+import { TEMPORARY_PASSWORD_EXPIRED_MESSAGE, temporaryPasswordState } from '@/lib/auth/temporaryPassword'
 import type { ProfileRole } from '@/lib/types/database'
 
 export async function signInWithPassword(formData: FormData) {
@@ -25,6 +26,18 @@ export async function signInWithPassword(formData: FormData) {
 
   if (error) {
     redirect(authErrorPath(errorRedirect, error.message))
+  }
+
+  // A temporary password the cafe issued: 72 hours, then refused (the cafe
+  // can issue a new one); while valid it leads only to the password change.
+  const temporary = temporaryPasswordState(data?.user)
+  if (temporary === 'expired') {
+    await supabase.auth.signOut()
+    redirect(authErrorPath(errorRedirect, TEMPORARY_PASSWORD_EXPIRED_MESSAGE))
+  }
+  if (temporary === 'active') {
+    const target = next === '/' || next === '/journey' ? '/dashboard/barista' : next
+    redirect(`/auth/change-password?next=${encodeURIComponent(target)}`)
   }
 
   // The form's default landings ('/' from /auth/login, '/journey' from the

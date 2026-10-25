@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { signInWithPassword, signUpWithPassword } from './actions';
 
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), redirect: vi.fn(), revalidate: vi.fn(), profile: vi.fn() }));
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), redirect: vi.fn(), revalidate: vi.fn(), profile: vi.fn(), signOut: vi.fn() }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ auth: {
-  signInWithPassword: mocks.auth, signUp: mocks.auth,
+  signInWithPassword: mocks.auth, signUp: mocks.auth, signOut: mocks.signOut,
 }, from: () => ({ select: () => ({ eq: () => ({ maybeSingle: mocks.profile }) }) }) }) }));
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }));
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidate }));
@@ -78,5 +78,38 @@ describe('login lands staff accounts in their own cabinet', () => {
     mocks.profile.mockResolvedValue({ data: { role: 'cafe_admin' }, error: null });
     await expect(login('/passport/X')).rejects.toThrow(/^\/passport\/X$/);
     expect(mocks.profile).not.toHaveBeenCalled();
+  });
+});
+
+describe('login with a temporary password the cafe issued', () => {
+  const login = (next?: string) => {
+    const form = new FormData();
+    form.set('email', 'anna@example.test');
+    form.set('password', 'fake-temporary-password');
+    if (next) form.set('next', next);
+    return signInWithPassword(form);
+  };
+  const userWith = (expiresAt: string) => ({
+    id: 'u1',
+    app_metadata: { must_change_password: true, temporary_password_expires_at: expiresAt, cafe_id: 'shop-x', barista_id: 'barista-x' },
+  });
+  beforeEach(() => {
+    mocks.profile.mockReset().mockResolvedValue({ data: { role: 'enthusiast' } });
+    mocks.signOut.mockReset().mockResolvedValue({ error: null });
+    mocks.redirect.mockReset().mockImplementation((path: string) => { throw new Error(path); });
+    mocks.revalidate.mockReset();
+  });
+
+  it('after 72 hours the temporary password is refused and the session is ended', async () => {
+    mocks.auth.mockReset().mockResolvedValue({ data: { user: userWith('2020-01-01T00:00:00.000Z') }, error: null });
+    await expect(login()).rejects.toThrow(/^\/auth\/login\?error=.*72/);
+    expect(mocks.signOut).toHaveBeenCalled();
+    expect(mocks.revalidate).not.toHaveBeenCalled();
+  });
+
+  it('a valid temporary password goes straight to the password change for the barista cabinet', async () => {
+    mocks.auth.mockReset().mockResolvedValue({ data: { user: userWith('2099-01-01T00:00:00.000Z') }, error: null });
+    await expect(login()).rejects.toThrow('/auth/change-password?next=%2Fdashboard%2Fbarista');
+    expect(mocks.signOut).not.toHaveBeenCalled();
   });
 });

@@ -64,4 +64,30 @@ describe('baristaProfileStore', () => {
       favoriteOrigin: 'Бурунди',
     });
   });
+
+  // Guest rating form: the cafe's roster comes from the database, so a barista
+  // the cafe just created is a choice right away; 'Не указан' stays last.
+  it('offers a just-created barista in the guest rating form, before "Не указан"', async () => {
+    rows = [row({ id: 'barista-0f6c', name: 'Анна' }), row({ id: 'barista-elsewhere', coffee_shop_id: 'shop-other', name: 'Чужой' })];
+    const store = await import('./baristaProfileStore');
+    await store.syncBaristaProfilesFromSupabase();
+    const choices = store.getBaristaChoicesForShop('shop-xo-vsevolozhsk').map((b) => b.name);
+    expect(choices).toContain('Анна');
+    expect(choices).not.toContain('Чужой');
+    expect(choices[choices.length - 1]).toBe('Не указан');
+  });
+
+  it('drops a barista the database no longer has (account removed)', async () => {
+    rows = [row({ id: 'barista-0f6c', name: 'Анна' })];
+    let store = await import('./baristaProfileStore');
+    await store.syncBaristaProfilesFromSupabase();
+    expect(store.getMergedBaristaById('barista-0f6c')).toBeDefined();
+
+    vi.resetModules();
+    rows = [];
+    store = await import('./baristaProfileStore');
+    await store.syncBaristaProfilesFromSupabase();
+    expect(store.getMergedBaristaById('barista-0f6c')).toBeUndefined();
+    expect(store.getMergedBaristaById('barista-xo-alexey')).toBeDefined();
+  });
 });

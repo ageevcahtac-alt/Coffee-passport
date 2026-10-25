@@ -3,7 +3,7 @@
 import type { Barista } from '@/lib/types/coffee';
 import type { BaristaProfileRow } from '@/lib/types/database';
 import { getBrowserSupabaseClient } from '@/lib/supabase/browserClient';
-import { BARISTAS } from './baristas';
+import { BARISTAS, UNSPECIFIED_BARISTA_ID } from './baristas';
 
 // Personal-preference overrides (favoriteOrigin/favoriteBrewMethod/avatarUrl)
 // on top of the static BARISTAS roster — same "localStorage cache + best-
@@ -88,6 +88,19 @@ export function getMergedBaristasForShop(coffeeShopId: string): Barista[] {
   return read().filter((barista) => barista.coffeeShopId === coffeeShopId);
 }
 
+// Guest rating form: the shop's roster (seed + every barista_profiles row of
+// that shop, so a barista the cafe just created is there) and 'Не указан' last.
+export function baristaChoicesFrom(roster: Barista[], coffeeShopId: string): Barista[] {
+  return [
+    ...roster.filter((barista) => barista.coffeeShopId === coffeeShopId),
+    ...roster.filter((barista) => barista.id === UNSPECIFIED_BARISTA_ID),
+  ];
+}
+
+export function getBaristaChoicesForShop(coffeeShopId: string): Barista[] {
+  return baristaChoicesFrom(read(), coffeeShopId);
+}
+
 function rowToProfileFields(row: BaristaProfileRow): ProfileFields {
   return {
     favoriteOrigin: row.favorite_origin,
@@ -107,7 +120,10 @@ export async function syncBaristaProfilesFromSupabase(): Promise<void> {
     const supabase = getBrowserSupabaseClient();
     const { data, error } = await supabase.from('barista_profiles').select('*');
     if (error || !data) return;
-    const overrides = readOverrides();
+    // The database is the roster: a non-seed barista it no longer has (login
+    // removed by the cafe) leaves the local cache too. Seed overrides stay.
+    const seedIds = new Set(BARISTAS.map((barista) => barista.id));
+    const overrides = Object.fromEntries(Object.entries(readOverrides()).filter(([id]) => seedIds.has(id)));
     for (const row of data as BaristaProfileRow[]) {
       overrides[row.id] = rowToProfileFields(row);
     }

@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useLots } from '@/lib/data/useLots';
 import { useCoffeeShops } from '@/lib/data/useCoffeeShops';
 import { useRoasters } from '@/lib/data/useRoasters';
-import { getBaristasForShop } from '@/lib/data/baristas';
+import { baristaChoicesFrom, syncBaristaProfilesFromSupabase } from '@/lib/data/baristaProfileStore';
+import { useBaristaProfiles } from '@/lib/data/useBaristaProfiles';
 import {
   emptyDrinkSelectionDraft,
   FILTER_ALTERNATIVE_TO_BREWING_METHOD,
@@ -78,6 +79,12 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
   const [baristaId, setBaristaId] = useState<string | null>(null);
   const [baristaRating, setBaristaRating] = useState(0);
   const [baristaNote, setBaristaNote] = useState('');
+  // Re-read the roster on reaching this step: a barista the cafe created
+  // after the page loaded must already be a choice.
+  const baristaRoster = useBaristaProfiles();
+  useEffect(() => {
+    if (step === 'barista') void syncBaristaProfilesFromSupabase();
+  }, [step]);
   const [brewingMethod, setBrewingMethod] = useState<BrewingMethodId | null>(null);
   const [drinkSelection, setDrinkSelection] = useState<DrinkSelectionDraft>(emptyDrinkSelectionDraft());
   const [pendingTasteValues, setPendingTasteValues] = useState<TastingFormValues | null>(null);
@@ -287,7 +294,7 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
 
             <p className="section-label mb-4 mt-8">Кто готовил?</p>
             <BaristaSelector
-              baristas={getBaristasForShop(coffeeShopId)}
+              baristas={baristaChoicesFrom(baristaRoster, coffeeShopId)}
               value={baristaId}
               onChange={setBaristaId}
             />

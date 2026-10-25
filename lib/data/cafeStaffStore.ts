@@ -3,11 +3,11 @@
 import type { StaffMember } from '@/lib/types/coffee';
 import { STAFF as SEED_STAFF } from './staff';
 
-// Cafe-created/edited staff records layer on top of the static seed roster,
-// the same way lotsStore does for lots: no backend yet, so edits live in
-// localStorage and are merged with the seed roster at read time. Overrides
-// win on id collision, which is also how editing an existing (seed) staff
-// member works.
+// Static seed roster plus staff cards a cafe once saved only in this browser
+// (localStorage, before staff became real logins — see
+// app/api/cafe/staff/barista-accounts). Nothing writes here any more; cards
+// already saved are still read and shown so they are not lost. Overrides win
+// on id collision, which is how an edited seed card used to work.
 
 const STORAGE_KEY = 'coffee-passport:staff';
 
@@ -54,21 +54,7 @@ export function getMergedStaffById(id: string): StaffMember | undefined {
   return read().find((member) => member.id === id);
 }
 
-export function saveStaffMember(member: StaffMember): void {
-  const overrides = readOverrides();
-  const index = overrides.findIndex((existing) => existing.id === member.id);
-  if (index >= 0) overrides[index] = member;
-  else overrides.push(member);
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(overrides));
-  } catch {
-    // Storage unavailable — the in-memory cache below still reflects the
-    // save for the rest of this session.
-  }
-  cache = computeAll();
-  listeners.forEach((listener) => listener());
-}
-
-export function generateStaffId(): string {
-  return `staff-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+// A card that exists only in this browser's storage (not in the seed).
+export function isBrowserOnlyStaff(id: string): boolean {
+  return !SEED_STAFF.some((member) => member.id === id) && readOverrides().some((member) => member.id === id);
 }
