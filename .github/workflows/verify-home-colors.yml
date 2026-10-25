@@ -1,0 +1,76 @@
+name: verify-home-colors
+# Цвета главной на проде по пикселям скриншота (scripts/ops/verify-home-colors.cjs):
+# фон картинки «Один лот. Четыре философии» против фона страницы на 390 и 1280 px,
+# поля входа при настоящем автозаполнении Chrome против пустого поля на 390 px.
+# PR — замер прода как есть («до», без порога). Push в ветку прода — ждёт, пока прод отдаёт
+# картинку из этого коммита, и проверяет с порогом («после»). Вручную — expect=match|none.
+# Скриншоты и report.md — артефакт verify-home-colors, таблицы — в Summary прогона.
+on:
+  pull_request:
+    paths:
+      - .github/workflows/verify-home-colors.yml
+      - scripts/ops/verify-home-colors.cjs
+      - public/images/coffee-passport-four-philosophies.png
+      - app/globals.css
+  push:
+    branches: [fix/pre-pilot-shortlist]
+    paths:
+      - .github/workflows/verify-home-colors.yml
+      - scripts/ops/verify-home-colors.cjs
+      - public/images/coffee-passport-four-philosophies.png
+      - app/globals.css
+  workflow_dispatch:
+    inputs:
+      expect:
+        description: "match — красный при расхождении; none — только замер"
+        default: "match"
+permissions:
+  contents: read
+concurrency:
+  group: verify-home-colors-${{ github.event_name }}
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PROD_URL: ${{ vars.PROD_URL }}
+      EXPECT: ${{ github.event_name == 'push' && 'match' || github.event_name == 'workflow_dispatch' && inputs.expect || 'none' }}
+      OUT_DIR: ${{ runner.temp }}/home-colors
+    steps:
+      - uses: actions/checkout@v4
+      - name: validate input
+        run: |
+          [ -n "$PROD_URL" ] || { echo "::error::PROD_URL не задан"; exit 1; }
+          case "$EXPECT" in match|none) ;; *) echo "::error::expect: match | none"; exit 1;; esac
+      - name: wait for deploy (push only)
+        if: github.event_name == 'push'
+        run: |
+          want=$(sha256sum public/images/coffee-passport-four-philosophies.png | cut -d' ' -f1)
+          for i in $(seq 1 60); do
+            got=$(curl -sS -m 30 "${PROD_URL%/}/images/coffee-passport-four-philosophies.png" | sha256sum | cut -d' ' -f1 || true)
+            if [ "$got" = "$want" ]; then echo "прод отдаёт картинку этого коммита"; exit 0; fi
+            sleep 20
+          done
+          echo "::error::за 20 минут прод не начал отдавать картинку этого коммита (деплой не дошёл?)"
+          exit 1
+      - name: playwright
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
+          npm init -y > /dev/null
+          npm install --silent --no-audit --no-fund playwright@1.64.0 pngjs@7.0.0
+          npx playwright install --with-deps chromium > /dev/null
+      - name: measure
+        run: |
+          node scripts/ops/verify-home-colors.cjs "$RUNNER_TEMP/pw/node_modules/playwright" "$RUNNER_TEMP/pw/node_modules/pngjs"
+      - name: summary
+        if: always()
+        run: '[ -f "$OUT_DIR/report.md" ] && cat "$OUT_DIR/report.md" >> "$GITHUB_STEP_SUMMARY" || true'
+      - name: screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-home-colors-${{ github.event_name }}
+          path: ${{ runner.temp }}/home-colors
+          if-no-files-found: ignore
+          retention-days: 14
