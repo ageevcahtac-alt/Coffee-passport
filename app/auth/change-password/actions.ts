@@ -69,6 +69,20 @@ export async function changeTemporaryPassword(formData: FormData) {
     backWithError(next, 'Кофейня удалила эту учётку. Попросите её создать доступ заново.')
   }
 
+  // The cafe may have issued a new temporary password since this session
+  // started: then this request (made with the old one) must not overwrite it.
+  // Compare-and-set on the expiry the cafe stamps on every issue; what is
+  // left is the gap between this read and the update below.
+  const current = await admin.auth.admin.getUserById(user.id)
+  if (
+    current.error ||
+    current.data.user?.app_metadata?.must_change_password !== true ||
+    current.data.user.app_metadata.temporary_password_expires_at !== user.app_metadata?.temporary_password_expires_at
+  ) {
+    await supabase.auth.signOut()
+    toLogin(next, 'Кофейня выдала новый временный пароль. Войдите с ним.')
+  }
+
   let failed = false
   try {
     const { error } = await admin.auth.admin.updateUserById(user.id, {

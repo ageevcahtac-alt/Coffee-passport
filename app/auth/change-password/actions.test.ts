@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   failProfiles: false,
   order: 0,
   fresh: { must_change_password: false } as Record<string, unknown>,
+  before: {} as Record<string, unknown>,
+  reads: 0,
 }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: () => ({
@@ -24,7 +26,12 @@ vi.mock('@/lib/supabase/adminClient', () => ({
     auth: {
       admin: {
         updateUserById: mocks.updateUserById,
-        getUserById: async () => ({ data: { user: { id: 'u1', app_metadata: mocks.fresh } }, error: null }),
+        // First read (before the password is set) sees the auth state at that
+        // moment, the second one (after the grant) sees `fresh`.
+        getUserById: async () => ({
+          data: { user: { id: 'u1', app_metadata: mocks.reads++ === 0 ? mocks.before : mocks.fresh } },
+          error: null,
+        }),
       },
     },
     from: (table: string) => {
@@ -79,6 +86,8 @@ describe('changeTemporaryPassword', () => {
     mocks.cards = [{ id: 'barista-anna', coffee_shop_id: 'shop-xo-vsevolozhsk' }];
     mocks.failProfiles = false;
     mocks.fresh = { must_change_password: false };
+    mocks.before = PENDING;
+    mocks.reads = 0;
     mocks.signOut.mockReset().mockResolvedValue({ error: null });
     mocks.user.mockReset().mockReturnValue({ id: 'u1', email: 'anna@example.com', app_metadata: PENDING });
     mocks.signIn.mockReset().mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
@@ -151,6 +160,17 @@ describe('changeTemporaryPassword', () => {
       { role: 'enthusiast', cafe_id: null, barista_id: null },
     ]);
     expect(mocks.signIn).not.toHaveBeenCalled();
+  });
+
+  // Codex review PR #25 round 2: a request started with the old temporary
+  // password must not overwrite one the cafe re-issued meanwhile.
+  it('a stale request does not overwrite a temporary password the cafe re-issued meanwhile', async () => {
+    mocks.before = { ...PENDING, temporary_password_expires_at: '2099-02-01T00:00:00.000Z' };
+    await expect(
+      changeTemporaryPassword(form({ password: NEW_PASSWORD, confirmation: NEW_PASSWORD, next: '/dashboard/barista' }))
+    ).rejects.toThrow(/^\/auth\/login\?next=%2Fdashboard%2Fbarista&error=/);
+    expect(mocks.updateUserById).not.toHaveBeenCalled();
+    expect(mocks.writes).toEqual([]);
   });
 
   it('if the grant fails after the password is saved, sends to login (the next login finishes the grant)', async () => {
