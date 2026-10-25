@@ -141,7 +141,8 @@ email/паролю (`app/auth/actions.ts`). Верить коду, а не READM
 
 ## Деплой
 
-- Прод — свой сервер Timeweb: `https://147.45.102.186`, приложение в
+- Прод — `https://coffeepassport.ru` (свой сервер Timeweb `147.45.102.186`; http://, www и IP — 301 на домен,
+  кроме `https://IP/supabase/` для старых вкладок), приложение в
   `/opt/coffee-passport/app`, systemd-юнит `coffee-passport`, перед ним Nginx;
   Supabase развёрнут сам (docker compose, Envoy), публичный API — `/supabase`.
   Выкатка — workflow `deploy` (после каждого push/merge в ветку прода и вручную).
@@ -153,15 +154,18 @@ email/паролю (`app/auth/actions.ts`). Верить коду, а не READM
 - Обновление: `gh workflow run deploy` (и автоматически на push в `fix/pre-pilot-shortlist`) — запускает на
   сервере `deploy/timeweb/update-app.sh` (`git pull --ff-only` → `npm ci` → `npm run build` → restart → curl),
   сверяет HEAD сервера с коммитом и ждёт `/api/health` с `"status":"ok"` до 5 минут, иначе красный.
-- Проверка здоровья: `curl -sS https://147.45.102.186/api/health` → `200
+- Проверка здоровья: `curl -sS https://coffeepassport.ru/api/health` → `200
   {"status":"ok","db":"ok",…}`, при недоступной БД — `503`. Полный набор — `deploy/timeweb/check-server.sh`.
 - Логи и диагностика: `gh workflow run server-ops [-f lines=200]` — только чтение: хвост `journalctl -u coffee-passport`
   с фильтром секретов, `ss -tlnp`, `df -h`, `docker ps -a`, HEAD приложения. Вывод — `gh run view <id> --log`.
   Шум: `Failed to parse body as FormData` / `Failed to find Server Action "x"` — POST от сканеров (в Nginx пути `/wp-admin/…`), не регрессия.
   Журналы операций — `/opt/coffee-passport/logs/`.
 - Перед изменениями на сервере — бэкап в `/opt/coffee-passport/backups/<дата>` (так делают все скрипты).
-- Домен `coffeepassport.ru` ещё не активирован (ждёт смены DNS A-записи);
-  активация — `deploy/timeweb/activate-domain.sh`.
+- Домен активирован 2026-10-25 (`gh workflow run domain-https -f mode=activate` → `deploy/timeweb/activate-domain.sh`):
+  сертификат Let's Encrypt `coffee-passport-domain` (апекс + www) и IP-сертификат продлевает таймер
+  `coffee-passport-cert-renew`. Проверка — `gh workflow run domain-https -f mode=verify` (301, health, сертификат,
+  `certbot renew --dry-run`, вход паролем через форму); разбор только чтение — `domain-inspect`.
+  Адрес сайта: `NEXT_PUBLIC_SUPABASE_URL`, Supabase `SITE_URL`/`API_EXTERNAL_URL`, `vars.PROD_URL`, `secrets.APP_URL` — всё на домене.
 - История и план переезда: `deploy/timeweb/DOMAIN_CHANGELOG.md`, `docs/audits/TIMEWEB_MIGRATION_PLAN.md`.
 
 ## Где что лежит

@@ -41,6 +41,7 @@ install_site() { # $1 — файл из $src, $2 — имя в sites-available; 
         exit 1
     fi
     nginx -s reload
+    sleep 3 # reload асинхронный: без паузы проверка ниже попадает в старые воркеры
 }
 
 echo "== 3. certificate"
@@ -53,7 +54,8 @@ openssl x509 -in /etc/letsencrypt/live/coffee-passport-domain/cert.pem -noout -s
 
 echo "== 4. nginx: domain 443"
 install_site nginx-domain.conf coffee-passport-domain
-curl --fail --silent --show-error "$url/" -o /dev/null && echo "$url/ ok"
+curl --fail --silent --show-error "$url/" -o /dev/null
+echo "$url/ ok"
 
 rollback() { # сбой на шагах 5–6: прежние env, runtime Supabase и сборка, рестарт; nginx домена остаётся
     echo "ROLLBACK: возвращаю env, Supabase runtime и .next из $backup" >&2
