@@ -25,6 +25,7 @@
 | 2026-10-25 | main (Claude) | codex | 20261025-1415-home-colors: фон картинки «Один лот. Четыре философии» = фон сайта (разница ≤1 на проде, 390/1280 px), поля при автозаполнении как обычные; workflow verify-home-colors | ok | 2 (PR #27) |
 
 | 2026-10-25 | main (Claude) | codex | 20261025-1700-domain-https: HTTPS на coffeepassport.ru (сертификат апекс+www, 301 с http/www/IP, адреса на домен, domain-https verify) | fix | 2 (PR #29) |
+| 2026-10-25 | main (Claude) | codex | 20261025-1800-admin-role-access: /admin по роли admin через обычный вход, Basic Auth убран; фикс 500 в /admin (HeadersAdapter); workflow verify-admin-access; заявка XO найдена | fix | 1+1+1 (PR #31, #32, #33; #35 — health) |
 
 ## Замены
 | дата | агент | было → стало | причина |
