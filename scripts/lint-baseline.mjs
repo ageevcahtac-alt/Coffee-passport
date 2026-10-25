@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BASELINE_PATH = path.join(ROOT, 'eslint-baseline.json');
-const TARGETS = ['app', 'components', 'lib', 'middleware.ts'];
+const TARGETS = ['app', 'components', 'lib'];
 
 // results: ESLint LintResult[] -> { "relative/file.tsx": { "rule-id": count } }
 export function countFindings(results, root = ROOT) {

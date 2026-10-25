@@ -41,7 +41,7 @@ describe('admin handlers allow only a session with role admin', () => {
   afterEach(() => vi.unstubAllEnvs());
 
   for (const [name, handler] of [
-    ['GET', (req: Request) => GET(req)],
+    ['GET', () => GET()],
     ['PATCH', (req: Request) => PATCH(req, { params: { id: 'lead' } })],
   ] as const) {
     it(`${name} answers 200 to an admin session without Basic Auth`, async () => {
@@ -66,6 +66,12 @@ describe('admin handlers allow only a session with role admin', () => {
         expect(createClient).not.toHaveBeenCalled();
       });
     }
+
+    it(`${name} answers 401 to valid Basic Auth without a session`, async () => {
+      mocks.user.mockReturnValue(null);
+      expect((await handler(request(name, basic('admin:test-secret')))).status).toBe(401);
+      expect(createClient).not.toHaveBeenCalled();
+    });
 
     it(`${name} answers 403 to a cafe session even with a bad Basic header`, async () => {
       mocks.profile.mockReturnValue(profile('cafe_admin'));

@@ -9,9 +9,8 @@ import { PILOT_STAFF_ROLES } from '@/lib/auth/pilotStaff';
 // login form by hand. The whole panel is opt-in, so a guest deployment
 // with the demo flag off has no development navigation covering its CTAs.
 //
-// Энтузиаст/Админ are plain navigation — neither route needs a session
-// (/journey works anonymously, /admin is HTTP-Basic-gated by
-// middleware.ts). Кофейня/Обжарщик/Бариста are real staff dashboards now
+// Энтузиаст/Админ are plain navigation — /journey works anonymously,
+// /admin sends a visitor without role admin to /auth/login. Кофейня/Обжарщик/Бариста are real staff dashboards now
 // gated by requireStaffRole.ts, so a bare router.push would just bounce
 // to /auth/login with no session behind it — those three submit
 // signInAsPilotStaff instead, which signs in as that role's fixed pilot

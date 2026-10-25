@@ -74,7 +74,7 @@ always defined by commits, never by calendar days).
 
 ## Стек и архитектура
 
-Next.js 14.2.35 (App Router, Server Actions, API routes, `middleware.ts`) +
+Next.js 14.2.35 (App Router, Server Actions, API routes) +
 React 18 + TypeScript 5 + Tailwind CSS 4 (токены — `tailwind.config.ts`,
 `app/globals.css`, обоснование — `DESIGN.md`). Данные и вход — Supabase
 (`@supabase/supabase-js`, `@supabase/ssr`), доступ к таблицам регулирует RLS;
@@ -109,7 +109,7 @@ email/паролю (`app/auth/actions.ts`). Верить коду, а не READM
 | # | Правило | Якорь в коде | Проверка | Почему (разбор) |
 |---|---|---|---|---|
 | 1 | `SUPABASE_SERVICE_ROLE_KEY` и `XO_*_SECRET` — только на сервере, никогда `NEXT_PUBLIC_`, без тихого отката на anon-ключ | `lib/supabase/adminClient.ts`, guard `window` в `lib/integrations/xoAdmin.ts` | нет | `docs/reports/COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md` |
-| 2 | `/admin` и `/api/admin/**` — за Basic Auth | `middleware.ts`, `lib/auth/requireAdminBasicAuth.ts` | `app/admin/layout.test.ts`, `app/api/admin/partner-requests/route.test.ts` | миграция `0028_partner_requests_lockdown.sql` |
+| 2 | `/admin` и `/api/admin/**` — только вход с ролью `admin` (как `/dashboard/admin`); Basic Auth убран | `app/admin/layout.tsx` (`requireStaffRole`), `lib/auth/requireAdminApi.ts` | `app/admin/layout.test.ts`, `app/api/admin/partner-requests/route.test.ts`; на проде — workflow `verify-admin-access` | миграция `0028_partner_requests_lockdown.sql`; 2026-10-25: `/admin` отдавал 500 под Basic Auth (`.agents/tasks/20261025-1800-admin-role-access.md`) |
 | 3 | API кабинетов берёт `cafe_id`/`roaster_id` из профиля сессии, а не из запроса | `lib/auth/requireStaffApi.ts`, `requireStaffRole.ts` | `app/api/cafe/roastery-orders/route.test.ts`, `app/api/roaster/production/route.test.ts` | комментарии в `lib/integrations/xoAdmin.ts` |
 | 4 | Любой `next=` в redirect — только через `safeNextPath`; callback редиректит на публичный хост, не на `Host` запроса | `lib/auth/safeRedirect.ts`, `app/auth/callback/route.ts` | `lib/auth/safeRedirect.test.ts`, `app/auth/callback/route.test.ts` | `deploy/timeweb/DOMAIN_CHANGELOG.md` (редирект на `https://localhost:3000`, фикс `856f42f`) |
 | 5 | Интеграции и cron закрыты, если секрет не задан (fail-closed, 401 / `admin_unavailable`) | `lib/integrations/xoStoreAuth.ts`, `xoAdmin.ts`, `app/api/cron/*` | `app/api/integrations/xo-store/lots/route.test.ts` | `docs/reports/P23_XO_STORE_READ_ONLY_INTEGRATION_BOUNDARY.md` |
