@@ -100,7 +100,9 @@ jobs:
             if [ "$loc" = "$SITE/passport/test?x=1" ]; then echo "PASS Location: $loc"; else echo "FAIL Location: ${loc:-none}"; fail=1; fi
           done
           echo "===== https://$IP/supabase/auth/v1/health (совместимость старых вкладок)"
-          curl -sS -o /dev/null -w '%{http_code}\n' --max-time 20 "https://$IP/supabase/auth/v1/health"
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "https://$IP/supabase/auth/v1/health" || true)
+          # 200 или 401 (Envoy без apikey) — запрос дошёл до шлюза Supabase, а не ушёл в редирект/404/502.
+          if [ "$code" = 200 ] || [ "$code" = 401 ]; then echo "PASS $code"; else echo "FAIL ${code:-none}"; fail=1; fi
           exit $fail
       - name: /api/health по домену
         run: |

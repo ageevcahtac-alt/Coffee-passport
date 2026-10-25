@@ -59,7 +59,9 @@ rollback() { # сбой на шагах 5–6: прежние env, runtime Supab
     echo "ROLLBACK: возвращаю env, Supabase runtime и .next из $backup" >&2
     cp -a "$backup/supabase.env" /opt/coffee-passport/supabase/.env
     cp -a "$backup/app.env" /opt/coffee-passport/app/.env.local
-    (cd /opt/coffee-passport/supabase && python3 /opt/coffee-passport/app/deploy/timeweb/reconcile-public-url-runtime.py) || true
+    # Не reconcile: он требует работающих контейнеров, а неудачный up мог их остановить.
+    (cd /opt/coffee-passport/supabase && docker compose -f docker-compose.yml -f docker-compose.local.yml \
+        up -d --no-deps auth api-gw storage functions studio) || echo "ROLLBACK: docker compose up не прошёл" >&2
     rm -rf /opt/coffee-passport/app/.next && cp -a "$backup/next" /opt/coffee-passport/app/.next
     systemctl restart coffee-passport || true
 }
