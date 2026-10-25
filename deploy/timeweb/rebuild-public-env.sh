@@ -16,7 +16,7 @@ echo "NEW_BUILD=$(cat .next/BUILD_ID)"
 systemctl restart coffee-passport
 ready=0
 for attempt in $(seq 1 30); do
- if curl --fail --silent https://147.45.102.186/ -o /dev/null; then ready=1; break; fi
+ if curl --fail --silent https://coffeepassport.ru/ -o /dev/null; then ready=1; break; fi
  sleep 2
 done
 test "$ready" = 1

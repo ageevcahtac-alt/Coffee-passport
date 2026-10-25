@@ -1,11 +1,11 @@
 #!/bin/bash
 set -euo pipefail
-curl -sI --max-time 15 https://147.45.102.186/auth/callback
-curl -sI --max-time 15 https://147.45.102.186/auth/reset-password
-echo 'Actual public domain response:'
-curl -sI --max-time 15 https://coffeepassport.ru/ || true
-echo 'IP certificate:'
-openssl x509 -in /etc/letsencrypt/live/coffee-passport-ip/fullchain.pem -noout -dates -ext subjectAltName
+curl -sI --max-time 15 https://coffeepassport.ru/auth/callback
+curl -sI --max-time 15 https://coffeepassport.ru/auth/reset-password
+echo 'IP redirect:'
+curl -sI --max-time 15 https://147.45.102.186/ | grep -iE "^(HTTP|location)" || true
+echo 'Certificates:'
+for c in coffee-passport-domain coffee-passport-ip; do openssl x509 -in /etc/letsencrypt/live/$c/fullchain.pem -noout -subject -dates -ext subjectAltName; done
 systemctl show coffee-passport-cert-renew.service -p Result -p ExecMainStatus
 systemctl is-enabled coffee-passport-cert-renew.timer
 python3 - <<'PY'

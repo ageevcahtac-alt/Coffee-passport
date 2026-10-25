@@ -9,7 +9,7 @@ name: Daily maintenance (events + cafe menu)
 # setting the two repo secrets below once.
 #
 # Required repo secrets (Settings → Secrets and variables → Actions):
-#   APP_URL            — e.g. https://147.45.102.186
+#   APP_URL            — e.g. https://coffeepassport.ru
 #   EVENTS_CRON_SECRET — must match the EVENTS_CRON_SECRET env var set on
 #                        the deployed app; both routes reject the request
 #                        with 401 if it doesn't match.

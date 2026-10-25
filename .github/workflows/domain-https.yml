@@ -1,0 +1,161 @@
+name: domain-https
+# HTTPS на https://coffeepassport.ru. PR — только проверка скриптов и nginx -t на подставных сертификатах.
+# Вручную:
+#   mode=verify   — только чтение (кроме временной учётки входа, она удаляется в конце): 301 с http://,
+#                   www и IP на https://coffeepassport.ru, /api/health, сертификат, certbot renew --dry-run,
+#                   вход по email+паролю через форму на домене.
+#   mode=activate — deploy/timeweb/activate-domain.sh на сервере (бэкап, сертификат, nginx, адреса,
+#                   пересборка), затем то же, что verify.
+# Запуск: gh workflow run domain-https -f mode=verify|activate
+on:
+  pull_request:
+    paths:
+      - .github/workflows/domain-https.yml
+      - deploy/timeweb/activate-domain.sh
+      - deploy/timeweb/nginx-domain.conf
+      - deploy/timeweb/nginx-ip-redirect.conf
+      - deploy/timeweb/domain-login-user.py
+      - scripts/ops/verify-domain-login.cjs
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "verify — проверить; activate — включить HTTPS и проверить"
+        default: "verify"
+permissions:
+  contents: read
+env:
+  SITE: https://coffeepassport.ru
+  IP: 147.45.102.186
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: scripts
+        run: |
+          bash -n deploy/timeweb/activate-domain.sh
+          python3 -m py_compile deploy/timeweb/domain-login-user.py
+          node --check scripts/ops/verify-domain-login.cjs
+      - name: nginx -t (переход и итог)
+        run: |
+          le="$RUNNER_TEMP/le"
+          for c in coffee-passport-ip coffee-passport-domain; do
+            mkdir -p "$le/live/$c"
+            openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=$c" \
+              -keyout "$le/live/$c/privkey.pem" -out "$le/live/$c/fullchain.pem" 2>/dev/null
+          done
+          t=deploy/timeweb
+          for ipconf in nginx-ip.conf nginx-ip-redirect.conf; do
+            echo "== $ipconf + nginx-domain.conf"
+            docker run --rm -v "$le:/etc/letsencrypt:ro" \
+              -v "$PWD/$t/$ipconf:/etc/nginx/conf.d/00-ip.conf:ro" \
+              -v "$PWD/$t/nginx-domain.conf:/etc/nginx/conf.d/10-domain.conf:ro" \
+              -v /dev/null:/etc/nginx/conf.d/default.conf:ro \
+              nginx:1.28 nginx -t
+          done
+
+  activate:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'activate'
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/ssh-setup
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      - name: activate-domain.sh on server
+        run: |
+          set -o pipefail
+          dir=$(ssh prod 'mktemp -d /tmp/domain-https.XXXXXX')
+          tar -C deploy/timeweb -cf - activate-domain.sh nginx-domain.conf nginx-ip-redirect.conf | ssh prod "tar -C $dir -xf -"
+          ssh prod "bash $dir/activate-domain.sh $dir; rc=\$?; rm -rf $dir; exit \$rc" 2>&1 | node scripts/ops/redact.mjs
+
+  verify:
+    if: always() && github.event_name == 'workflow_dispatch' && needs.lint.result == 'success' && needs.activate.result != 'failure' && needs.activate.result != 'cancelled'
+    needs: [lint, activate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: 301 на https://coffeepassport.ru
+        run: |
+          fail=0
+          for u in "http://coffeepassport.ru/" "http://www.coffeepassport.ru/" "https://www.coffeepassport.ru/" "http://$IP/" "https://$IP/"; do
+            echo "===== curl -I $u"
+            out=$(curl -sS -I --max-time 20 "$u" 2>&1 || true)
+            printf '%s\n' "$out" | grep -iE '^(HTTP/|location:|curl:)'
+            code=$(printf '%s\n' "$out" | awk 'toupper($1) ~ /^HTTP\// {print $2; exit}')
+            loc=$(printf '%s\n' "$out" | awk 'tolower($1)=="location:" {print $2}' | tr -d '\r')
+            if [ "$code" = 301 ] && [ "$loc" = "$SITE/" ]; then echo "PASS $u -> 301 $loc"; else echo "FAIL $u -> ${code:-none} ${loc:-none}"; fail=1; fi
+          done
+          for u in "http://www.coffeepassport.ru" "https://$IP"; do
+            echo "===== curl -I $u/passport/test?x=1 (путь и query сохраняются)"
+            loc=$(curl -sS -I --max-time 20 "$u/passport/test?x=1" | awk 'tolower($1)=="location:" {print $2}' | tr -d '\r')
+            if [ "$loc" = "$SITE/passport/test?x=1" ]; then echo "PASS Location: $loc"; else echo "FAIL Location: ${loc:-none}"; fail=1; fi
+          done
+          echo "===== https://$IP/supabase/auth/v1/health (совместимость старых вкладок)"
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 "https://$IP/supabase/auth/v1/health" || true)
+          # 200 или 401 (Envoy без apikey) — запрос дошёл до шлюза Supabase, а не ушёл в редирект/404/502.
+          if [ "$code" = 200 ] || [ "$code" = 401 ]; then echo "PASS $code"; else echo "FAIL ${code:-none}"; fail=1; fi
+          exit $fail
+      - name: /api/health по домену
+        run: |
+          echo "===== curl -sS -i $SITE/api/health"
+          out=$(curl -sS -i --max-time 20 "$SITE/api/health")
+          printf '%s\n' "$out" | grep -E '^HTTP/|^\{'
+          printf '%s\n' "$out" | head -1 | grep -q ' 200' && printf '%s' "$out" | grep -qF '"status":"ok"' && echo "PASS 200 status ok"
+      - name: сертификат
+        run: |
+          for sni in coffeepassport.ru www.coffeepassport.ru; do
+            echo "===== openssl s_client -servername $sni"
+            echo | openssl s_client -connect "$IP:443" -servername "$sni" -verify_return_error 2>&1 | grep -E 'Verify return code|Verification'
+            echo | openssl s_client -connect "$IP:443" -servername "$sni" 2>/dev/null | openssl x509 -noout -subject -issuer -dates -ext subjectAltName
+          done
+          echo | openssl s_client -connect "$IP:443" -servername coffeepassport.ru 2>/dev/null | openssl x509 -noout -checkhost coffeepassport.ru -checkhost www.coffeepassport.ru -checkend 2592000
+      - uses: ./.github/actions/ssh-setup
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      - name: certbot renew --dry-run и таймер
+        run: |
+          set -o pipefail
+          ssh prod 'bash -s' <<'SH' 2>&1 | node scripts/ops/redact.mjs
+          log=$(mktemp)
+          docker run --rm --network host -v /etc/letsencrypt:/etc/letsencrypt -v /var/lib/letsencrypt:/var/lib/letsencrypt -v /var/log/letsencrypt:/var/log/letsencrypt -v /var/www/coffee-passport-acme:/var/www/coffee-passport-acme certbot/certbot:v5.4.0 renew --dry-run --no-random-sleep-on-renew > "$log" 2>&1
+          rc=$?
+          tail -20 "$log"; rm -f "$log"
+          echo "certbot renew --dry-run exit $rc"
+          systemctl is-enabled coffee-passport-cert-renew.timer
+          systemctl list-timers --no-pager coffee-passport-cert-renew.timer | head -3
+          exit $rc
+          SH
+      - name: временная учётка
+        id: temp
+        run: |
+          password="Dv$(openssl rand -hex 12)!a"
+          echo "::add-mask::$password"
+          email="domain-login-temp-${GITHUB_RUN_ID}@example.com"
+          printf '{"email":"%s","password":"%s"}' "$email" "$password" > "$RUNNER_TEMP/temp.json"
+          remote=$(ssh prod 'mktemp /tmp/domain-login-user.XXXXXX')
+          ssh prod "cat > $remote" < deploy/timeweb/domain-login-user.py
+          echo "remote=$remote" >> "$GITHUB_OUTPUT"
+          ssh prod "python3 $remote create" < "$RUNNER_TEMP/temp.json"
+      - name: playwright
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw" && npm init -y > /dev/null
+          npm install --silent --no-audit --no-fund playwright@1.48.2
+          npx playwright install --with-deps chromium > /dev/null
+      - name: вход по email+паролю через домен
+        env:
+          PROD_URL: ${{ env.SITE }}
+        run: TEMP_JSON="$RUNNER_TEMP/temp.json" node scripts/ops/verify-domain-login.cjs "$RUNNER_TEMP/pw/node_modules/playwright"
+      - name: удалить временную учётку
+        if: always() && steps.temp.outputs.remote != ''
+        run: |
+          ssh prod "python3 ${{ steps.temp.outputs.remote }} delete; rc=\$?; rm -f ${{ steps.temp.outputs.remote }}; exit \$rc" < "$RUNNER_TEMP/temp.json"

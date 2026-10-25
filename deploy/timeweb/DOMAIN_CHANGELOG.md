@@ -58,3 +58,17 @@
 - Read-only API checks after restart passed: Auth, REST lot query and Storage 200; administrative proxy paths 404. Build log: `/opt/coffee-passport/logs/public-env-rebuild.log`.
 - Fresh Chromium context checked main, login, recovery and guest cafe/roaster cabinet navigation after restart. No requests to localhost, loopback IPv4/IPv6 or 0.0.0.0; no JavaScript page errors. Network requests included real browser REST calls to the working IP proxy.
 - Exercised the compiled Supabase browser SDK through a recovery probe: it requested `https://147.45.102.186/supabase/auth/v1/verify`. The deliberately invalid probe was intercepted locally and never submitted to Auth, so no account state changed. Evidence saved locally in ignored `.next/domain-qa/browser-network.json`; query strings, headers and bodies are omitted from logs.
+
+## 2026-10-25 — HTTPS on the domain (task 20261025-1700-domain-https, PR #29)
+
+- Diagnosis (`domain-inspect`, run 40200361013): apex and www A = `147.45.102.186`, no AAAA. https on apex/www
+  failed with curl (60): nginx had no `listen 443` for the domain and served the IP certificate (default_server,
+  SAN `IP Address:147.45.102.186`). Domain certificate had never been issued.
+- Activation (`domain-https` mode=activate, run 40201814150): backup `/opt/coffee-passport/backups/domain-https-20261025T142136Z`;
+  certificate `coffee-passport-domain` CN=coffeepassport.ru, SAN apex + www, valid to 2027-01-23; domain 443 vhost;
+  Supabase SITE_URL/API_EXTERNAL_URL/SUPABASE_PUBLIC_URL and NEXT_PUBLIC_SUPABASE_URL → domain; Next.js rebuilt;
+  IP and unknown Host → 301 (308 for non GET/HEAD) to the domain, `https://IP/supabase/` kept for old tabs;
+  `certbot renew --dry-run` succeeded for both certificates.
+- Verified: http apex, http www, https www, http IP, https IP → 301 `https://coffeepassport.ru/` (path and query kept);
+  `/api/health` 200 `"status":"ok"`; email+password login through the domain form with a temporary user (deleted);
+  site-health by domain fails 0; events-cron with APP_URL = domain success.
