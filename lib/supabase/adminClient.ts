@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
 // A plain (non-SSR, non-cookie) Supabase client for server-side route
-// handlers that don't need a user session — the partner-requests API
-// routes are gated by HTTP Basic Auth instead (see middleware.ts).
+// handlers that read across all rows — the admin partner-requests API
+// routes check role admin first (lib/auth/requireAdminApi.ts).
 //
 // Production readiness hardening (see docs/reports/COFFEE_PASSPORT_PRODUCTION_READINESS_AUDIT.md):
 // 0003_partner_requests.sql's own anon-key "acceptable for now" policies

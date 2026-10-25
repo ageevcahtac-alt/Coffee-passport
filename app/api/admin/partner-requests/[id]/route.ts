@@ -7,7 +7,7 @@ import { PARTNER_REQUEST_STATUS_ORDER, type PartnerRequestStatus } from '@/lib/t
 // status and/or manager notes for one lead. Partial: only fields present
 // in the body are changed.
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
-  const denied = await requireAdminApi(request);
+  const denied = await requireAdminApi();
   if (denied) return denied;
   let body: { status?: string; manager_notes?: string };
   try {

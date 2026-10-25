@@ -49,6 +49,12 @@ describe('admin server layout', () => {
     });
   }
 
+  it('Basic Auth alone no longer opens /admin', async () => {
+    mocks.user.mockReturnValue(null);
+    requestHeaders.mockReturnValue(new Headers({ authorization: `Basic ${Buffer.from('admin:test-secret').toString('base64')}` }));
+    await expect(AdminLayout({ children: 'private admin UI' })).rejects.toThrow('redirect:/auth/login?next=%2Fadmin');
+  });
+
   it('refuses an admin whose temporary password is not changed yet', async () => {
     mocks.user.mockReturnValue({ id: 'u1', app_metadata: { must_change_password: true } });
     await expect(AdminLayout({ children: 'private admin UI' })).rejects.toThrow('redirect:/auth/change-password?next=%2Fadmin');
