@@ -10,7 +10,7 @@ from scipy import ndimage as ndi
 TARGET = np.array([245, 242, 235], float)  # --color-parchment-200 (#f5f2eb)
 TOL = 8           # отклонение от бумаги, при котором пиксель — чистый фон (фон гладкий, σ≈0.7)
 HOLE_MAX = 40000  # дыры в маске меньше этого — буквы, строки текста и значки внутри фона
-FRINGE = 8        # мягкий край: вес сдвига плавно спадает до 0 на этом расстоянии от фона, px
+FRINGE = 2        # мягкий край (ширина сглаживания): вес сдвига плавно спадает до 0 за столько px от фона
 L_INK = 20.0
 
 src, out, mask_out = sys.argv[1:4]
@@ -21,6 +21,17 @@ L = a @ [0.2126, 0.7152, 0.0722]
 
 ref = np.median(a[0:150].reshape(-1, 3)[(L[0:150].reshape(-1) > 200)], axis=0)
 near = np.abs(a - ref).max(2) <= TOL
+# золотая рамка карточки — барьер; короткие разрывы рамки закрываются вдоль её линий
+gold = (a[..., 0] - a[..., 2] > 35) & (L > 120) & (L < 235)
+rim = ndi.binary_closing(gold, np.ones((3, 121), bool)) | ndi.binary_closing(gold, np.ones((121, 3), bool))
+near &= ~ndi.binary_dilation(rim, iterations=1)
+# фон гладкий (σ≈0.7), у бумаги карточки фактура (σ 3–5). Карточка — самое большое светлое
+# шероховатое пятно; оно и 3 px вокруг — не фон (там, где рамка в блике, её не видно по цвету)
+m1 = ndi.uniform_filter(L, 7)
+rough = np.sqrt(np.maximum(ndi.uniform_filter(L * L, 7) - m1 * m1, 0)) > 2.0
+rl, rn = ndi.label(rough & (L > 190))
+card = rl == 1 + int(np.argmax(ndi.sum(np.ones_like(L), rl, range(1, rn + 1))))
+near &= ~ndi.binary_dilation(ndi.binary_fill_holes(card), iterations=3)
 # мостики в 1–2 px (светлые места золотой рамки карточки) не соединяют фон с карточкой
 seed = ndi.binary_erosion(near, iterations=2, border_value=1)
 lab, _ = ndi.label(seed)

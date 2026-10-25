@@ -2,8 +2,8 @@ name: verify-home-colors
 # Цвета главной на проде по пикселям скриншота (scripts/ops/verify-home-colors.cjs):
 # фон картинки «Один лот. Четыре философии» против фона страницы на 390 и 1280 px,
 # поля входа при настоящем автозаполнении Chrome против пустого поля на 390 px.
-# PR — замер прода как есть («до», без порога). Push в ветку прода — ждёт, пока прод отдаёт
-# картинку из этого коммита, и проверяет с порогом («после»). Вручную — expect=match|none.
+# PR — замер прода как есть («до», без порога). Push в ветку прода — ждёт успешный deploy
+# этого коммита и проверяет с порогом («после»). Вручную — expect=match|none.
 # Скриншоты и report.md — артефакт verify-home-colors, таблицы — в Summary прогона.
 on:
   pull_request:
@@ -26,6 +26,7 @@ on:
         default: "match"
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: verify-home-colors-${{ github.event_name }}
   cancel-in-progress: false
@@ -42,16 +43,23 @@ jobs:
         run: |
           [ -n "$PROD_URL" ] || { echo "::error::PROD_URL не задан"; exit 1; }
           case "$EXPECT" in match|none) ;; *) echo "::error::expect: match | none"; exit 1;; esac
-      - name: wait for deploy (push only)
+      - name: wait for deploy of this commit (push only)
         if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          want=$(sha256sum public/images/coffee-passport-four-philosophies.png | cut -d' ' -f1)
+          # Готовность прода = успешный workflow deploy именно этого коммита (он сверяет HEAD сервера
+          # и ждёт /api/health ok). Хеш картинки не годится: правка только CSS его не меняет.
           for i in $(seq 1 60); do
-            got=$(curl -sS -m 30 "${PROD_URL%/}/images/coffee-passport-four-philosophies.png" | sha256sum | cut -d' ' -f1 || true)
-            if [ "$got" = "$want" ]; then echo "прод отдаёт картинку этого коммита"; exit 0; fi
+            state=$(gh run list -R "$GITHUB_REPOSITORY" --workflow deploy.yml --commit "$GITHUB_SHA" \
+              --json status,conclusion --jq '.[0] | "\(.status) \(.conclusion)"' || true)
+            case "$state" in
+              "completed success") echo "deploy $GITHUB_SHA: success"; exit 0;;
+              completed*) echo "::error::deploy $GITHUB_SHA: $state"; exit 1;;
+            esac
             sleep 20
           done
-          echo "::error::за 20 минут прод не начал отдавать картинку этого коммита (деплой не дошёл?)"
+          echo "::error::за 20 минут deploy этого коммита не завершился"
           exit 1
       - name: playwright
         run: |
