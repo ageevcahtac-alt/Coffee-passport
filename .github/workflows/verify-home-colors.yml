@@ -48,18 +48,24 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Готовность прода = успешный workflow deploy именно этого коммита (он сверяет HEAD сервера
-          # и ждёт /api/health ok). Хеш картинки не годится: правка только CSS его не меняет.
+          # Готовность прода = успешный deploy вершины ветки (она содержит этот коммит), и вершина
+          # не сдвинулась после него. deploy сверяет HEAD сервера и ждёт /api/health ok, но прогон,
+          # который обогнал более новый push, завершается успехом без выкладки (шаг superseded?) —
+          # поэтому ждём прогон именно текущей вершины. Хеш картинки не годится: правка CSS его не меняет.
           for i in $(seq 1 60); do
-            state=$(gh run list -R "$GITHUB_REPOSITORY" --workflow deploy.yml --commit "$GITHUB_SHA" \
+            head=$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | cut -f1)
+            state=$(gh run list -R "$GITHUB_REPOSITORY" --workflow deploy.yml --commit "$head" \
               --json status,conclusion --jq '.[0] | "\(.status) \(.conclusion)"' || true)
             case "$state" in
-              "completed success") echo "deploy $GITHUB_SHA: success"; exit 0;;
-              completed*) echo "::error::deploy $GITHUB_SHA: $state"; exit 1;;
+              "completed success")
+                if [ "$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | cut -f1)" = "$head" ]; then
+                  echo "прод на $head (содержит $GITHUB_SHA)"; exit 0
+                fi;;
+              completed*) echo "::error::deploy $head: $state"; exit 1;;
             esac
             sleep 20
           done
-          echo "::error::за 20 минут deploy этого коммита не завершился"
+          echo "::error::за 20 минут deploy вершины ветки не завершился"
           exit 1
       - name: playwright
         run: |
