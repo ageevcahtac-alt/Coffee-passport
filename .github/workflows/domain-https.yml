@@ -94,8 +94,13 @@ jobs:
             loc=$(printf '%s\n' "$out" | awk 'tolower($1)=="location:" {print $2}' | tr -d '\r')
             if [ "$code" = 301 ] && [ "$loc" = "$SITE/" ]; then echo "PASS $u -> 301 $loc"; else echo "FAIL $u -> ${code:-none} ${loc:-none}"; fail=1; fi
           done
-          echo "===== curl -I $SITE/passport/test?x=1 (путь и query сохраняются)"
-          curl -sS -I --max-time 20 "http://www.coffeepassport.ru/passport/test?x=1" | grep -i '^location:'
+          for u in "http://www.coffeepassport.ru" "https://$IP"; do
+            echo "===== curl -I $u/passport/test?x=1 (путь и query сохраняются)"
+            loc=$(curl -sS -I --max-time 20 "$u/passport/test?x=1" | awk 'tolower($1)=="location:" {print $2}' | tr -d '\r')
+            if [ "$loc" = "$SITE/passport/test?x=1" ]; then echo "PASS Location: $loc"; else echo "FAIL Location: ${loc:-none}"; fail=1; fi
+          done
+          echo "===== https://$IP/supabase/auth/v1/health (совместимость старых вкладок)"
+          curl -sS -o /dev/null -w '%{http_code}\n' --max-time 20 "https://$IP/supabase/auth/v1/health"
           exit $fail
       - name: /api/health по домену
         run: |

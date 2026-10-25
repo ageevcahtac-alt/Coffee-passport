@@ -55,6 +55,16 @@ echo "== 4. nginx: domain 443"
 install_site nginx-domain.conf coffee-passport-domain
 curl --fail --silent --show-error "$url/" -o /dev/null && echo "$url/ ok"
 
+rollback() { # сбой на шагах 5–6: прежние env, runtime Supabase и сборка, рестарт; nginx домена остаётся
+    echo "ROLLBACK: возвращаю env, Supabase runtime и .next из $backup" >&2
+    cp -a "$backup/supabase.env" /opt/coffee-passport/supabase/.env
+    cp -a "$backup/app.env" /opt/coffee-passport/app/.env.local
+    (cd /opt/coffee-passport/supabase && python3 /opt/coffee-passport/app/deploy/timeweb/reconcile-public-url-runtime.py) || true
+    rm -rf /opt/coffee-passport/app/.next && cp -a "$backup/next" /opt/coffee-passport/app/.next
+    systemctl restart coffee-passport || true
+}
+trap rollback ERR
+
 echo "== 5. public URLs → $url"
 python3 - "$url" <<'PY'
 import sys
@@ -85,15 +95,19 @@ grep -hE '^NEXT_PUBLIC_SUPABASE_URL=' /opt/coffee-passport/app/.env.local
 
 echo "== 6. rebuild Next.js"
 cd /opt/coffee-passport/app
-npm run build > /opt/coffee-passport/logs/domain-https-build.log 2>&1 || { tail -40 /opt/coffee-passport/logs/domain-https-build.log; exit 1; }
+if ! npm run build > /opt/coffee-passport/logs/domain-https-build.log 2>&1; then
+    tail -40 /opt/coffee-passport/logs/domain-https-build.log
+    false # → rollback
+fi
 tail -5 /opt/coffee-passport/logs/domain-https-build.log
 systemctl restart coffee-passport
 deadline=$((SECONDS + 300))
-until curl --fail-with-body --max-time 10 -sS "$url/api/health" | grep -qF '"status":"ok"'; do
-    [ "$SECONDS" -lt "$deadline" ] || { echo "/api/health по домену не ok за 5 минут" >&2; exit 1; }
+until curl --fail-with-body --max-time 10 -sS "$url/api/health" 2>/dev/null | grep -qF '"status":"ok"'; do
+    if [ "$SECONDS" -ge "$deadline" ]; then echo "/api/health по домену не ok за 5 минут" >&2; false; fi
     sleep 5
 done
 curl -sS "$url/api/health"; echo
+trap - ERR
 
 echo "== 7. nginx: IP → $url"
 install_site nginx-ip-redirect.conf coffee-passport
