@@ -12,6 +12,7 @@ vi.mock('@/lib/supabase/server', () => ({
     from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: mocks.profile() }) }) }) }),
   }),
 }));
+import { HeadersAdapter } from 'next/dist/server/web/spec-extension/adapters/headers';
 import AdminLayout from './layout';
 
 const profile = (role: string) => ({ role, cafe_id: null, roaster_id: null, barista_id: null, display_name: null });
@@ -26,6 +27,13 @@ describe('admin server layout', () => {
   afterEach(() => vi.unstubAllEnvs());
 
   it('renders for a signed-in account with role admin, without Basic Auth', async () => {
+    expect(await AdminLayout({ children: 'private admin UI' })).toBe('private admin UI');
+  });
+
+  // headers() in a real request is Next's HeadersAdapter, which has its own
+  // `headers` field — prod answered 500 on /admin before this was covered.
+  it('renders with the real request headers object Next passes to layouts', async () => {
+    requestHeaders.mockReturnValue(HeadersAdapter.seal(new HeadersAdapter({ cookie: 'sb-x-auth-token=1' }) as unknown as Headers));
     expect(await AdminLayout({ children: 'private admin UI' })).toBe('private admin UI');
   });
 

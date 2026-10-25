@@ -16,7 +16,8 @@ function equalSecret(actual: string, expected: string): boolean {
 
 export function requireAdminBasicAuth(input: Request | Headers): NextResponse | null {
   const password = process.env.ADMIN_PASSWORD;
-  const header = ('headers' in input ? input.headers : input).get('authorization');
+  // Not `'headers' in input`: Next's headers() object has its own `headers` field.
+  const header = (input instanceof Request ? input.headers : input).get('authorization');
   if (password && header) {
     const match = /^Basic ([A-Za-z0-9+/]+={0,2})$/i.exec(header);
     if (match) {
