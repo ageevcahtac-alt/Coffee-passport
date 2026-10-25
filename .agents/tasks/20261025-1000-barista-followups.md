@@ -42,3 +42,26 @@ Claude — всё (п. 7 — по прецеденту 20261024-1900/2100: пр�
 
 ## Не трогать
 Миграции; форму регистрации на главной; реальных гостей, бариста и их строки.
+
+## Итог 20261025-1000-barista-followups
+Запланировано: 1. срок 72 ч и состояние временного пароля 2. API учёток POST/GET/PATCH 3. смена пароля с выдачей прав 4. вход и гейт в API 5. бариста из базы в форме оценки 6. «Команда» с одной кнопкой 7. проверка на проде.
+Написал: Claude — всё (п. 7 по прецеденту 20261024-1900/2100).
+  lib/auth/temporaryPassword.ts, lib/auth/grantBaristaRights.ts, app/api/cafe/staff/barista-accounts/route.ts,
+  app/auth/actions.ts, app/auth/change-password/{actions,page}.ts(x), lib/auth/requireStaffApi.ts,
+  lib/data/baristaProfileStore.ts, app/(site)/passport/[lotId]/taste/page.tsx, analytics, ServiceReviewCard,
+  app/dashboard/cafe/(hub)/team/page.tsx, components/cafe/BaristaAccount{Form,sList}.tsx, cafeStaffStore (только чтение),
+  staff/new и staff/[id]/edit → редирект, StaffForm удалён; verify-barista-access.{yml,py,cjs}.
+Ревью: Codex, PR #25 — 2/2 раунда.
+  принято: права выдавались до смены пароля → сначала пароль, потом права, затем повторная проверка флага (grantBaristaRights.ts);
+           PATCH снимал права только у «активной» учётки → снимает всегда, до и после установки флага (route.ts);
+           синк без пагинации мог выбросить живых бариста → постранично по 500 (baristaProfileStore.ts);
+           устаревший запрос смены пароля перезаписывал новый временный → сверка срока перед обновлением (change-password/actions.ts).
+  отклонено (частично): полная сериализация смены пароля и перевыдачи — нужна блокировка в БД (миграция). Остаток — миллисекунды
+           между двумя запросами админ-API; временный пароль знают только кофейня (у cafe_admin те же права в этой кофейне) и сам бариста.
+Проверки: тесты сначала красные — 18 failed | 33 passed, после ревью ещё 5 + 2 + 5 + 5 красных; итог `npx vitest run`: 385 passed,
+  1 файл scripts/ops/redact.test.ts падает локально (CRLF после shebang на Windows, не связан, в CI зелёный);
+  tsc ok; lint ok (8 frozen); next build ok; CI check PR #25 — success (7516814).
+  deploy run 40181147699 — success; site-health run 40181328690 — checked 78 urls, pages 18, fails 0.
+  verify-barista-access на проде — НЕ запущен: секреты CABINET_* удалены после прошлой задачи, запись секретов агенту запрещена.
+Merge: PR #25 → fix/pre-pilot-shortlist (9f3602c), deploy зелёный.
+Результат: blocked — нужен прогон verify-barista-access (секреты CABINET_* ставит владелец).
