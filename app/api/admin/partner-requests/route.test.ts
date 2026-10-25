@@ -1,23 +1,35 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { createClient, mocks } = vi.hoisted(() => ({
+  createClient: vi.fn(),
+  mocks: { user: vi.fn(), profile: vi.fn() },
+}));
+vi.mock('@/lib/supabase/adminClient', () => ({ createAdminSupabaseClient: createClient }));
+vi.mock('@/lib/supabase/server', () => ({
+  createClient: () => ({
+    auth: { getUser: async () => ({ data: { user: mocks.user() } }) },
+    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: mocks.profile() }) }) }) }),
+  }),
+}));
 import { GET } from './route';
 import { PATCH } from './[id]/route';
 
-const { createClient } = vi.hoisted(() => ({ createClient: vi.fn() }));
-vi.mock('@/lib/supabase/adminClient', () => ({ createAdminSupabaseClient: createClient }));
-
-function request(authorization?: string, method = 'GET') {
+function request(method = 'GET', authorization?: string) {
   return new Request('http://localhost/api/admin/partner-requests', {
     method,
     headers: authorization ? { authorization } : {},
     ...(method === 'PATCH' ? { body: JSON.stringify({ status: 'new' }) } : {}),
   });
 }
+const profile = (role: string) => ({ role, cafe_id: 'shop-x', roaster_id: null, barista_id: null, display_name: null });
 const basic = (value: string) => `Basic ${Buffer.from(value).toString('base64')}`;
 
-describe('admin handlers independently enforce Basic Auth', () => {
+describe('admin handlers allow only a session with role admin', () => {
   beforeEach(() => {
     vi.stubEnv('ADMIN_USER', 'admin');
-    vi.stubEnv('ADMIN_PASSWORD', 'test-secret:with-colon');
+    vi.stubEnv('ADMIN_PASSWORD', 'test-secret');
+    mocks.user.mockReset().mockReturnValue({ id: 'u1', app_metadata: {} });
+    mocks.profile.mockReset().mockReturnValue(profile('admin'));
     createClient.mockReset();
     createClient.mockReturnValue({
       from: () => ({
@@ -32,22 +44,33 @@ describe('admin handlers independently enforce Basic Auth', () => {
     ['GET', (req: Request) => GET(req)],
     ['PATCH', (req: Request) => PATCH(req, { params: { id: 'lead' } })],
   ] as const) {
-    for (const authorization of [undefined, basic('admin:wrong'), basic('other:test-secret:with-colon'), 'Bearer token', 'Basic !!!', basic('admin')]) {
-      it(`${name} denies ${authorization ?? 'missing authorization'} before accessing privileged data`, async () => {
-        const response = await handler(request(authorization, name));
-        expect(response.status).toBe(401);
-        expect(response.headers.get('www-authenticate')).toBe('Basic realm="Secure Admin Area"');
+    it(`${name} answers 200 to an admin session without Basic Auth`, async () => {
+      expect((await handler(request(name))).status).toBe(200);
+      expect(createClient).toHaveBeenCalledOnce();
+    });
+
+    it(`${name} answers 401 without a session, before touching data`, async () => {
+      mocks.user.mockReturnValue(null);
+      const response = await handler(request(name));
+      expect(response.status).toBe(401);
+      expect((await response.json()).code).toBe('unauthenticated');
+      expect(createClient).not.toHaveBeenCalled();
+    });
+
+    for (const role of ['cafe_admin', 'roaster_admin', 'barista', 'enthusiast']) {
+      it(`${name} answers 403 to role ${role}, before touching data`, async () => {
+        mocks.profile.mockReturnValue(profile(role));
+        const response = await handler(request(name));
+        expect(response.status).toBe(403);
+        expect((await response.json()).code).toBe('forbidden');
         expect(createClient).not.toHaveBeenCalled();
       });
     }
-    it(`${name} fails closed without ADMIN_PASSWORD even for correct credentials`, async () => {
-      vi.stubEnv('ADMIN_PASSWORD', '');
-      expect((await handler(request(basic('admin:test-secret:with-colon'), name))).status).toBe(401);
+
+    it(`${name} answers 403 to a cafe session even with a bad Basic header`, async () => {
+      mocks.profile.mockReturnValue(profile('cafe_admin'));
+      expect((await handler(request(name, basic('admin:wrong')))).status).toBe(403);
       expect(createClient).not.toHaveBeenCalled();
-    });
-    it(`${name} accepts valid credentials, including colons in the password`, async () => {
-      expect((await handler(request(basic('admin:test-secret:with-colon'), name))).status).toBe(200);
-      expect(createClient).toHaveBeenCalledOnce();
     });
   }
 });
