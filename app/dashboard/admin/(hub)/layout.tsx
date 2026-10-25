@@ -6,6 +6,8 @@ import { usePathname } from 'next/navigation';
 const TABS = [
   { href: '/dashboard/admin', label: 'Обратная связь' },
   { href: '/dashboard/admin/events', label: 'Мероприятия' },
+  // Partner requests, registry, community, legacy lots — app/admin, same role gate.
+  { href: '/admin', label: 'Заявки и партнёры' },
 ] as const;
 
 // Tabbed admin hub, same pattern as app/dashboard/cafe/(hub)/layout.tsx —

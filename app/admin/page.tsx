@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 
 // Note: `next build` prerenders this page's initial client shell, which
 // runs PartnerRequestsTab's fetch once server-side during the build. Until
@@ -22,7 +23,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'legacy', label: 'Создать лот (Supabase)' },
 ];
 
-// Basic Auth is checked by both middleware and this segment's server layout.
+// Role admin is checked by this segment's server layout (app/admin/layout.tsx).
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>('requests');
   const allLots = useLots();
@@ -33,7 +34,10 @@ export default function AdminPage() {
         <p className="text-xs uppercase tracking-widest2 text-ink-400 font-body mb-2">
           Coffee Passport
         </p>
-        <h1 className="font-display text-3xl text-ink-900 mb-8">Кабинет администратора</h1>
+        <h1 className="font-display text-3xl text-ink-900 mb-2">Кабинет администратора</h1>
+        <Link href="/dashboard/admin" className="inline-block text-sm text-ink-400 hover:text-ink-700 mb-8">
+          ← Обратная связь и мероприятия
+        </Link>
 
         <nav className="flex gap-1 border-b border-ink-200 mb-8 overflow-x-auto">
           {TABS.map((item) => {
