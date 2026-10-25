@@ -62,6 +62,11 @@ Claude — всё (п. 7 — по прецеденту 20261024-1900/2100: пр�
   1 файл scripts/ops/redact.test.ts падает локально (CRLF после shebang на Windows, не связан, в CI зелёный);
   tsc ok; lint ok (8 frozen); next build ok; CI check PR #25 — success (7516814).
   deploy run 40181147699 — success; site-health run 40181328690 — checked 78 urls, pages 18, fails 0.
-  verify-barista-access на проде — НЕ запущен: секреты CABINET_* удалены после прошлой задачи, запись секретов агенту запрещена.
+  verify-barista-access run 40184604807 — success, все PASS до и после уборки: временный бариста виден в форме оценки, оценка 5 дошла
+  в его кабинет; до смены пароля rpc loyalty_redeem / loyalty_sell_subscription -> HTTP 400, чтение лояльности гостя — 0 строк, баланс 1000;
+  просроченный временный пароль -> «Срок временного пароля (72 часа) истёк…»; новый пароль от кофейни -> HTTP 200 -> смена -> кабинет;
+  списание 317 ₽ 1000 -> 683; чужие строки (checkins 13, statuses 2, transactions 4, subscriptions 1) — 0 изменений; после уборки
+  гостя, его оценки и временного бариста нет. Совпадений email/паролей в логе: 0. Секреты CABINET_* удалены.
+  site-health run 40184812452 — checked 78 urls, pages 18, fails 0.
 Merge: PR #25 → fix/pre-pilot-shortlist (9f3602c), deploy зелёный.
-Результат: blocked — нужен прогон verify-barista-access (секреты CABINET_* ставит владелец).
+Результат: done
