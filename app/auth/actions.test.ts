@@ -1,10 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { signInWithPassword, signUpWithPassword } from './actions';
 
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), redirect: vi.fn(), revalidate: vi.fn(), profile: vi.fn() }));
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), redirect: vi.fn(), revalidate: vi.fn(), profile: vi.fn(), signOut: vi.fn() }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => ({ auth: {
-  signInWithPassword: mocks.auth, signUp: mocks.auth,
+  signInWithPassword: mocks.auth, signUp: mocks.auth, signOut: mocks.signOut,
 }, from: () => ({ select: () => ({ eq: () => ({ maybeSingle: mocks.profile }) }) }) }) }));
+const admin = vi.hoisted(() => ({ upserts: [] as unknown[] }));
+vi.mock('@/lib/supabase/adminClient', () => ({
+  createAdminSupabaseClient: () => ({
+    auth: { admin: { getUserById: async () => ({ data: { user: { app_metadata: { must_change_password: false } } }, error: null }) } },
+    from: () => {
+      const builder = {
+        select: () => builder,
+        eq: () => builder,
+        maybeSingle: async () => ({ data: { id: 'barista-x' }, error: null }),
+        upsert: async (row: unknown) => (admin.upserts.push(row), { error: null }),
+        update: () => ({ eq: async () => ({ error: null }) }),
+      };
+      return builder;
+    },
+  }),
+}));
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }));
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidate }));
 
@@ -78,5 +94,51 @@ describe('login lands staff accounts in their own cabinet', () => {
     mocks.profile.mockResolvedValue({ data: { role: 'cafe_admin' }, error: null });
     await expect(login('/passport/X')).rejects.toThrow(/^\/passport\/X$/);
     expect(mocks.profile).not.toHaveBeenCalled();
+  });
+});
+
+describe('login with a temporary password the cafe issued', () => {
+  const login = (next?: string) => {
+    const form = new FormData();
+    form.set('email', 'anna@example.test');
+    form.set('password', 'fake-temporary-password');
+    if (next) form.set('next', next);
+    return signInWithPassword(form);
+  };
+  const userWith = (expiresAt: string) => ({
+    id: 'u1',
+    app_metadata: { must_change_password: true, temporary_password_expires_at: expiresAt, cafe_id: 'shop-x', barista_id: 'barista-x' },
+  });
+  beforeEach(() => {
+    mocks.profile.mockReset().mockResolvedValue({ data: { role: 'enthusiast' } });
+    mocks.signOut.mockReset().mockResolvedValue({ error: null });
+    mocks.redirect.mockReset().mockImplementation((path: string) => { throw new Error(path); });
+    mocks.revalidate.mockReset();
+  });
+
+  it('after 72 hours the temporary password is refused and the session is ended', async () => {
+    mocks.auth.mockReset().mockResolvedValue({ data: { user: userWith('2020-01-01T00:00:00.000Z') }, error: null });
+    await expect(login()).rejects.toThrow(/^\/auth\/login\?error=.*72/);
+    expect(mocks.signOut).toHaveBeenCalled();
+    expect(mocks.revalidate).not.toHaveBeenCalled();
+  });
+
+  it('a valid temporary password goes straight to the password change for the barista cabinet', async () => {
+    mocks.auth.mockReset().mockResolvedValue({ data: { user: userWith('2099-01-01T00:00:00.000Z') }, error: null });
+    await expect(login()).rejects.toThrow('/auth/change-password?next=%2Fdashboard%2Fbarista');
+    expect(mocks.signOut).not.toHaveBeenCalled();
+  });
+
+  // The password change saved the own password but the grant failed: the next
+  // login with that own password finishes it and opens the cabinet.
+  it('finishes a pending barista grant on login with the own password', async () => {
+    admin.upserts.length = 0;
+    mocks.auth.mockReset().mockResolvedValue({
+      data: { user: { id: 'u1', app_metadata: { must_change_password: false, cafe_id: 'shop-x', barista_id: 'barista-x' } } },
+      error: null,
+    });
+    mocks.profile.mockResolvedValueOnce({ data: { role: 'enthusiast' } }).mockResolvedValue({ data: { role: 'barista' } });
+    await expect(login()).rejects.toThrow('/dashboard/barista');
+    expect(admin.upserts).toEqual([{ id: 'u1', role: 'barista', cafe_id: 'shop-x', roaster_id: null, barista_id: 'barista-x' }]);
   });
 });

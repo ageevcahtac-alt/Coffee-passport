@@ -1,18 +1,27 @@
-// Доступ бариста на проде — через настоящий интерфейс, как это делают люди:
-//   1) кофейня входит → «Команда» → «Доступ в кабинет бариста»: имя, email, временный пароль;
-//   2) бариста входит временным паролем → «Задайте свой пароль» → свой кабинет;
-//      временный пароль больше не пускает, новый ведёт сразу в кабинет;
-//   3) экран скана (камера — фейковое устройство Chromium) открывается; гость находится по коду
+// Доступ бариста на проде — через настоящий интерфейс, как это делают люди.
+// Фаза create (до серверной проверки gate):
+//   a) кофейня → «Команда» → единственная кнопка «+ Добавить сотрудника» → учётка временного бариста
+//      этого прогона, в списке «Ждёт смены пароля»;
+//   b) гость открывает форму оценки — новый бариста уже в «Кто готовил?», гость ставит ему 5 и пишет отзыв;
+//   c) временный пароль ведёт только на смену пароля: кабинет бариста и API кабинета закрыты.
+// Фаза main (сервер уже проверил, что API отклоняет действия, и перевёл срок пароля в прошлое):
+//   d) вход с просроченным временным паролем отклонён с сообщением о 72 часах;
+//   e) кофейня «Выдать новый временный пароль» → бариста входит новым, задаёт свой → в его кабинете
+//      виден отзыв гостя;
+//   1) бариста владельца: при reset — кофейня добавляет, первый вход со сменой пароля;
+//   2) экран скана (камера — фейковое устройство Chromium) открывается; гость находится по коду
 //      (тот же путь, что после скана QR: extractGuestId → loadGuest) → «Списать баллы» с абонемента;
-//   4) кабинет кофейни → «Лояльность»: гость и операция на сумму чека видны.
-// Запуск (из workflow verify-barista-access): node verify-barista-access.cjs <путь к playwright>
+//   3) кабинет кофейни → «Лояльность»: гость и операция на сумму чека видны.
+// Запуск (из workflow verify-barista-access): node verify-barista-access.cjs <путь к playwright> create|main
 // env: PROD_URL, FLOW_JSON (путь к JSON), SHOTS_DIR (скриншоты при сбое).
 // Печатает только шаги, пути и суммы — ни email, ни пароли в вывод не попадают.
 const fs = require('fs');
 const { chromium } = require(process.argv[2]);
 
+const phase = process.argv[3];
 const base = process.env.PROD_URL;
 const flow = JSON.parse(fs.readFileSync(process.env.FLOW_JSON, 'utf8'));
+const temp = flow.temp_barista;
 const amountText = `${Number(flow.amount).toLocaleString('ru-RU')} ₽`;
 let failed = 0;
 
@@ -68,44 +77,165 @@ async function step(browser, label, fn) {
   }
 }
 
+async function cafeTeam(page) {
+  const landed = await login(page, flow.cafe.email, flow.cafe.password);
+  if (landed.pathname !== '/dashboard/cafe') throw new Error(`вход кофейни привёл на ${landed.pathname}`);
+  await page.goto(base + '/dashboard/cafe/team', { waitUntil: 'networkidle' });
+}
+
+async function addStaff(page, name, email, password) {
+  const buttons = page.getByRole('button', { name: /Добавить сотрудника/ });
+  const count = await buttons.count();
+  if (count !== 1) throw new Error(`кнопок «Добавить сотрудника» на странице: ${count}`);
+  await buttons.click();
+  await page.fill('#barista-name', name);
+  await page.fill('#barista-email', email);
+  await page.fill('#barista-temporary-password', password);
+  const [response] = await Promise.all([
+    page.waitForResponse(
+      (r) => r.url().endsWith('/api/cafe/staff/barista-accounts') && r.request().method() === 'POST',
+      { timeout: 30000 }
+    ),
+    page.getByRole('button', { name: 'Создать учётку' }).click(),
+  ]);
+  if (response.status() !== 201) throw new Error(`POST barista-accounts -> HTTP ${response.status()}`);
+}
+
+async function accountRow(page, name) {
+  const row = page.locator('[data-testid="barista-accounts"] li').filter({ hasText: name }).first();
+  await row.waitFor({ timeout: 20000 });
+  return row;
+}
+
+async function changePassword(page, password) {
+  await page.waitForURL((url) => url.pathname === '/auth/change-password', { timeout: 20000 }).catch(() => {});
+  const landed = new URL(page.url());
+  if (landed.pathname !== '/auth/change-password') throw new Error(`временный пароль привёл на ${landed.pathname}`);
+  await page.fill('#new-password', password);
+  await page.fill('#new-password-confirmation', password);
+  await Promise.all([
+    page.waitForURL((url) => url.pathname !== '/auth/change-password' || url.searchParams.has('error'), { timeout: 30000 }),
+    page.getByRole('button', { name: 'Сохранить и войти' }).click(),
+  ]);
+  const after = await settle(page);
+  if (after.pathname !== '/dashboard/barista') throw new Error(`после смены пароля — ${after.pathname}`);
+}
+
+async function createPhase(browser) {
+  await step(browser, 'cafe adds staff login', async (page) => {
+    await cafeTeam(page);
+    await addStaff(page, temp.name, temp.email, temp.temp_password);
+    const row = await accountRow(page, temp.name);
+    await row.getByText('Ждёт смены пароля').waitFor({ timeout: 15000 });
+    pass('cafe adds staff login', 'одна кнопка «+ Добавить сотрудника» → «Создать учётку» -> HTTP 201, в списке «Ждёт смены пароля»');
+  });
+
+  await step(browser, 'new barista in guest rating form', async (page) => {
+    const landed = await login(page, flow.guest.email, flow.guest.password);
+    if (landed.searchParams.has('error')) throw new Error('вход гостя вернул ошибку');
+    await page.goto(`${base}/passport/${flow.lot_id}`, { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: /Я в кофейне/ }).click();
+    await page.getByPlaceholder('Найти аккредитованную кофейню…').fill('XO');
+    await page.getByRole('button').filter({ hasText: 'Всеволожск' }).first().click();
+    await page.getByRole('link', { name: 'Начать слепую дегустацию' }).click();
+    await page.getByRole('heading', { name: 'Что вы пьёте?' }).waitFor();
+    await page.getByRole('button', { name: 'Чёрный кофе', exact: true }).click();
+    await page.getByRole('button', { name: 'Эспрессо', exact: true }).click();
+    await page.getByRole('button', { name: 'Далее', exact: true }).click();
+    await page.getByRole('heading', { name: 'Расскажите о чашке' }).waitFor();
+    await page.getByRole('radio', { name: '4 из 5' }).first().click();
+    await page.getByRole('button', { name: 'Далее — работа бариста' }).click();
+    await page.getByRole('heading', { name: 'Работа бариста' }).waitFor();
+    const choice = page.getByLabel(temp.name, { exact: true });
+    await choice.waitFor({ timeout: 20000 });
+    pass('new barista in guest rating form', `«Кто готовил?» → «${temp.name}» в списке сразу после создания учётки`);
+
+    await choice.check();
+    await page.getByRole('radio', { name: '5 из 5' }).last().click();
+    await page.fill('#barista-note', temp.note);
+    const [response] = await Promise.all([
+      page.waitForResponse(
+        (r) => r.request().method() === 'POST' && new URL(r.url()).pathname.endsWith('/rest/v1/checkins'),
+        { timeout: 30000 }
+      ),
+      page.getByRole('button', { name: 'Сохранить дегустацию в дневник' }).click(),
+    ]);
+    if (response.status() !== 201) throw new Error(`POST checkins -> HTTP ${response.status()}`);
+    pass('guest rates the new barista', 'оценка 5 и отзыв -> POST checkins HTTP 201');
+  });
+
+  await step(browser, 'temporary password opens only the password change', async (page) => {
+    await login(page, temp.email, temp.temp_password);
+    await page.waitForURL((url) => url.pathname === '/auth/change-password', { timeout: 20000 }).catch(() => {});
+    const landed = new URL(page.url());
+    if (landed.pathname !== '/auth/change-password') throw new Error(`временный пароль привёл на ${landed.pathname}`);
+    await page.goto(base + '/dashboard/barista', { waitUntil: 'networkidle' });
+    const after = await settle(page);
+    if (after.pathname !== '/auth/change-password') throw new Error(`/dashboard/barista открылся (${after.pathname})`);
+    pass('temporary password opens only the password change', 'вход -> /auth/change-password; /dashboard/barista -> /auth/change-password');
+  });
+}
+
+async function reissueSteps(browser) {
+  await step(browser, 'expired temporary password refused', async (page) => {
+    const landed = await login(page, temp.email, temp.temp_password);
+    const error = landed.searchParams.get('error') || '';
+    if (!error.includes('72')) {
+      throw new Error(`ожидался отказ про 72 часа, получено ${landed.pathname} ${error ? `«${error}»` : 'без ошибки'}`);
+    }
+    pass('expired temporary password refused', `вход -> ${landed.pathname} «${error}»`);
+  });
+
+  await step(browser, 'cafe issues a new temporary password', async (page) => {
+    await cafeTeam(page);
+    let row = await accountRow(page, temp.name);
+    await row.getByText('Временный пароль истёк').waitFor({ timeout: 15000 });
+    await row.getByRole('button', { name: 'Выдать новый временный пароль' }).click();
+    await row.locator('input').fill(temp.temp_password2);
+    const [response] = await Promise.all([
+      page.waitForResponse(
+        (r) => r.url().endsWith('/api/cafe/staff/barista-accounts') && r.request().method() === 'PATCH',
+        { timeout: 30000 }
+      ),
+      row.getByRole('button', { name: 'Выдать пароль' }).click(),
+    ]);
+    if (response.status() !== 200) throw new Error(`PATCH barista-accounts -> HTTP ${response.status()}`);
+    row = await accountRow(page, temp.name);
+    await row.getByText('Ждёт смены пароля').waitFor({ timeout: 15000 });
+    pass('cafe issues a new temporary password', '«Временный пароль истёк» → «Выдать новый временный пароль» -> HTTP 200, снова «Ждёт смены пароля»');
+  });
+
+  await step(browser, 'rating reached the new barista cabinet', async (page) => {
+    await login(page, temp.email, temp.temp_password2);
+    await changePassword(page, temp.password);
+    await page.getByText(temp.note).waitFor({ timeout: 30000 });
+    pass('rating reached the new barista cabinet', 'новый временный пароль -> свой пароль -> /dashboard/barista, отзыв гостя виден в кабинете');
+  });
+}
+
 (async () => {
   const browser = await chromium.launch({
     headless: true,
     args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'],
   });
   try {
+    if (phase === 'create') {
+      await createPhase(browser);
+      return;
+    }
+    if (phase !== 'main') throw new Error('фаза: create | main');
+    await reissueSteps(browser);
+
     if (flow.barista_state === 'absent') {
       await step(browser, 'cafe adds barista', async (page) => {
-        const landed = await login(page, flow.cafe.email, flow.cafe.password);
-        if (landed.pathname !== '/dashboard/cafe') throw new Error(`вход кофейни привёл на ${landed.pathname}`);
-        await page.goto(base + '/dashboard/cafe/team', { waitUntil: 'networkidle' });
-        await page.fill('#barista-name', 'Бариста владельца');
-        await page.fill('#barista-email', flow.barista.email);
-        await page.fill('#barista-temporary-password', flow.barista.temp_password);
-        const [response] = await Promise.all([
-          page.waitForResponse((r) => r.url().endsWith('/api/cafe/staff/barista-accounts'), { timeout: 30000 }),
-          page.getByRole('button', { name: 'Создать доступ' }).click(),
-        ]);
-        if (response.status() !== 201) throw new Error(`POST barista-accounts -> HTTP ${response.status()}`);
-        await page.getByText('создана. Передайте бариста').waitFor({ timeout: 15000 });
-        pass('cafe adds barista', 'Команда → «Создать доступ» -> HTTP 201, сообщение «учётка создана»');
+        await cafeTeam(page);
+        await addStaff(page, 'Бариста владельца', flow.barista.email, flow.barista.temp_password);
+        pass('cafe adds barista', 'Команда → «+ Добавить сотрудника» -> HTTP 201');
       });
 
       await step(browser, 'barista first login', async (page) => {
-        let landed = await login(page, flow.barista.email, flow.barista.temp_password);
-        // Прямое ожидание нужного адреса — на случай редиректа позже окна settle(); настоящий баг
-        // (вход сразу в кабинет) всё равно упадёт по таймауту ниже.
-        await page.waitForURL((url) => url.pathname === '/auth/change-password', { timeout: 20000 }).catch(() => {});
-        landed = new URL(page.url());
-        if (landed.pathname !== '/auth/change-password') throw new Error(`временный пароль привёл на ${landed.pathname}`);
-        await page.fill('#new-password', flow.barista.password);
-        await page.fill('#new-password-confirmation', flow.barista.password);
-        await Promise.all([
-          page.waitForURL((url) => url.pathname !== '/auth/change-password' || url.searchParams.has('error'), { timeout: 30000 }),
-          page.getByRole('button', { name: 'Сохранить и войти' }).click(),
-        ]);
-        const after = await settle(page);
-        if (after.pathname !== '/dashboard/barista') throw new Error(`после смены пароля — ${after.pathname}`);
+        await login(page, flow.barista.email, flow.barista.temp_password);
+        await changePassword(page, flow.barista.password);
         pass('barista first login', 'временный пароль -> /auth/change-password -> свой пароль -> /dashboard/barista');
       });
 
@@ -115,7 +245,7 @@ async function step(browser, label, fn) {
         pass('temporary password retired', `временный пароль -> ${landed.pathname} с ошибкой входа`);
       });
     } else {
-      console.log('note: учётка бариста уже есть — шаги «кофейня добавляет» и «первый вход» пропущены (reset_barista=true, чтобы пройти их заново)');
+      console.log('note: учётка бариста владельца уже есть — шаги «кофейня добавляет» и «первый вход» пропущены (reset_barista=true, чтобы пройти их заново)');
     }
 
     await step(browser, 'barista cabinet and loyalty', async (page) => {
@@ -160,8 +290,12 @@ async function step(browser, label, fn) {
       await rows.first().waitFor({ timeout: 20000 });
       pass('cafe sees the operation', `«Лояльность»: временный гость в абонементах, строк с ${amountText} в сверке: ${await rows.count()}`);
     });
+  } catch (error) {
+    failed++;
+    console.log(`FAIL ${error.message}`);
   } finally {
+    // Здесь, а не после try: фаза create выходит через return.
     await browser.close();
+    process.exit(failed ? 1 : 0);
   }
-  process.exit(failed ? 1 : 0);
 })();

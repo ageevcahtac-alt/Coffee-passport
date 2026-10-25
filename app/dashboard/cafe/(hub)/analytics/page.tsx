@@ -5,7 +5,8 @@ import { useSearchParams } from 'next/navigation';
 import { useShopCheckins } from '@/lib/data/useShopCheckins';
 import { useLots } from '@/lib/data/useLots';
 import { useCafeMenuLotIds } from '@/lib/data/useCafeMenu';
-import { getBaristasForShop } from '@/lib/data/baristas';
+import { baristaChoicesFrom, syncBaristaProfilesFromSupabase } from '@/lib/data/baristaProfileStore';
+import { useBaristaProfiles } from '@/lib/data/useBaristaProfiles';
 import { getMergedLotById } from '@/lib/data/lotsStore';
 import { useStaffSession } from '@/lib/auth/staffSession';
 import { downloadCsv } from '@/lib/utils/csvExport';
@@ -44,7 +45,13 @@ export default function CafeAnalyticsPage() {
     () => lots.filter((lot) => menuLotIds.includes(lot.id)).sort((a, b) => a.name.localeCompare(b.name)),
     [lots, menuLotIds]
   );
-  const shopBaristas = useMemo(() => getBaristasForShop(cafeId ?? ''), [cafeId]);
+  // Baristas the cafe created live only in barista_profiles; staff dashboards
+  // do not run the app-wide sync, so pull the roster here.
+  const roster = useBaristaProfiles();
+  useEffect(() => {
+    void syncBaristaProfilesFromSupabase();
+  }, []);
+  const shopBaristas = useMemo(() => baristaChoicesFrom(roster, cafeId ?? ''), [cafeId, roster]);
 
   const scoped = tab === 'coffee' ? shopRecords : shopRecords.filter((record) => record.baristaRating > 0);
 

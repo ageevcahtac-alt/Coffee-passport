@@ -5,6 +5,9 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { PILOT_STAFF_PASSWORD, PILOT_STAFF_ROLES, type PilotStaffRole } from '@/lib/auth/pilotStaff'
 import { authErrorPath, safeNextPath } from '@/lib/auth/safeRedirect'
+import { TEMPORARY_PASSWORD_EXPIRED_MESSAGE, pendingBaristaBinding, temporaryPasswordState } from '@/lib/auth/temporaryPassword'
+import { grantPendingBaristaRights } from '@/lib/auth/grantBaristaRights'
+import { createAdminSupabaseClient } from '@/lib/supabase/adminClient'
 import type { ProfileRole } from '@/lib/types/database'
 
 export async function signInWithPassword(formData: FormData) {
@@ -25,6 +28,32 @@ export async function signInWithPassword(formData: FormData) {
 
   if (error) {
     redirect(authErrorPath(errorRedirect, error.message))
+  }
+
+  // A temporary password the cafe issued: 72 hours, then refused (the cafe
+  // can issue a new one); while valid it leads only to the password change.
+  const temporary = temporaryPasswordState(data?.user)
+  if (temporary === 'expired') {
+    await supabase.auth.signOut()
+    redirect(authErrorPath(errorRedirect, TEMPORARY_PASSWORD_EXPIRED_MESSAGE))
+  }
+  if (temporary === 'active') {
+    const target = next === '/' || next === '/journey' ? '/dashboard/barista' : next
+    redirect(`/auth/change-password?next=${encodeURIComponent(target)}`)
+  }
+
+  // Own password already set, but the barista grant after it did not go
+  // through (app/auth/change-password/actions.ts): finish it now.
+  const binding = data?.user ? pendingBaristaBinding(data.user) : null
+  if (binding && data?.user) {
+    const { data: current } = await supabase.from('profiles').select('role').eq('id', data.user.id).maybeSingle()
+    if (current?.role !== 'barista') {
+      try {
+        await grantPendingBaristaRights(createAdminSupabaseClient(), data.user.id, binding)
+      } catch (error) {
+        console.error('[login] pending barista grant failed:', error instanceof Error ? error.message : 'unknown')
+      }
+    }
   }
 
   // The form's default landings ('/' from /auth/login, '/journey' from the

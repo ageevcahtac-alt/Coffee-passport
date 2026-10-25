@@ -18,10 +18,19 @@ class MemoryStorage {
 }
 
 let rows: BaristaProfileRow[] = [];
+const MAX_ROWS = 1000;
 
 vi.mock('@/lib/supabase/browserClient', () => ({
   getBrowserSupabaseClient: () => ({
-    from: () => ({ select: () => Promise.resolve({ data: rows, error: null }) }),
+    // PostgREST caps a response (max-rows): the store must page with range().
+    from: () => ({
+      select: () => ({
+        order: () => ({
+          range: (from: number, to: number) =>
+            Promise.resolve({ data: rows.slice(from, Math.min(to + 1, from + MAX_ROWS)), error: null }),
+        }),
+      }),
+    }),
   }),
 }));
 
@@ -63,5 +72,39 @@ describe('baristaProfileStore', () => {
       name: 'Алексей',
       favoriteOrigin: 'Бурунди',
     });
+  });
+
+  // Guest rating form: the cafe's roster comes from the database, so a barista
+  // the cafe just created is a choice right away; 'Не указан' stays last.
+  it('offers a just-created barista in the guest rating form, before "Не указан"', async () => {
+    rows = [row({ id: 'barista-0f6c', name: 'Анна' }), row({ id: 'barista-elsewhere', coffee_shop_id: 'shop-other', name: 'Чужой' })];
+    const store = await import('./baristaProfileStore');
+    await store.syncBaristaProfilesFromSupabase();
+    const choices = store.getBaristaChoicesForShop('shop-xo-vsevolozhsk').map((b) => b.name);
+    expect(choices).toContain('Анна');
+    expect(choices).not.toContain('Чужой');
+    expect(choices[choices.length - 1]).toBe('Не указан');
+  });
+
+  // Codex review PR #25: pruning by one capped response deleted live baristas.
+  it('reads the whole roster page by page before dropping anyone', async () => {
+    rows = Array.from({ length: MAX_ROWS + 1 }, (_, i) => row({ id: `barista-${String(i).padStart(5, '0')}`, name: `Б${i}` }));
+    const store = await import('./baristaProfileStore');
+    await store.syncBaristaProfilesFromSupabase();
+    expect(store.getMergedBaristaById(`barista-${String(MAX_ROWS).padStart(5, '0')}`)).toBeDefined();
+  });
+
+  it('drops a barista the database no longer has (account removed)', async () => {
+    rows = [row({ id: 'barista-0f6c', name: 'Анна' })];
+    let store = await import('./baristaProfileStore');
+    await store.syncBaristaProfilesFromSupabase();
+    expect(store.getMergedBaristaById('barista-0f6c')).toBeDefined();
+
+    vi.resetModules();
+    rows = [];
+    store = await import('./baristaProfileStore');
+    await store.syncBaristaProfilesFromSupabase();
+    expect(store.getMergedBaristaById('barista-0f6c')).toBeUndefined();
+    expect(store.getMergedBaristaById('barista-xo-alexey')).toBeDefined();
   });
 });
