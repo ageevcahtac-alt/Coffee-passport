@@ -74,7 +74,7 @@ always defined by commits, never by calendar days).
 
 ## Стек и архитектура
 
-Next.js 14.2.35 (App Router, Server Actions, API routes, `middleware.ts`) +
+Next.js 14.2.35 (App Router, Server Actions, API routes) +
 React 18 + TypeScript 5 + Tailwind CSS 4 (токены — `tailwind.config.ts`,
 `app/globals.css`, обоснование — `DESIGN.md`). Данные и вход — Supabase
 (`@supabase/supabase-js`, `@supabase/ssr`), доступ к таблицам регулирует RLS;
