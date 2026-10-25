@@ -22,3 +22,10 @@
 - Саму заявку XO Coffee (не одобрять, не менять статус).
 - `supabase/password coffee pasport/`, прод-секреты.
 - Хранение одобрения и цвета булавки (localStorage) — только описать в итоге.
+
+## Итог
+Результат: partial — доступ сделан и доказан на проде; уведомление о заявках не уходит (нет RESEND_API_KEY и PARTNER_NOTIFY_EMAIL), ждём адрес получателя от владельца.
+- PR #31 этап 1 (роль admin + Basic запасной), #32 фикс 500 в /admin (requireAdminBasicAuth брал поле `headers` у HeadersAdapter — /admin падал и под Basic), #33 этап 2 (Basic убран), #35 site-health.
+- Прод: verify-admin-access run 40208030606 — PASS; site-health run 40208542583 — fails 0.
+- Заявка XO: ab107366-51ea-4cbf-bba0-c4fb8b83872c, coffee_shop, new, 2026-10-25 14:58:53 МСК — не менялась.
+- Одобрение и цвет булавки в /admin пишутся только в localStorage браузера (lib/data/roasters.ts, coffeeShops.ts) — в базу и на карту у других не попадают. Отдельная задача.
