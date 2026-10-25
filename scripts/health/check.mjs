@@ -45,7 +45,7 @@ for (const spec of specs) {
   const url = base + spec.path;
   const r = await hit(url);
   const problems = [];
-  // spec.status — ожидаемый код для закрытых страниц (например, /admin за Basic Auth → 401).
+  // spec.status — ожидаемый код для закрытых страниц (например, страница за Basic Auth → 401).
   if (r.status === 0) problems.push(`network ${r.error}`);
   else if (spec.status ? r.status !== spec.status : r.status >= 400)
     problems.push(`HTTP ${r.status}${spec.status ? `, ждали ${spec.status}` : ''}`);
