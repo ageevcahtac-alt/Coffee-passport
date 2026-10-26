@@ -96,7 +96,7 @@ email/паролю (`app/auth/actions.ts`). Верить коду, а не READM
 
 | Что | Команда | Результат |
 |---|---|---|
-| Тесты | `npm test` (`vitest run`) | 49 файлов, 435 тестов — зелёные (2026-10-26) |
+| Тесты | `npm test` (`vitest run`) | 49 файлов, 441 тест — зелёные (2026-10-26) |
 | Типы | `npx tsc --noEmit` | без ошибок |
 | Сборка | `npm run build` | обязательна перед аудитом (см. выше) |
 | Lint | `npm run lint` | ESLint Strict (`next/core-web-vitals`, `.eslintrc.json`) через `scripts/lint-baseline.mjs`: 8 старых предупреждений заморожены в `eslint-baseline.json`, любая новая находка (и предупреждение тоже) — красный. Исправил старую → `npm run lint -- --update`. Добавлять записи в baseline руками нельзя. |
