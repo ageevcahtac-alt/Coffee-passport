@@ -56,6 +56,7 @@ async function settle(page) {
 
 async function login(context, account) {
   const page = await context.newPage();
+  page.setDefaultTimeout(60000);
   try {
     await page.goto(base + '/auth/login', { waitUntil: 'networkidle' });
     await page.fill('#enthusiast-email', account.email);
@@ -76,6 +77,7 @@ const step = (label, what) => console.log(`${new Date().toISOString()} ${label}:
 async function visit(context, label, pagePath, { screenshot, tiles, geocode } = {}) {
   step(label, 'открываю');
   const page = await context.newPage();
+  page.setDefaultTimeout(60000); // действия Playwright без своего timeout иначе ждут бесконечно
   const hosts = new Map();
   const fonts = new Set();
   const tile = { ok: 0, bad: 0, cancelled: 0 };
@@ -182,10 +184,13 @@ async function checkGeocode(page, geo) {
 
 async function passportPath(context) {
   const page = await context.newPage();
+  page.setDefaultTimeout(60000);
   try {
     for (const from of ['/scan', '/']) {
-      await page.goto(base + from, { waitUntil: 'networkidle' });
-      const href = await page.locator('a[href^="/passport/"]').first().getAttribute('href').catch(() => null);
+      step('Паспорт лота', `ищу ссылку на ${from}`);
+      await page.goto(base + from, { waitUntil: 'networkidle', timeout: 60000 }).catch(() => {});
+      // Без timeout getAttribute ждёт появления ссылки бесконечно.
+      const href = await page.locator('a[href^="/passport/"]').first().getAttribute('href', { timeout: 15000 }).catch(() => null);
       if (href) return href.split('?')[0];
     }
     return null;
@@ -218,6 +223,13 @@ function report() {
 
 (async () => {
   fs.mkdirSync(out, { recursive: true });
+  // Предохранитель: замер не дольше 20 минут — иначе job висит до своего таймаута без отчёта.
+  setTimeout(() => {
+    console.error('FAIL замер дольше 20 минут — прерван');
+    report();
+    process.exit(1);
+  }, 20 * 60 * 1000).unref();
+  step('замер', 'запуск браузера');
   const browser = await chromium.launch({ headless: true });
   try {
     const anon = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1 });
