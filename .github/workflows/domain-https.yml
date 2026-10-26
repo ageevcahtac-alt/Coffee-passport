@@ -81,7 +81,7 @@ jobs:
             printf '%s\n' "$h" | head -1 | grep -q ' 200' && printf '%s' "$h" | grep -qi '^content-type: image/png' || fail=1
             [ "$i" = 2 ] && { printf '%s' "$h" | grep -qi '^x-cache-status: HIT' || { echo "FAIL второй запрос не из кэша"; fail=1; }; }
           done
-          file "$RUNNER_TEMP/tile.png"
+          file "$RUNNER_TEMP/tile.png" | tee /dev/stderr | grep -q "PNG image data" || { echo "FAIL тело тайла — не PNG"; fail=1; }
           for p in /tiles/20/1/1.png /tiles/3/4/2.jpg /tiles/x/1/1.png; do
             code=$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:8080$p")
             echo "GET $p → $code"; [ "$code" = 404 ] || fail=1
@@ -109,7 +109,7 @@ jobs:
         run: |
           set -o pipefail
           dir=$(ssh prod 'mktemp -d /tmp/domain-https.XXXXXX')
-          tar -C deploy/timeweb -cf - activate-domain.sh nginx-domain.conf nginx-ip-redirect.conf | ssh prod "tar -C $dir -xf -"
+          tar -C deploy/timeweb -cf - activate-domain.sh nginx-domain.conf nginx-tiles.conf nginx-ip-redirect.conf | ssh prod "tar -C $dir -xf -"
           ssh prod "bash $dir/activate-domain.sh $dir; rc=\$?; rm -rf $dir; exit \$rc" 2>&1 | node scripts/ops/redact.mjs
 
   verify:

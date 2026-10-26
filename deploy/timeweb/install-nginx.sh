@@ -46,13 +46,20 @@ if ! nginx -t; then
     echo "nginx -t не прошёл — прежние конфиги возвращены" >&2
     exit 1
 fi
-nginx -s reload
+if ! nginx -s reload; then
+    restore
+    echo "nginx -s reload не прошёл — прежние конфиги возвращены" >&2
+    exit 1
+fi
 sleep 3 # reload асинхронный: проверка ниже не должна попасть в старые воркеры
 
-# Тайл с самого сервера через домен: 200 image/png или откат.
-code=$(curl -sS -o /dev/null -w '%{http_code} %{content_type}' --max-time 60 https://coffeepassport.ru/tiles/0/0/0.png || true)
-echo "GET /tiles/0/0/0.png → $code"
-if [ "$code" != "200 image/png" ]; then
+# Тайл с самого сервера через домен: 200 image/png и тело — настоящий PNG, иначе откат.
+tile=$(mktemp)
+code=$(curl -sS -o "$tile" -w '%{http_code} %{content_type}' --max-time 60 https://coffeepassport.ru/tiles/0/0/0.png) || code="curl error $?"
+magic=$(head -c 8 "$tile" | od -An -tx1 | tr -d ' \n')
+echo "GET /tiles/0/0/0.png → $code, $(stat -c %s "$tile") байт"
+rm -f "$tile"
+if [ "$code" != "200 image/png" ] || [ "$magic" != 89504e470d0a1a0a ]; then
     restore
     echo "тайл не отдаётся — прежние конфиги возвращены" >&2
     exit 1

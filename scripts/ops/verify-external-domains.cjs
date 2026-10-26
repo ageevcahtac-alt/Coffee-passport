@@ -75,13 +75,19 @@ async function visit(context, label, pagePath, { screenshot, tiles, geocode } = 
   const hosts = new Map();
   const fonts = new Set();
   const tile = { ok: 0, bad: 0 };
+  const tileChecks = [];
   const geo = { status: '—' };
+  // Тайл засчитывается, только если тело — настоящий PNG (сигнатура 89 50 4E 47), а не пустой ответ 200.
   page.on('response', (res) => {
     const url = new URL(res.url());
     if (url.hostname !== own || !url.pathname.startsWith('/tiles/')) return;
     const png = (res.headers()['content-type'] || '').startsWith('image/png');
-    if (res.status() === 200 && png) tile.ok += 1;
-    else tile.bad += 1;
+    tileChecks.push(
+      (res.status() === 200 && png ? res.body() : Promise.resolve(Buffer.alloc(0)))
+        .then((body) => body.length > 8 && body.readUInt32BE(0) === 0x89504e47)
+        .catch(() => false)
+        .then((ok) => (ok ? (tile.ok += 1) : (tile.bad += 1)))
+    );
   });
   const note = (raw, type) => {
     let url;
@@ -107,6 +113,7 @@ async function visit(context, label, pagePath, { screenshot, tiles, geocode } = 
     if (!res || res.status() >= 400) failed += 1;
     await settle(page);
     if (geocode) await checkGeocode(page, geo);
+    await Promise.all(tileChecks);
     // Итоговый путь — после ожидания: кабинет может увести на вход уже после загрузки (ревью Codex).
     finalPath = new URL(page.url()).pathname;
     if (screenshot) await page.screenshot({ path: path.join(out, screenshot), fullPage: true });
