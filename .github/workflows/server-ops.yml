@@ -1,5 +1,5 @@
 name: server-ops
-# Диагностика прода, только чтение: хвост логов приложения (с фильтром секретов),
+# Диагностика прода, только чтение: хвост логов приложения (с фильтром секретов, email и телефонов),
 # ss -tlnp, df -h, статус контейнеров. Команд, меняющих сервер, здесь быть не должно.
 # Запуск: gh workflow run server-ops [-f lines=200]
 on:
@@ -10,6 +10,10 @@ on:
         default: "200"
 permissions:
   contents: read
+# bash явно — с pipefail: падение ssh не прячется за успешным redact; весь вывод — через redact
+defaults:
+  run:
+    shell: bash
 jobs:
   inspect:
     runs-on: ubuntu-latest
@@ -27,13 +31,12 @@ jobs:
           [[ "$LINES" =~ ^[0-9]+$ ]] && [ "$LINES" -ge 1 ] && [ "$LINES" -le 2000 ] || { echo "::error::lines: 1–2000"; exit 1; }
       - name: app logs
         run: |
-          set -o pipefail
           ssh prod "journalctl -u coffee-passport -n $LINES --no-pager" | node scripts/ops/redact.mjs
       - name: listening ports
-        run: ssh prod 'ss -tlnp'
+        run: ssh prod 'ss -tlnp' | node scripts/ops/redact.mjs
       - name: disk
-        run: ssh prod 'df -h'
+        run: ssh prod 'df -h' | node scripts/ops/redact.mjs
       - name: containers
-        run: ssh prod "docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'"
+        run: ssh prod "docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'" | node scripts/ops/redact.mjs
       - name: app service
-        run: ssh prod 'systemctl is-active coffee-passport; git -C /opt/coffee-passport/app rev-parse HEAD'
+        run: ssh prod 'systemctl is-active coffee-passport; git -C /opt/coffee-passport/app rev-parse HEAD' | node scripts/ops/redact.mjs

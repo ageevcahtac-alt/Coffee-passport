@@ -96,7 +96,7 @@ email/паролю (`app/auth/actions.ts`). Верить коду, а не READM
 
 | Что | Команда | Результат |
 |---|---|---|
-| Тесты | `npm test` (`vitest run`) | 36 файлов, 293 теста — зелёные |
+| Тесты | `npm test` (`vitest run`) | 49 файлов, 432 теста — зелёные (2026-10-26) |
 | Типы | `npx tsc --noEmit` | без ошибок |
 | Сборка | `npm run build` | обязательна перед аудитом (см. выше) |
 | Lint | `npm run lint` | ESLint Strict (`next/core-web-vitals`, `.eslintrc.json`) через `scripts/lint-baseline.mjs`: 8 старых предупреждений заморожены в `eslint-baseline.json`, любая новая находка (и предупреждение тоже) — красный. Исправил старую → `npm run lint -- --update`. Добавлять записи в baseline руками нельзя. |
@@ -116,6 +116,15 @@ email/паролю (`app/auth/actions.ts`). Верить коду, а не READM
 | 6 | Схема и RLS меняются только новой миграцией `supabase/migrations/NNNN_*.sql`, старые не редактировать | `supabase/migrations/` | нет | профилактическое правило, инцидента не было |
 | 7 | `NEXT_PUBLIC_*` вшиваются при сборке: после их смены нужна пересборка | `deploy/timeweb/rebuild-public-env.sh` | `deploy/timeweb/check-browser-network.cjs` (вручную) | `DOMAIN_CHANGELOG.md`, раздел «Next.js public environment rebuild» |
 | 8 | Security definer RPC, которые зовёт cron, исполняет только `service_role`; никаких `grant execute … to anon, authenticated` | `supabase/migrations/0033_cron_rpc_service_role_only.sql` | `supabase/cronRpcGrants.test.ts` | 2026-10-20: анонимный ключ вызывал `/rpc/events_archive_expired` в обход секрета крона (HTTP 200) |
+| 9 | Данные только в России: новый сервис, получающий персональные данные или IP посетителя (почта, карта, аналитика, CDN, шрифты, внешние API), — только российский; логи в GitHub — через `scripts/ops/redact.mjs` (секреты, email, телефоны) | `scripts/ops/redact.mjs`, раздел «Данные только в России» ниже | `scripts/ops/redact.test.ts`; на проде — workflow `verify-external-domains` | `.agents/tasks/20261026-1200-pd-russia-only.md` |
+
+## Данные только в России
+
+- Персональные данные пользователей хранятся и обрабатываются только в России. Новые сервисы, которые их получают (включая IP посетителя при загрузке ресурса), — только российские; иностранный — только с решением владельца.
+- Шрифты, скрипты, стили — из сборки со своего домена (`next/font` — самохостинг), без CDN. Проверка — `gh workflow run verify-external-domains --ref fix/pre-pilot-shortlist`: таблица внешних доменов по страницам и кабинетам.
+- При разборе данных из базы (SQL, REST, логи, отчёты) email, телефоны и имена **не выводить** ни в чат, ни в логи: выбирать только id, роли, статусы, счётчики; вывод с сервера — через `node scripts/ops/redact.mjs`.
+- Логи GitHub Actions хранятся в США: всё, что печатает workflow с сервера, идёт через `redact.mjs`.
+- Известные иностранные обращения (на решении владельца, 2026-10-26): тайлы карты `*.tile.openstreetmap.org` (`components/map/*`), геокодер Nominatim (`lib/utils/geocode.ts`, по кнопке), письма заявок через Resend (`lib/email/sendPartnerRequestNotification.ts`, ключ на проде не задан — писем нет), ссылка «Маршрут» на Google Maps. `next/font/google` скачивает шрифты с Google только при сборке на сервере — посетители их получают с нашего домена.
 
 ## Анти-паттерны этого проекта
 
@@ -135,7 +144,8 @@ email/паролю (`app/auth/actions.ts`). Верить коду, а не READM
 | `.github/workflows/ci.yml` | job `check`: `npm ci` → тесты → `tsc --noEmit` → lint (baseline) → `next build` с подставными `NEXT_PUBLIC_*`; на каждом PR и push в `main` / `fix/pre-pilot-shortlist` | да: ruleset `protect-prod` на `main` и `fix/pre-pilot-shortlist` — required check `check`, запрет force push и удаления; PR не обязателен, но прямой push без зелёного `check` не пройдёт |
 | `.github/workflows/health.yml` (`site-health`) | каждый час, вручную и на PR с правкой проверки: `scripts/health/check.mjs` по `vars.PROD_URL` — маршруты и тексты из `.agents/health.config.json`, `/api/health` с `"status":"ok"`; при поломке (не на PR) открывает issue. Без `PROD_URL` — зелёный пропуск | нет |
 | `.github/workflows/deploy.yml` | push в `fix/pre-pilot-shortlist` и вручную: `update-app.sh` на сервере по SSH, сверка HEAD, ожидание `/api/health` `"status":"ok"` | нет (после merge); красный = прод не обновился или нездоров |
-| `.github/workflows/server-ops.yml` | только вручную, только чтение: логи (с фильтром секретов), `ss -tlnp`, `df -h`, контейнеры | нет |
+| `.github/workflows/verify-external-domains.yml` | на PR с правкой проверки, на push в ветку прода (после deploy) при правке шрифтов/карты/next.config и вручную: внешние домены браузера по страницам и кабинетам (временные учётки), хосты исходящих адресов сервера, скриншоты 390 px | нет |
+| `.github/workflows/server-ops.yml` | только вручную, только чтение: логи (с фильтром секретов, email и телефонов), `ss -tlnp`, `df -h`, контейнеры | нет |
 | `.github/workflows/db-migrate.yml` | только вручную, по одному файлу: бэкап `pg_dump` в `/opt/coffee-passport/backups/`, накат `psql -1 ON_ERROR_STOP`; ошибки SQL — только в приватный лог на сервере; проверка колонки `verify_table`/`verify_column` | нет |
 | `.github/workflows/events-cron.yml` | ежедневно 03:00 UTC: POST в `/api/cron/events-archive`, `events-aggregate`, `cafe-menu-expire` с `EVENTS_CRON_SECRET`; секреты репо `APP_URL`, `EVENTS_CRON_SECRET` | нет (планировщик). Работает с 2026-10-20. Секрет на сервере — `/opt/coffee-passport/secrets/events_cron_secret` и `.env.local`; в GitHub ставить через bash `gh secret set EVENTS_CRON_SECRET < файл`, не через `\|` из PowerShell 5.1 (дописывает перевод строки → 401 / битый URL) |
 
