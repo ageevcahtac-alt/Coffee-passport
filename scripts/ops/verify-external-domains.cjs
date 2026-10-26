@@ -166,13 +166,24 @@ async function visit(context, label, pagePath, { screenshot, tiles, geocode } = 
 }
 
 // «Найти на карте по адресу»: ответ своего /api/cafe/geocode — 200 и координаты. Форма не сохраняется.
+// Любое ожидание Playwright — не дольше ms (res.json()/body() своего тайм-аута не имеют).
+const within = (promise, ms, what) =>
+  Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(`${what}: дольше ${ms / 1000} с`)), ms))]);
+
 async function checkGeocode(page, geo) {
+  const label = 'Поиск адреса';
   try {
-    const [res] = await Promise.all([
-      page.waitForResponse((r) => new URL(r.url()).pathname === '/api/cafe/geocode', { timeout: 45000 }),
-      page.getByRole('button', { name: 'Найти на карте по адресу' }).click(),
-    ]);
-    const body = await res.json().catch(() => ({}));
+    step(label, 'нажимаю «Найти на карте по адресу»');
+    const [res] = await within(
+      Promise.all([
+        page.waitForResponse((r) => new URL(r.url()).pathname === '/api/cafe/geocode', { timeout: 45000 }),
+        page.getByRole('button', { name: 'Найти на карте по адресу' }).click({ timeout: 15000 }),
+      ]),
+      60000,
+      'ответ /api/cafe/geocode'
+    );
+    step(label, `ответ HTTP ${res.status()}`);
+    const body = await within(res.json(), 15000, 'тело ответа').catch(() => ({}));
     const coords = Number.isFinite(body.lat) && Number.isFinite(body.lng);
     geo.status = res.status() === 200 && coords ? 'ok' : `HTTP ${res.status()}${coords ? '' : ', без координат'}`;
     await page.waitForLoadState('networkidle').catch(() => {});
