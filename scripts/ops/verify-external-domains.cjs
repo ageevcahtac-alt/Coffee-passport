@@ -74,7 +74,7 @@ async function visit(context, label, pagePath, { screenshot, tiles, geocode } = 
   const page = await context.newPage();
   const hosts = new Map();
   const fonts = new Set();
-  const tile = { ok: 0, bad: 0 };
+  const tile = { ok: 0, bad: 0, cancelled: 0 };
   const tileChecks = [];
   const geo = { status: '—' };
   // Тайл засчитывается, только если тело — настоящий PNG (сигнатура 89 50 4E 47), а не пустой ответ 200.
@@ -82,11 +82,14 @@ async function visit(context, label, pagePath, { screenshot, tiles, geocode } = 
     const url = new URL(res.url());
     if (url.hostname !== own || !url.pathname.startsWith('/tiles/')) return;
     const png = (res.headers()['content-type'] || '').startsWith('image/png');
+    // Leaflet отменяет загрузку тайлов, ушедших с экрана: тело такого ответа не приходит никогда (body() висит).
+    // Через 10 с тайл считается отменённым — не успех и не ошибка.
+    const body = res.status() === 200 && png ? res.body() : Promise.resolve(Buffer.alloc(0));
+    const timeout = new Promise((resolve) => setTimeout(() => resolve('cancelled'), 10000));
     tileChecks.push(
-      (res.status() === 200 && png ? res.body() : Promise.resolve(Buffer.alloc(0)))
-        .then((body) => body.length > 8 && body.readUInt32BE(0) === 0x89504e47)
-        .catch(() => false)
-        .then((ok) => (ok ? (tile.ok += 1) : (tile.bad += 1)))
+      Promise.race([body.then((b) => b.length > 8 && b.readUInt32BE(0) === 0x89504e47).catch(() => false), timeout]).then(
+        (r) => (r === 'cancelled' ? (tile.cancelled += 1) : r ? (tile.ok += 1) : (tile.bad += 1))
+      )
     );
   };
   page.on('response', onTile);
@@ -198,11 +201,11 @@ function report() {
   const all = [...new Set(results.flatMap((r) => r.external.map((e) => e.host)))].sort();
   log(`Все внешние домены: ${all.join(', ') || 'нет'} (${all.length})`);
   log('');
-  log('| Страница | Тайлы со своего /tiles/ (200 image/png) | Тайлы с ошибкой | Поиск адреса (/api/cafe/geocode) |');
-  log('|---|---|---|---|');
+  log('| Страница | Тайлы со своего /tiles/ (200, тело PNG) | Тайлы с ошибкой | Отменены картой | Поиск адреса (/api/cafe/geocode) |');
+  log('|---|---|---|---|---|');
   for (const r of results) {
     if (!r.tiles && !r.geocode) continue;
-    log(`| ${r.label} | ${r.tiles ? r.tiles.ok : '—'} | ${r.tiles ? r.tiles.bad : '—'} | ${r.geocode || '—'} |`);
+    log(`| ${r.label} | ${r.tiles ? r.tiles.ok : '—'} | ${r.tiles ? r.tiles.bad : '—'} | ${r.tiles ? r.tiles.cancelled : '—'} | ${r.geocode || '—'} |`);
   }
 }
 
