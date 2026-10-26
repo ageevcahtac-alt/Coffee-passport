@@ -96,7 +96,7 @@ email/паролю (`app/auth/actions.ts`). Верить коду, а не READM
 
 | Что | Команда | Результат |
 |---|---|---|
-| Тесты | `npm test` (`vitest run`) | 49 файлов, 441 тест — зелёные (2026-10-26) |
+| Тесты | `npm test` (`vitest run`) | 52 файла, 454 теста — зелёные (2026-10-26) |
 | Типы | `npx tsc --noEmit` | без ошибок |
 | Сборка | `npm run build` | обязательна перед аудитом (см. выше) |
 | Lint | `npm run lint` | ESLint Strict (`next/core-web-vitals`, `.eslintrc.json`) через `scripts/lint-baseline.mjs`: 8 старых предупреждений заморожены в `eslint-baseline.json`, любая новая находка (и предупреждение тоже) — красный. Исправил старую → `npm run lint -- --update`. Добавлять записи в baseline руками нельзя. |
@@ -116,7 +116,7 @@ email/паролю (`app/auth/actions.ts`). Верить коду, а не READM
 | 6 | Схема и RLS меняются только новой миграцией `supabase/migrations/NNNN_*.sql`, старые не редактировать | `supabase/migrations/` | нет | профилактическое правило, инцидента не было |
 | 7 | `NEXT_PUBLIC_*` вшиваются при сборке: после их смены нужна пересборка | `deploy/timeweb/rebuild-public-env.sh` | `deploy/timeweb/check-browser-network.cjs` (вручную) | `DOMAIN_CHANGELOG.md`, раздел «Next.js public environment rebuild» |
 | 8 | Security definer RPC, которые зовёт cron, исполняет только `service_role`; никаких `grant execute … to anon, authenticated` | `supabase/migrations/0033_cron_rpc_service_role_only.sql` | `supabase/cronRpcGrants.test.ts` | 2026-10-20: анонимный ключ вызывал `/rpc/events_archive_expired` в обход секрета крона (HTTP 200) |
-| 9 | Данные только в России: новый сервис, получающий персональные данные или IP посетителя (почта, карта, аналитика, CDN, шрифты, внешние API), — только российский; логи в GitHub — через `scripts/ops/redact.mjs` (секреты, email, телефоны) | `scripts/ops/redact.mjs`, раздел «Данные только в России» ниже | `scripts/ops/redact.test.ts`; на проде — workflow `verify-external-domains` (красный на внешнем домене вне списка `KNOWN`) | `.agents/tasks/20261026-1200-pd-russia-only.md` |
+| 9 | Данные только в России: новый сервис, получающий персональные данные или IP посетителя (почта, карта, аналитика, CDN, шрифты, внешние API), — только российский; логи в GitHub — через `scripts/ops/redact.mjs` (секреты, email, телефоны) | `scripts/ops/redact.mjs`, раздел «Данные только в России» ниже | `scripts/ops/redact.test.ts`; на проде — workflow `verify-external-domains` (красный на любом внешнем домене браузера, на тайлах не со своего `/tiles/` и на поиске адреса не через `/api/cafe/geocode`) | `.agents/tasks/20261026-1200-pd-russia-only.md`, `20261026-1500-pd-russia-map-geocode.md` |
 
 ## Данные только в России
 
@@ -124,7 +124,8 @@ email/паролю (`app/auth/actions.ts`). Верить коду, а не READM
 - Шрифты, скрипты, стили — из сборки со своего домена (`next/font` — самохостинг), без CDN. Проверка — `gh workflow run verify-external-domains --ref fix/pre-pilot-shortlist`: таблица внешних доменов по страницам и кабинетам.
 - При разборе данных из базы (SQL, REST, логи, отчёты) email, телефоны и имена **не выводить** ни в чат, ни в логи: выбирать только id, роли, статусы, счётчики; вывод с сервера — через `node scripts/ops/redact.mjs`.
 - Логи GitHub Actions хранятся в США: всё, что печатает workflow с сервера, идёт через `redact.mjs`.
-- Известные иностранные обращения (на решении владельца, 2026-10-26): тайлы карты `*.tile.openstreetmap.org` (`components/map/*`), геокодер Nominatim (`lib/utils/geocode.ts`, по кнопке), письма заявок через Resend (`lib/email/sendPartnerRequestNotification.ts`, ключ на проде не задан — писем нет), ссылка «Маршрут» на Google Maps. `next/font/google` скачивает шрифты с Google только при сборке на сервере — посетители их получают с нашего домена.
+- Браузер посетителя не обращается ни к одному внешнему домену. Тайлы карты — `/tiles/{z}/{x}/{y}.png` со своего домена: nginx с кэшем и лимитами ходит в `tile.openstreetmap.org` без данных посетителя (`deploy/timeweb/nginx-tiles.conf`, ставит `install-nginx.sh` из workflow `deploy`); подпись «© OpenStreetMap» на карте обязательна по политике OSM. Поиск адреса — `/api/cafe/geocode` (только `cafe_admin`), Nominatim спрашивает сервер: 1 запрос/с, кэш (`lib/server/geocode.ts`). «Маршрут» — ссылка на Яндекс Карты.
+- Иностранное на решении владельца (2026-10-26): письма заявок через Resend (`lib/email/sendPartnerRequestNotification.ts`, ключ на проде не задан — писем нет); сравнение российских сервисов — `docs/reports/TRANSACTIONAL_EMAIL_RU_COMPARISON.md`. `next/font/google` скачивает шрифты с Google только при сборке на сервере — посетители их получают с нашего домена.
 
 ## Анти-паттерны этого проекта
 

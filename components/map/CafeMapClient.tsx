@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, useMap, AttributionControl } from 'react-leaflet';
 import MarkerClusterGroup from 'react-leaflet-cluster';
 import L, { type LeafletEventHandlerFnMap } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { TILE_ATTRIBUTION, TILE_URL } from './tiles';
 import type { CoffeeShop } from '@/lib/types/coffee';
 
 // Loaded only via next/dynamic(..., { ssr: false }) from app/map — Leaflet
@@ -16,12 +17,6 @@ const DEFAULT_CENTER: [number, number] = [55.7558, 37.6173]; // Moscow — a
 // re-centers on the shops that actually have coordinates.
 const DEFAULT_ZOOM = 4;
 const FALLBACK_PIN_COLOR = '#8a7a63';
-
-// CartoDB's basemaps.cartocdn.com now stamps an "API KEY REQUIRED"
-// watermark across every tile without one, and this project has no map API
-// key configured for anything (Google/Yandex/CARTO alike) — back to stock
-// OpenStreetMap raster tiles, still free with no key.
-const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 export interface FlyTarget {
   center: [number, number];
@@ -109,16 +104,13 @@ export function CafeMapClient({
       zoom={DEFAULT_ZOOM}
       className="w-full h-full"
       scrollWheelZoom
-      // Leaflet's own default attribution control renders a "Leaflet" flag
-      // link nobody asked for on top of the tile credit — off entirely
-      // rather than fighting its prefix API, per this screen's clean-chrome
-      // requirement.
+      // Leaflet's default attribution control adds a "Leaflet" flag link —
+      // replaced below by one with prefix={false}: only the OSM credit the
+      // tile usage policy requires.
       attributionControl={false}
     >
-      <TileLayer
-        attribution="&copy; Map data &copy; OpenStreetMap contributors"
-        url={TILE_URL}
-      />
+      <AttributionControl position="bottomright" prefix={false} />
+      <TileLayer attribution={TILE_ATTRIBUTION} url={TILE_URL} />
       <FitAllBounds shops={shops} />
       <FlyTo target={flyTarget} />
       {/* animate:false sidesteps a known leaflet.markercluster + React

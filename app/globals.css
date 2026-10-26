@@ -221,13 +221,17 @@ select:autofill {
   transform-origin: center;
 }
 
-/* Belt-and-suspenders for the /map module (components/map/*): both
-   MapContainer instances already pass attributionControl={false}, so
-   Leaflet never mounts this control — this rule just guarantees it stays
-   hidden even if that prop is ever dropped or a future Leaflet
-   version renders it before React hydrates. */
-.leaflet-control-attribution {
-  display: none !important;
+/* /map module (components/map/*): the only attribution is the OSM credit the
+   tile usage policy requires — small, in the corner, without Leaflet's flag. */
+.leaflet-container .leaflet-control-attribution {
+  font-size: 10px;
+  line-height: 1.4;
+  padding: 0 4px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--color-ink-500);
+}
+.leaflet-container .leaflet-control-attribution a {
+  color: inherit;
 }
 
 /* Адаптация под системный режим уменьшения движения */

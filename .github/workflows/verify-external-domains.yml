@@ -24,7 +24,7 @@ on:
       - next.config.js
       - components/map/**
       - lib/utils/geocode.ts
-      - lib/geocode/**
+      - lib/server/geocode.ts
       - app/api/cafe/geocode/**
       - deploy/timeweb/nginx-domain.conf
       - deploy/timeweb/nginx-tiles.conf

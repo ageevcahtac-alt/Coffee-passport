@@ -14,6 +14,8 @@ on:
       - deploy/timeweb/activate-domain.sh
       - deploy/timeweb/nginx-domain.conf
       - deploy/timeweb/nginx-ip-redirect.conf
+      - deploy/timeweb/nginx-tiles.conf
+      - deploy/timeweb/install-nginx.sh
       - deploy/timeweb/domain-login-user.py
       - scripts/ops/verify-domain-login.cjs
   workflow_dispatch:
@@ -35,6 +37,7 @@ jobs:
       - name: scripts
         run: |
           bash -n deploy/timeweb/activate-domain.sh
+          bash -n deploy/timeweb/install-nginx.sh
           python3 -m py_compile deploy/timeweb/domain-login-user.py
           node --check scripts/ops/verify-domain-login.cjs
       - name: nginx -t (переход и итог)
@@ -47,13 +50,46 @@ jobs:
           done
           t=deploy/timeweb
           for ipconf in nginx-ip.conf nginx-ip-redirect.conf; do
-            echo "== $ipconf + nginx-domain.conf"
+            echo "== $ipconf + nginx-tiles.conf + nginx-domain.conf"
             docker run --rm -v "$le:/etc/letsencrypt:ro" \
+              -v /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro \
               -v "$PWD/$t/$ipconf:/etc/nginx/conf.d/00-ip.conf:ro" \
+              -v "$PWD/$t/nginx-tiles.conf:/etc/nginx/conf.d/05-tiles.conf:ro" \
               -v "$PWD/$t/nginx-domain.conf:/etc/nginx/conf.d/10-domain.conf:ro" \
               -v /dev/null:/etc/nginx/conf.d/default.conf:ro \
               nginx:1.28 nginx -t
           done
+      - name: тайлы карты через прокси (блок location из nginx-domain.conf, живой запрос к OSM)
+        run: |
+          t=deploy/timeweb
+          awk '/location ~ \^\/tiles\//,/^    }$/' "$t/nginx-domain.conf" > "$RUNNER_TEMP/tiles-location.conf"
+          grep -q proxy_cache "$RUNNER_TEMP/tiles-location.conf" || { echo "FAIL блок location /tiles/ не найден"; exit 1; }
+          printf 'server {\n    listen 8080;\n    include /etc/nginx/tiles-location.conf;\n    location / { return 404; }\n}\n' > "$RUNNER_TEMP/tiles-test.conf"
+          docker run -d --name tiles -p 8080:8080 \
+            -v /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro \
+            -v "$PWD/$t/nginx-tiles.conf:/etc/nginx/conf.d/05-tiles.conf:ro" \
+            -v "$RUNNER_TEMP/tiles-location.conf:/etc/nginx/tiles-location.conf:ro" \
+            -v "$RUNNER_TEMP/tiles-test.conf:/etc/nginx/conf.d/10-test.conf:ro" \
+            -v /dev/null:/etc/nginx/conf.d/default.conf:ro \
+            nginx:1.28 > /dev/null
+          sleep 2
+          fail=0
+          for i in 1 2; do
+            echo "===== GET /tiles/3/4/2.png (запрос $i)"
+            h=$(curl -sS -o "$RUNNER_TEMP/tile.png" -D - --max-time 60 -H 'Cookie: sid=visitor' http://127.0.0.1:8080/tiles/3/4/2.png)
+            printf '%s\n' "$h" | grep -iE '^(HTTP/|content-type|cache-control|expires|x-cache-status)'
+            printf '%s\n' "$h" | head -1 | grep -q ' 200' && printf '%s' "$h" | grep -qi '^content-type: image/png' || fail=1
+            [ "$i" = 2 ] && { printf '%s' "$h" | grep -qi '^x-cache-status: HIT' || { echo "FAIL второй запрос не из кэша"; fail=1; }; }
+          done
+          file "$RUNNER_TEMP/tile.png"
+          for p in /tiles/20/1/1.png /tiles/3/4/2.jpg /tiles/x/1/1.png; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:8080$p")
+            echo "GET $p → $code"; [ "$code" = 404 ] || fail=1
+          done
+          docker logs tiles 2>&1 | tail -5
+          docker rm -f tiles > /dev/null
+          [ $fail = 0 ] && echo "PASS тайлы: 200 image/png, второй — HIT, чужие пути — 404"
+          exit $fail
 
   activate:
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'activate'

@@ -1,6 +1,7 @@
 name: deploy
-# Выкатка прода: то же, что deploy/timeweb/update-app.sh (его и запускает на сервере),
-# затем ждёт /api/health с "status":"ok" снаружи. Нет ok за 5 минут — job красный.
+# Выкатка прода: сначала nginx-конфиги сайта с ветки прода (deploy/timeweb/install-nginx.sh — только если
+# отличаются; тайлы карты /tiles/), затем deploy/timeweb/update-app.sh на сервере, затем ждёт
+# /api/health с "status":"ok" снаружи. Нет ok за 5 минут — job красный.
 # Сервер всегда тянет ветку прода (fix/pre-pilot-shortlist), с какой бы ветки ни запустили workflow.
 # Секреты: DEPLOY_SSH_KEY, DEPLOY_KNOWN_HOSTS. Переменная: PROD_URL.
 # Локальный ssh не используется — см. CLAUDE.md, раздел «Деплой».
@@ -39,6 +40,16 @@ jobs:
         with:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      - name: nginx confs on server
+        if: steps.fresh.outputs.skip != 'true'
+        run: |
+          set -o pipefail
+          # Конфиги — с вершины ветки прода (как и код, который стянет update-app.sh), не с ветки запуска.
+          git fetch -q origin "$PROD_BRANCH"
+          dir=$(ssh prod 'mktemp -d /tmp/install-nginx.XXXXXX')
+          git archive "origin/$PROD_BRANCH" deploy/timeweb/install-nginx.sh deploy/timeweb/nginx-tiles.conf deploy/timeweb/nginx-domain.conf \
+            | ssh prod "tar -C $dir --strip-components=2 -xf -"
+          ssh prod "bash $dir/install-nginx.sh $dir; rc=\$?; rm -rf $dir; exit \$rc" 2>&1 | node scripts/ops/redact.mjs
       - name: update-app.sh on server
         if: steps.fresh.outputs.skip != 'true'
         run: |
