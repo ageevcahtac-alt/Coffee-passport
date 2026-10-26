@@ -165,7 +165,7 @@ async function visit(context, label, pagePath, { screenshot, tiles, geocode } = 
   });
 }
 
-// «Найти на карте по адресу»: ответ своего /api/cafe/geocode — 200 и координаты. Форма не сохраняется.
+// «Найти на карте по адресу» (Невский проспект, 1): ответ своего /api/cafe/geocode — 200 и координаты. Форма не сохраняется.
 // Любое ожидание Playwright — не дольше ms (res.json()/body() своего тайм-аута не имеют).
 const within = (promise, ms, what) =>
   Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(`${what}: дольше ${ms / 1000} с`)), ms))]);
@@ -173,6 +173,9 @@ const within = (promise, ms, what) =>
 async function checkGeocode(page, geo) {
   const label = 'Поиск адреса';
   try {
+    // Известный адрес вместо адреса кофейни из базы: проверка не зависит от данных прода. Форма не сохраняется.
+    await page.fill('#profile-city', 'Санкт-Петербург');
+    await page.fill('#profile-address', 'Невский проспект, 1');
     step(label, 'нажимаю «Найти на карте по адресу»');
     const [res] = await within(
       Promise.all([
