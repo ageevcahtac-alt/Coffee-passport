@@ -45,6 +45,11 @@ describe('redact', () => {
     ['тел. 89123456789', '9123456789'],
     ['тел. 8-912-345-67-89', '345-67-89'],
     ['{"phone":"79123456789"}', '9123456789'],
+    // ревью Codex, раунд 1: url-кодированные и с точками
+    ['GET /x?phone=%2B79123456789', '9123456789'],
+    ['GET /x?phone=+7+912+345+67+89', '345+67+89'],
+    ['GET /x?phone=8%20912%20345%2067%2089', '345%2067%2089'],
+    ['phone +7.912.345.67.89', '345.67.89'],
   ])('masks personal data in %s', (line, pd) => {
     const out = redact(line);
     expect(out).not.toContain(pd);
@@ -69,6 +74,9 @@ describe('redact', () => {
     'postgres://***:***@db:5432/x',
     'image node@22 and pkg @supabase/ssr@0.5.2',
     '89123456789abcdef0123456789abcdef0123456',
+    // df на сервере: systemd-юниты с @ — не email
+    'none 1.0M 0 1.0M 0% /run/credentials/serial-getty@ttyS0.service',
+    'Started getty@tty1.service and user-runtime-dir@1000.service',
   ])('keeps non-personal line intact: %s', (line) => {
     expect(redact(line)).toBe(line);
   });

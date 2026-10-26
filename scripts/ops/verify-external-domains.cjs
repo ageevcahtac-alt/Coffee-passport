@@ -6,7 +6,8 @@
 // В отчёт идут только хост, тип ресурса и число запросов — ни путей с параметрами, ни email, ни паролей.
 // Скриншоты главной и паспорта лота на 390 px (fullPage) — для сравнения «до/после».
 // Запуск (из workflow verify-external-domains): node verify-external-domains.cjs <путь к playwright>
-// env: PROD_URL, OUT_DIR (report.md, domains.json, скриншоты), TEMP_JSON — учётки кабинетов (необязательно).
+// env: PROD_URL, OUT_DIR (report.md, domains.json, скриншоты), TEMP_JSON — учётки кабинетов (необязательно),
+// KNOWN_HOSTS — regex разрешённых внешних хостов вместо KNOWN (для проверки, что сторож краснеет: '^$').
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require(process.argv[2]);
@@ -25,6 +26,9 @@ const COUNTRY = [
   [/(^|\.)supabase\.(co|in)$/, 'США (Supabase Cloud)'],
   [/(^|\.)(yandex\.(ru|net|com)|yastatic\.net|mc\.yandex\.ru)$/, 'Россия (Яндекс)'],
 ];
+// Внешние домены, уже вынесенные владельцу на решение (CLAUDE.md, «Данные только в России»). Любой другой —
+// красный прогон: новый иностранный сервис не появляется на сайте молча.
+const KNOWN = new RegExp(process.env.KNOWN_HOSTS || String.raw`^[abc]\.tile\.openstreetmap\.org$`);
 const country = (host) => (COUNTRY.find(([re]) => re.test(host)) || [null, '?'])[1];
 const lines = [];
 const results = [];
@@ -89,8 +93,10 @@ async function visit(context, label, pagePath, screenshot) {
   try {
     const res = await page.goto(base + pagePath, { waitUntil: 'networkidle', timeout: 60000 });
     status = res ? res.status() : 'нет ответа';
-    finalPath = new URL(page.url()).pathname;
+    if (!res || res.status() >= 400) failed += 1;
     await settle(page);
+    // Итоговый путь — после ожидания: кабинет может увести на вход уже после загрузки (ревью Codex).
+    finalPath = new URL(page.url()).pathname;
     if (screenshot) await page.screenshot({ path: path.join(out, screenshot), fullPage: true });
   } catch (err) {
     failed += 1;
@@ -99,6 +105,11 @@ async function visit(context, label, pagePath, screenshot) {
     await page.close();
   }
   const external = [...hosts].filter(([host]) => host !== own);
+  for (const [host] of external) {
+    if (KNOWN.test(host)) continue;
+    failed += 1;
+    log(`FAIL ${label}: новый внешний домен ${host} — правило «Данные только в России» (CLAUDE.md)`);
+  }
   results.push({
     label,
     path: pagePath,

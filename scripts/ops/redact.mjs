@@ -9,6 +9,8 @@ import { createInterface } from 'node:readline';
 import { pathToFileURL } from 'node:url';
 
 const NAMES = 'pass(?:word|wd)?|secret|token|api[_-]?key|apikey|key|authorization|cookie|dsn';
+const SYSTEMD_UNIT = /\.(?:service|socket|device|mount|automount|swap|target|path|timer|slice|scope)$/i;
+const SEP = String.raw`(?:[\s.()+-]|%20|%28|%29|%2B)*`;
 const RULES = [
   // JWT (ключи Supabase anon/service_role, сессии)
   [/eyJ[\w-]{5,}\.[\w-]{5,}\.[\w-]{5,}/g, '***jwt***'],
@@ -23,9 +25,13 @@ const RULES = [
   [new RegExp(String.raw`((?:[\w-]*(?:${NAMES}))["']?\s*[:=]\s*)(?!["'\s])[^&\n]+`, 'gi'), '$1***'],
   // Персональные данные: логи уходят в GitHub (США), а данные посетителей — только в России.
   // email, в том числе кириллический и url-кодированный (fake%40mail.ru в query string)
-  [/[\p{L}\p{N}._%+-]+(?:@|%40)[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\.\p{L}{2,}/giu, '***@***'],
-  // телефон РФ: +7 / 8 / 7 и 10 цифр, с пробелами, скобками и дефисами; не часть более длинного числа или хеша
-  [/(?<![\p{L}\p{N}_+])(?:\+7|8|7)[\s(-]*\d{3}[\s)-]*\d{3}[\s-]*\d{2}[\s-]*\d{2}(?![\p{L}\p{N}_])/gu, '+7***'],
+  // (кроме systemd-юнитов вида getty@tty1.service — в выводе df и journalctl они не персональные данные)
+  [/[\p{L}\p{N}._%+-]+(?:@|%40)[\p{L}\p{N}-]+(?:\.[\p{L}\p{N}-]+)*\.\p{L}{2,}/giu,
+    (m) => (SYSTEMD_UNIT.test(m) ? m : '***@***')],
+  // телефон РФ: +7 / 8 / 7 и 10 цифр; между группами пробелы, скобки, дефисы, точки, `+` и их
+  // url-коды (%2B79…, +7+912+…, 8%20912…); не часть более длинного числа или хеша
+  [new RegExp(String.raw`(?<![\p{L}\p{N}_+%])(?:(?:\+|%2B)7|8|7)${SEP}\d{3}${SEP}\d{3}${SEP}\d{2}${SEP}\d{2}(?![\p{L}\p{N}_])`, 'giu'),
+    '+7***'],
 ];
 
 export function redact(line) {

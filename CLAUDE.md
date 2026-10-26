@@ -116,7 +116,7 @@ email/паролю (`app/auth/actions.ts`). Верить коду, а не READM
 | 6 | Схема и RLS меняются только новой миграцией `supabase/migrations/NNNN_*.sql`, старые не редактировать | `supabase/migrations/` | нет | профилактическое правило, инцидента не было |
 | 7 | `NEXT_PUBLIC_*` вшиваются при сборке: после их смены нужна пересборка | `deploy/timeweb/rebuild-public-env.sh` | `deploy/timeweb/check-browser-network.cjs` (вручную) | `DOMAIN_CHANGELOG.md`, раздел «Next.js public environment rebuild» |
 | 8 | Security definer RPC, которые зовёт cron, исполняет только `service_role`; никаких `grant execute … to anon, authenticated` | `supabase/migrations/0033_cron_rpc_service_role_only.sql` | `supabase/cronRpcGrants.test.ts` | 2026-10-20: анонимный ключ вызывал `/rpc/events_archive_expired` в обход секрета крона (HTTP 200) |
-| 9 | Данные только в России: новый сервис, получающий персональные данные или IP посетителя (почта, карта, аналитика, CDN, шрифты, внешние API), — только российский; логи в GitHub — через `scripts/ops/redact.mjs` (секреты, email, телефоны) | `scripts/ops/redact.mjs`, раздел «Данные только в России» ниже | `scripts/ops/redact.test.ts`; на проде — workflow `verify-external-domains` | `.agents/tasks/20261026-1200-pd-russia-only.md` |
+| 9 | Данные только в России: новый сервис, получающий персональные данные или IP посетителя (почта, карта, аналитика, CDN, шрифты, внешние API), — только российский; логи в GitHub — через `scripts/ops/redact.mjs` (секреты, email, телефоны) | `scripts/ops/redact.mjs`, раздел «Данные только в России» ниже | `scripts/ops/redact.test.ts`; на проде — workflow `verify-external-domains` (красный на внешнем домене вне списка `KNOWN`) | `.agents/tasks/20261026-1200-pd-russia-only.md` |
 
 ## Данные только в России
 

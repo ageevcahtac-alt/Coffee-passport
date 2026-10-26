@@ -10,7 +10,7 @@ on:
         default: "200"
 permissions:
   contents: read
-# bash явно — с pipefail: падение ssh не прячется за успешным redact; весь вывод — через redact
+# bash явно — с pipefail: падение ssh не прячется за успешным redact; весь вывод (и stderr) — через redact
 defaults:
   run:
     shell: bash
@@ -31,12 +31,12 @@ jobs:
           [[ "$LINES" =~ ^[0-9]+$ ]] && [ "$LINES" -ge 1 ] && [ "$LINES" -le 2000 ] || { echo "::error::lines: 1–2000"; exit 1; }
       - name: app logs
         run: |
-          ssh prod "journalctl -u coffee-passport -n $LINES --no-pager" | node scripts/ops/redact.mjs
+          ssh prod "journalctl -u coffee-passport -n $LINES --no-pager" 2>&1 | node scripts/ops/redact.mjs
       - name: listening ports
-        run: ssh prod 'ss -tlnp' | node scripts/ops/redact.mjs
+        run: ssh prod 'ss -tlnp' 2>&1 | node scripts/ops/redact.mjs
       - name: disk
-        run: ssh prod 'df -h' | node scripts/ops/redact.mjs
+        run: ssh prod 'df -h' 2>&1 | node scripts/ops/redact.mjs
       - name: containers
-        run: ssh prod "docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'" | node scripts/ops/redact.mjs
+        run: ssh prod "docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'" 2>&1 | node scripts/ops/redact.mjs
       - name: app service
-        run: ssh prod 'systemctl is-active coffee-passport; git -C /opt/coffee-passport/app rev-parse HEAD' | node scripts/ops/redact.mjs
+        run: ssh prod 'systemctl is-active coffee-passport; git -C /opt/coffee-passport/app rev-parse HEAD' 2>&1 | node scripts/ops/redact.mjs

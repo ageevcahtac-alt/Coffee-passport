@@ -44,7 +44,7 @@ def call(method, path, body=None, prefer=None):
             raw = response.read()
             return json.loads(raw) if raw else None
     except HTTPError as error:
-        sys.exit(f'FAIL {method} {path.split("?")[0]} -> HTTP {error.code}')
+        raise SystemExit(f'FAIL {method} {path.split("?")[0]} -> HTTP {error.code}') from None
 
 
 def find(email):
@@ -84,16 +84,21 @@ def create(accounts):
 
 
 def delete(accounts):
+    # Ошибка на одной учётке не обрывает удаление остальных (ревью Codex): каждая — отдельно.
     failed = False
     for label, account in accounts.items():
-        user = find(account['email'])
-        if user:
-            call('DELETE', f'/auth/v1/admin/users/{user["id"]}')
-            print(f'deleted {label}')
-        else:
-            print(f'no temp {label}')
-        if find(account['email']):
-            print(f'FAIL temp {label} still exists')
+        try:
+            user = find(account['email'])
+            if user:
+                call('DELETE', f'/auth/v1/admin/users/{user["id"]}')
+                print(f'deleted {label}')
+            else:
+                print(f'no temp {label}')
+            if find(account['email']):
+                print(f'FAIL temp {label} still exists')
+                failed = True
+        except SystemExit as error:
+            print(f'{error} ({label})')
             failed = True
     if failed:
         sys.exit(1)
