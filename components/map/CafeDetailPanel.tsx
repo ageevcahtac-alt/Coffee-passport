@@ -91,7 +91,8 @@ export function CafeDetailPanel({ shop, onClose }: { shop: CoffeeShop; onClose: 
     }
   }
 
-  const directionsUrl = lat !== null && lng !== null ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}` : null;
+  // Яндекс Карты: маршрут от текущего местоположения (пустая точка «от» в rtext) до кофейни.
+  const directionsUrl = lat !== null && lng !== null ? `https://yandex.ru/maps/?rtext=~${lat},${lng}` : null;
 
   const socialLinks = [
     { label: 'Telegram', href: telegramUrl },

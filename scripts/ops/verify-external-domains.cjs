@@ -4,10 +4,12 @@
 // профиль на карте), обжарщик, admin (/dashboard/admin и /admin).
 // Учитываются все запросы страницы (документ, скрипты, стили, шрифты, картинки, тайлы, fetch) и websocket.
 // В отчёт идут только хост, тип ресурса и число запросов — ни путей с параметрами, ни email, ни паролей.
-// Скриншоты главной и паспорта лота на 390 px (fullPage) — для сравнения «до/после».
+// Скриншоты главной, паспорта лота, карты и профиля кофейни на 390 px (fullPage) — для сравнения «до/после».
+// Карта и профиль кофейни: тайлы — только со своего /tiles/ (HTTP 200, image/png, хотя бы один); на профиле
+// кофейни «Найти на карте по адресу» — запрос к своему /api/cafe/geocode, 200 и координаты.
 // Запуск (из workflow verify-external-domains): node verify-external-domains.cjs <путь к playwright>
 // env: PROD_URL, OUT_DIR (report.md, domains.json, скриншоты), TEMP_JSON — учётки кабинетов (необязательно),
-// KNOWN_HOSTS — regex разрешённых внешних хостов вместо KNOWN (для проверки, что сторож краснеет: '^$').
+// KNOWN_HOSTS — regex разрешённых внешних хостов (по умолчанию — ни одного).
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require(process.argv[2]);
@@ -26,9 +28,9 @@ const COUNTRY = [
   [/(^|\.)supabase\.(co|in)$/, 'США (Supabase Cloud)'],
   [/(^|\.)(yandex\.(ru|net|com)|yastatic\.net|mc\.yandex\.ru)$/, 'Россия (Яндекс)'],
 ];
-// Внешние домены, уже вынесенные владельцу на решение (CLAUDE.md, «Данные только в России»). Любой другой —
-// красный прогон: новый иностранный сервис не появляется на сайте молча.
-const KNOWN = new RegExp(process.env.KNOWN_HOSTS || String.raw`^[abc]\.tile\.openstreetmap\.org$`);
+// Браузер посетителя не обращается ни к одному внешнему домену (CLAUDE.md, «Данные только в России»): любой
+// внешний хост — красный прогон. Исключение задаётся только явно, через KNOWN_HOSTS.
+const KNOWN = process.env.KNOWN_HOSTS ? new RegExp(process.env.KNOWN_HOSTS) : null;
 const country = (host) => (COUNTRY.find(([re]) => re.test(host)) || [null, '?'])[1];
 const lines = [];
 const results = [];
@@ -68,10 +70,26 @@ async function login(context, account) {
   }
 }
 
-async function visit(context, label, pagePath, screenshot) {
+async function visit(context, label, pagePath, { screenshot, tiles, geocode } = {}) {
   const page = await context.newPage();
   const hosts = new Map();
   const fonts = new Set();
+  const tile = { ok: 0, bad: 0 };
+  const tileChecks = [];
+  const geo = { status: '—' };
+  // Тайл засчитывается, только если тело — настоящий PNG (сигнатура 89 50 4E 47), а не пустой ответ 200.
+  const onTile = (res) => {
+    const url = new URL(res.url());
+    if (url.hostname !== own || !url.pathname.startsWith('/tiles/')) return;
+    const png = (res.headers()['content-type'] || '').startsWith('image/png');
+    tileChecks.push(
+      (res.status() === 200 && png ? res.body() : Promise.resolve(Buffer.alloc(0)))
+        .then((body) => body.length > 8 && body.readUInt32BE(0) === 0x89504e47)
+        .catch(() => false)
+        .then((ok) => (ok ? (tile.ok += 1) : (tile.bad += 1)))
+    );
+  };
+  page.on('response', onTile);
   const note = (raw, type) => {
     let url;
     try {
@@ -95,9 +113,13 @@ async function visit(context, label, pagePath, screenshot) {
     status = res ? res.status() : 'нет ответа';
     if (!res || res.status() >= 400) failed += 1;
     await settle(page);
+    if (geocode) await checkGeocode(page, geo);
     // Итоговый путь — после ожидания: кабинет может увести на вход уже после загрузки (ревью Codex).
     finalPath = new URL(page.url()).pathname;
     if (screenshot) await page.screenshot({ path: path.join(out, screenshot), fullPage: true });
+    // Ответы после этой точки не учитываются; все начатые проверки тел — дождаться до вердикта (ревью Codex).
+    page.off('response', onTile);
+    await Promise.all(tileChecks);
   } catch (err) {
     failed += 1;
     status = `ошибка: ${err.message.split('\n')[0]}`;
@@ -106,12 +128,22 @@ async function visit(context, label, pagePath, screenshot) {
   }
   const external = [...hosts].filter(([host]) => host !== own);
   for (const [host] of external) {
-    if (KNOWN.test(host)) continue;
+    if (KNOWN && KNOWN.test(host)) continue;
     failed += 1;
     log(`FAIL ${label}: новый внешний домен ${host} — правило «Данные только в России» (CLAUDE.md)`);
   }
+  if (tiles && (!tile.ok || tile.bad)) {
+    failed += 1;
+    log(`FAIL ${label}: тайлы со своего /tiles/ — ${tile.ok} ок, ${tile.bad} с ошибкой`);
+  }
+  if (geocode && geo.status !== 'ok') {
+    failed += 1;
+    log(`FAIL ${label}: поиск адреса — ${geo.status}`);
+  }
   results.push({
     label,
+    tiles: tiles ? tile : null,
+    geocode: geocode ? geo.status : null,
     path: pagePath,
     finalPath,
     status,
@@ -119,6 +151,23 @@ async function visit(context, label, pagePath, screenshot) {
     fonts: [...fonts],
     external: external.map(([host, e]) => ({ host, count: e.count, types: [...e.types].sort(), country: country(host) })),
   });
+}
+
+// «Найти на карте по адресу»: ответ своего /api/cafe/geocode — 200 и координаты. Форма не сохраняется.
+async function checkGeocode(page, geo) {
+  try {
+    const [res] = await Promise.all([
+      page.waitForResponse((r) => new URL(r.url()).pathname === '/api/cafe/geocode', { timeout: 45000 }),
+      page.getByRole('button', { name: 'Найти на карте по адресу' }).click(),
+    ]);
+    const body = await res.json().catch(() => ({}));
+    const coords = Number.isFinite(body.lat) && Number.isFinite(body.lng);
+    geo.status = res.status() === 200 && coords ? 'ok' : `HTTP ${res.status()}${coords ? '' : ', без координат'}`;
+    await page.waitForLoadState('networkidle').catch(() => {});
+    await page.waitForTimeout(2500);
+  } catch (err) {
+    geo.status = `нет ответа своего /api/cafe/geocode: ${err.message.split('\n')[0]}`;
+  }
 }
 
 async function passportPath(context) {
@@ -147,7 +196,14 @@ function report() {
   }
   log('');
   const all = [...new Set(results.flatMap((r) => r.external.map((e) => e.host)))].sort();
-  log(`Все внешние домены: ${all.join(', ') || 'нет'}`);
+  log(`Все внешние домены: ${all.join(', ') || 'нет'} (${all.length})`);
+  log('');
+  log('| Страница | Тайлы со своего /tiles/ (200 image/png) | Тайлы с ошибкой | Поиск адреса (/api/cafe/geocode) |');
+  log('|---|---|---|---|');
+  for (const r of results) {
+    if (!r.tiles && !r.geocode) continue;
+    log(`| ${r.label} | ${r.tiles ? r.tiles.ok : '—'} | ${r.tiles ? r.tiles.bad : '—'} | ${r.geocode || '—'} |`);
+  }
 }
 
 (async () => {
@@ -156,19 +212,22 @@ function report() {
   try {
     const anon = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1 });
     const passport = await passportPath(anon);
-    await visit(anon, 'Главная', '/', 'home-390.png');
-    if (passport) await visit(anon, 'Паспорт лота', passport, 'passport-390.png');
+    await visit(anon, 'Главная', '/', { screenshot: 'home-390.png' });
+    if (passport) await visit(anon, 'Паспорт лота', passport, { screenshot: 'passport-390.png' });
     else {
       failed += 1;
       log('FAIL: ссылка на паспорт лота не найдена ни на /scan, ни на главной');
     }
-    await visit(anon, 'Карта', '/map');
+    await visit(anon, 'Карта', '/map', { screenshot: 'map-390.png', tiles: true });
     await visit(anon, 'Вход', '/auth/login');
     await anon.close();
 
     const cabinets = {
       guest: [['Кабинет гостя', '/journey']],
-      cafe: [['Кабинет кофейни', '/dashboard/cafe'], ['Кофейня: профиль на карте', '/dashboard/cafe/map-profile']],
+      cafe: [
+        ['Кабинет кофейни', '/dashboard/cafe'],
+        ['Кофейня: профиль на карте', '/dashboard/cafe/map-profile', { screenshot: 'map-profile-390.png', tiles: true, geocode: true }],
+      ],
       roaster: [['Кабинет обжарщика', '/dashboard/roaster']],
       admin: [['Кабинет admin', '/dashboard/admin'], ['Админка /admin', '/admin']],
     };
@@ -177,8 +236,8 @@ function report() {
       const context = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1 });
       try {
         await login(context, accounts[key]);
-        for (const [label, p] of pages) {
-          await visit(context, label, p);
+        for (const [label, p, opts] of pages) {
+          await visit(context, label, p, opts);
           const landed = results[results.length - 1].finalPath;
           if (landed !== p) {
             failed += 1;

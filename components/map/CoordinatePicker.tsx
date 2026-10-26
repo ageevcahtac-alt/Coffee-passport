@@ -1,21 +1,16 @@
 'use client';
 
 import { useEffect, useMemo, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, useMap, useMapEvents, AttributionControl } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { TILE_ATTRIBUTION, TILE_URL } from './tiles';
 
 // Loaded only via next/dynamic(..., { ssr: false }) from the cafe's
 // "Профиль на карте" screen (app/dashboard/cafe/(hub)/map-profile) — same
 // reason as CafeMapClient: Leaflet needs `window` at import time.
 
 const DEFAULT_CENTER: [number, number] = [55.7558, 37.6173]; // Moscow
-
-// Same stock OpenStreetMap raster tiles as CafeMapClient (the public /map
-// screen) — CartoDB's free basemaps now watermark "API KEY REQUIRED"
-// without one, and this project has no map API key configured for
-// anything.
-const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 function pickerIcon(): L.DivIcon {
   return L.divIcon({
@@ -111,10 +106,8 @@ export function CoordinatePicker({
       scrollWheelZoom
       attributionControl={false}
     >
-      <TileLayer
-        attribution="&copy; Map data &copy; OpenStreetMap contributors"
-        url={TILE_URL}
-      />
+      <AttributionControl position="bottomright" prefix={false} />
+      <TileLayer attribution={TILE_ATTRIBUTION} url={TILE_URL} />
       <ClickToPlace onPick={onChange} />
       <RecenterOnSignal lat={lat} lng={lng} signal={recenterSignal} />
       {lat !== null && lng !== null && (

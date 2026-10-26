@@ -53,6 +53,9 @@ docker run --rm --network host -v /etc/letsencrypt:/etc/letsencrypt -v /var/lib/
 openssl x509 -in /etc/letsencrypt/live/coffee-passport-domain/cert.pem -noout -subject -dates -ext subjectAltName
 
 echo "== 4. nginx: domain 443"
+# Конфиг домена ссылается на кэш и upstream тайлов карты (nginx-tiles.conf) — они ставятся раньше.
+install -m 644 "$src/nginx-tiles.conf" "$avail/00-coffee-passport-tiles"
+ln -sfn "$avail/00-coffee-passport-tiles" /etc/nginx/sites-enabled/00-coffee-passport-tiles
 install_site nginx-domain.conf coffee-passport-domain
 curl --fail --silent --show-error "$url/" -o /dev/null
 echo "$url/ ok"
