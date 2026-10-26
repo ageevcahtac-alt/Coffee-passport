@@ -50,6 +50,10 @@ describe('redact', () => {
     ['GET /x?phone=+7+912+345+67+89', '345+67+89'],
     ['GET /x?phone=8%20912%20345%2067%2089', '345%2067%2089'],
     ['phone +7.912.345.67.89', '345.67.89'],
+    // ревью Codex, раунд 2: исключение systemd не открывает настоящие адреса
+    ['email=fake@example.target', 'fake@example.target'],
+    ['GET /x?email=fake%40example.target', 'fake%40example.target'],
+    ['GET /x?email=fake%40example.service', 'fake%40example.service'],
   ])('masks personal data in %s', (line, pd) => {
     const out = redact(line);
     expect(out).not.toContain(pd);

@@ -97,7 +97,7 @@ def delete(accounts):
             if find(account['email']):
                 print(f'FAIL temp {label} still exists')
                 failed = True
-        except SystemExit as error:
+        except (SystemExit, Exception) as error:  # HTTP, сеть, таймаут — следующая учётка всё равно удаляется
             print(f'{error} ({label})')
             failed = True
     if failed:

@@ -9,7 +9,9 @@ import { createInterface } from 'node:readline';
 import { pathToFileURL } from 'node:url';
 
 const NAMES = 'pass(?:word|wd)?|secret|token|api[_-]?key|apikey|key|authorization|cookie|dsn';
-const SYSTEMD_UNIT = /\.(?:service|socket|device|mount|automount|swap|target|path|timer|slice|scope)$/i;
+// Типы unit-файлов, которые не являются доменами верхнего уровня (.target — бренд-домен, его не исключаем);
+// только с буквальным `@`: url-кодированный %40 бывает лишь в адресах из запросов.
+const SYSTEMD_UNIT = /^[^%]*@[^%]*\.(?:service|socket|device|mount|automount|swap|path|timer|slice|scope)$/i;
 const SEP = String.raw`(?:[\s.()+-]|%20|%28|%29|%2B)*`;
 const RULES = [
   // JWT (ключи Supabase anon/service_role, сессии)
