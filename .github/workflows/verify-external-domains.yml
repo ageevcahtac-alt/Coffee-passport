@@ -3,9 +3,10 @@ name: verify-external-domains
 # главная, паспорт лота, карта, вход, кабинеты гостя / кофейни / обжарщика / admin — на 390 px.
 # Кабинеты — временными учётками прогона (ext-domains-*-<run>@example.com), удаляются в конце при любом исходе.
 # Сервер: куда он ходит сам — хосты URL-переменных, SMTP Auth, задан ли ключ Resend (без значений).
-# Красный — кабинет не открылся, HTTP ≥ 400 или внешний домен, которого нет в KNOWN (verify-external-domains.cjs).
+# Красный — кабинет не открылся, HTTP ≥ 400, любой внешний домен (кроме явного known_hosts), тайлы карты не со
+# своего /tiles/ или поиск адреса на профиле кофейни не ответил координатами (verify-external-domains.cjs).
 # PR — замер прода как есть («до»). Push в ветку прода — ждёт успешный deploy вершины ветки («после»).
-# Таблица — в Summary прогона, скриншоты главной и паспорта (390 px) и report.md — артефакт.
+# Таблица — в Summary прогона, скриншоты главной, паспорта, карты и профиля кофейни (390 px) и report.md — артефакт.
 on:
   pull_request:
     paths:
@@ -22,10 +23,15 @@ on:
       - app/globals.css
       - next.config.js
       - components/map/**
+      - lib/utils/geocode.ts
+      - lib/geocode/**
+      - app/api/cafe/geocode/**
+      - deploy/timeweb/nginx-domain.conf
+      - deploy/timeweb/nginx-tiles.conf
   workflow_dispatch:
     inputs:
       known_hosts:
-        description: "regex разрешённых внешних хостов; пусто — по умолчанию (тайлы OSM), '^$' — проверить, что сторож краснеет"
+        description: "regex разрешённых внешних хостов; пусто — ни одного"
         default: ""
 permissions:
   contents: read
