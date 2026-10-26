@@ -56,6 +56,7 @@ async function settle(page) {
 
 async function login(context, account) {
   const page = await context.newPage();
+  page.setDefaultTimeout(60000);
   try {
     await page.goto(base + '/auth/login', { waitUntil: 'networkidle' });
     await page.fill('#enthusiast-email', account.email);
@@ -70,11 +71,16 @@ async function login(context, account) {
   }
 }
 
+// Ход замера — в лог job (не в отчёт): видно, на какой странице и шаге прогон стоит.
+const step = (label, what) => console.log(`${new Date().toISOString()} ${label}: ${what}`);
+
 async function visit(context, label, pagePath, { screenshot, tiles, geocode } = {}) {
+  step(label, 'открываю');
   const page = await context.newPage();
+  page.setDefaultTimeout(60000); // действия Playwright без своего timeout иначе ждут бесконечно
   const hosts = new Map();
   const fonts = new Set();
-  const tile = { ok: 0, bad: 0 };
+  const tile = { ok: 0, bad: 0, cancelled: 0 };
   const tileChecks = [];
   const geo = { status: '—' };
   // Тайл засчитывается, только если тело — настоящий PNG (сигнатура 89 50 4E 47), а не пустой ответ 200.
@@ -82,11 +88,14 @@ async function visit(context, label, pagePath, { screenshot, tiles, geocode } = 
     const url = new URL(res.url());
     if (url.hostname !== own || !url.pathname.startsWith('/tiles/')) return;
     const png = (res.headers()['content-type'] || '').startsWith('image/png');
+    // Leaflet отменяет загрузку тайлов, ушедших с экрана: тело такого ответа не приходит никогда (body() висит).
+    // Через 10 с тайл считается отменённым — не успех и не ошибка.
+    const body = res.status() === 200 && png ? res.body() : Promise.resolve(Buffer.alloc(0));
+    const timeout = new Promise((resolve) => setTimeout(() => resolve('cancelled'), 10000));
     tileChecks.push(
-      (res.status() === 200 && png ? res.body() : Promise.resolve(Buffer.alloc(0)))
-        .then((body) => body.length > 8 && body.readUInt32BE(0) === 0x89504e47)
-        .catch(() => false)
-        .then((ok) => (ok ? (tile.ok += 1) : (tile.bad += 1)))
+      Promise.race([body.then((b) => b.length > 8 && b.readUInt32BE(0) === 0x89504e47).catch(() => false), timeout]).then(
+        (r) => (r === 'cancelled' ? (tile.cancelled += 1) : r ? (tile.ok += 1) : (tile.bad += 1))
+      )
     );
   };
   page.on('response', onTile);
@@ -113,18 +122,21 @@ async function visit(context, label, pagePath, { screenshot, tiles, geocode } = 
     status = res ? res.status() : 'нет ответа';
     if (!res || res.status() >= 400) failed += 1;
     await settle(page);
+    step(label, 'загружена');
     if (geocode) await checkGeocode(page, geo);
     // Итоговый путь — после ожидания: кабинет может увести на вход уже после загрузки (ревью Codex).
     finalPath = new URL(page.url()).pathname;
     if (screenshot) await page.screenshot({ path: path.join(out, screenshot), fullPage: true });
     // Ответы после этой точки не учитываются; все начатые проверки тел — дождаться до вердикта (ревью Codex).
     page.off('response', onTile);
+    step(label, `проверка тел тайлов: ${tileChecks.length}`);
     await Promise.all(tileChecks);
   } catch (err) {
     failed += 1;
     status = `ошибка: ${err.message.split('\n')[0]}`;
   } finally {
     await page.close();
+    step(label, 'закрыта');
   }
   const external = [...hosts].filter(([host]) => host !== own);
   for (const [host] of external) {
@@ -153,14 +165,28 @@ async function visit(context, label, pagePath, { screenshot, tiles, geocode } = 
   });
 }
 
-// «Найти на карте по адресу»: ответ своего /api/cafe/geocode — 200 и координаты. Форма не сохраняется.
+// «Найти на карте по адресу» (Невский проспект, 1): ответ своего /api/cafe/geocode — 200 и координаты. Форма не сохраняется.
+// Любое ожидание Playwright — не дольше ms (res.json()/body() своего тайм-аута не имеют).
+const within = (promise, ms, what) =>
+  Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error(`${what}: дольше ${ms / 1000} с`)), ms))]);
+
 async function checkGeocode(page, geo) {
+  const label = 'Поиск адреса';
   try {
-    const [res] = await Promise.all([
-      page.waitForResponse((r) => new URL(r.url()).pathname === '/api/cafe/geocode', { timeout: 45000 }),
-      page.getByRole('button', { name: 'Найти на карте по адресу' }).click(),
-    ]);
-    const body = await res.json().catch(() => ({}));
+    // Известный адрес вместо адреса кофейни из базы: проверка не зависит от данных прода. Форма не сохраняется.
+    await page.fill('#profile-city', 'Санкт-Петербург');
+    await page.fill('#profile-address', 'Невский проспект, 1');
+    step(label, 'нажимаю «Найти на карте по адресу»');
+    const [res] = await within(
+      Promise.all([
+        page.waitForResponse((r) => new URL(r.url()).pathname === '/api/cafe/geocode', { timeout: 45000 }),
+        page.getByRole('button', { name: 'Найти на карте по адресу' }).click({ timeout: 15000 }),
+      ]),
+      60000,
+      'ответ /api/cafe/geocode'
+    );
+    step(label, `ответ HTTP ${res.status()}`);
+    const body = await within(res.json(), 15000, 'тело ответа').catch(() => ({}));
     const coords = Number.isFinite(body.lat) && Number.isFinite(body.lng);
     geo.status = res.status() === 200 && coords ? 'ok' : `HTTP ${res.status()}${coords ? '' : ', без координат'}`;
     await page.waitForLoadState('networkidle').catch(() => {});
@@ -172,10 +198,13 @@ async function checkGeocode(page, geo) {
 
 async function passportPath(context) {
   const page = await context.newPage();
+  page.setDefaultTimeout(60000);
   try {
     for (const from of ['/scan', '/']) {
-      await page.goto(base + from, { waitUntil: 'networkidle' });
-      const href = await page.locator('a[href^="/passport/"]').first().getAttribute('href').catch(() => null);
+      step('Паспорт лота', `ищу ссылку на ${from}`);
+      await page.goto(base + from, { waitUntil: 'networkidle', timeout: 60000 }).catch(() => {});
+      // Без timeout getAttribute ждёт появления ссылки бесконечно.
+      const href = await page.locator('a[href^="/passport/"]').first().getAttribute('href', { timeout: 15000 }).catch(() => null);
       if (href) return href.split('?')[0];
     }
     return null;
@@ -198,16 +227,23 @@ function report() {
   const all = [...new Set(results.flatMap((r) => r.external.map((e) => e.host)))].sort();
   log(`Все внешние домены: ${all.join(', ') || 'нет'} (${all.length})`);
   log('');
-  log('| Страница | Тайлы со своего /tiles/ (200 image/png) | Тайлы с ошибкой | Поиск адреса (/api/cafe/geocode) |');
-  log('|---|---|---|---|');
+  log('| Страница | Тайлы со своего /tiles/ (200, тело PNG) | Тайлы с ошибкой | Отменены картой | Поиск адреса (/api/cafe/geocode) |');
+  log('|---|---|---|---|---|');
   for (const r of results) {
     if (!r.tiles && !r.geocode) continue;
-    log(`| ${r.label} | ${r.tiles ? r.tiles.ok : '—'} | ${r.tiles ? r.tiles.bad : '—'} | ${r.geocode || '—'} |`);
+    log(`| ${r.label} | ${r.tiles ? r.tiles.ok : '—'} | ${r.tiles ? r.tiles.bad : '—'} | ${r.tiles ? r.tiles.cancelled : '—'} | ${r.geocode || '—'} |`);
   }
 }
 
 (async () => {
   fs.mkdirSync(out, { recursive: true });
+  // Предохранитель: замер не дольше 20 минут — иначе job висит до своего таймаута без отчёта.
+  setTimeout(() => {
+    console.error('FAIL замер дольше 20 минут — прерван');
+    report();
+    process.exit(1);
+  }, 20 * 60 * 1000).unref();
+  step('замер', 'запуск браузера');
   const browser = await chromium.launch({ headless: true });
   try {
     const anon = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 1 });
