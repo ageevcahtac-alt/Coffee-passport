@@ -60,6 +60,14 @@ magic=$(head -c 8 "$tile" | od -An -tx1 | tr -d ' \n')
 echo "GET /tiles/0/0/0.png → $code, $(stat -c %s "$tile") байт"
 rm -f "$tile"
 if [ "$code" != "200 image/png" ] || [ "$magic" != 89504e470d0a1a0a ]; then
+    # Разбор: ошибки nginx по тайлам (без адресов посетителей) и прямой запрос сервера к OSM.
+    grep -E 'cp_tiles|tile\.openstreetmap|coffee-passport-tiles' /var/log/nginx/error.log 2>/dev/null | tail -n 15 \
+        | sed -E 's/client: [^,]+,/client: -,/' || true
+    for ipv in 4 6; do
+        echo "curl -$ipv https://tile.openstreetmap.org/0/0/0.png → $(curl -"$ipv" -sS -o /dev/null --max-time 20 \
+            -A 'CoffeePassport/1.0 (+https://coffeepassport.ru; tile proxy)' \
+            -w '%{http_code} %{remote_ip}' https://tile.openstreetmap.org/0/0/0.png 2>&1 || true)"
+    done
     restore
     echo "тайл не отдаётся — прежние конфиги возвращены" >&2
     exit 1
