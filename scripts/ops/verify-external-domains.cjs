@@ -70,7 +70,11 @@ async function login(context, account) {
   }
 }
 
+// Ход замера — в лог job (не в отчёт): видно, на какой странице и шаге прогон стоит.
+const step = (label, what) => console.log(`${new Date().toISOString()} ${label}: ${what}`);
+
 async function visit(context, label, pagePath, { screenshot, tiles, geocode } = {}) {
+  step(label, 'открываю');
   const page = await context.newPage();
   const hosts = new Map();
   const fonts = new Set();
@@ -116,18 +120,21 @@ async function visit(context, label, pagePath, { screenshot, tiles, geocode } = 
     status = res ? res.status() : 'нет ответа';
     if (!res || res.status() >= 400) failed += 1;
     await settle(page);
+    step(label, 'загружена');
     if (geocode) await checkGeocode(page, geo);
     // Итоговый путь — после ожидания: кабинет может увести на вход уже после загрузки (ревью Codex).
     finalPath = new URL(page.url()).pathname;
     if (screenshot) await page.screenshot({ path: path.join(out, screenshot), fullPage: true });
     // Ответы после этой точки не учитываются; все начатые проверки тел — дождаться до вердикта (ревью Codex).
     page.off('response', onTile);
+    step(label, `проверка тел тайлов: ${tileChecks.length}`);
     await Promise.all(tileChecks);
   } catch (err) {
     failed += 1;
     status = `ошибка: ${err.message.split('\n')[0]}`;
   } finally {
     await page.close();
+    step(label, 'закрыта');
   }
   const external = [...hosts].filter(([host]) => host !== own);
   for (const [host] of external) {
