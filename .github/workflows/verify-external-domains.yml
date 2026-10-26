@@ -1,0 +1,123 @@
+name: verify-external-domains
+# Внешние домены, к которым обращается браузер посетителя на проде (scripts/ops/verify-external-domains.cjs):
+# главная, паспорт лота, карта, вход, кабинеты гостя / кофейни / обжарщика / admin — на 390 px.
+# Кабинеты — временными учётками прогона (ext-domains-*-<run>@example.com), удаляются в конце при любом исходе.
+# Сервер: куда он ходит сам — хосты URL-переменных, SMTP Auth, задан ли ключ Resend (без значений).
+# Красный — кабинет не открылся, HTTP ≥ 400 или внешний домен, которого нет в KNOWN (verify-external-domains.cjs).
+# PR — замер прода как есть («до»). Push в ветку прода — ждёт успешный deploy вершины ветки («после»).
+# Таблица — в Summary прогона, скриншоты главной и паспорта (390 px) и report.md — артефакт.
+on:
+  pull_request:
+    paths:
+      - .github/workflows/verify-external-domains.yml
+      - scripts/ops/verify-external-domains.cjs
+      - deploy/timeweb/verify-external-domains.py
+  push:
+    branches: [fix/pre-pilot-shortlist]
+    paths:
+      - .github/workflows/verify-external-domains.yml
+      - scripts/ops/verify-external-domains.cjs
+      - deploy/timeweb/verify-external-domains.py
+      - app/layout.tsx
+      - app/globals.css
+      - next.config.js
+      - components/map/**
+  workflow_dispatch:
+    inputs:
+      known_hosts:
+        description: "regex разрешённых внешних хостов; пусто — по умолчанию (тайлы OSM), '^$' — проверить, что сторож краснеет"
+        default: ""
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: verify-external-domains
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      PROD_URL: ${{ vars.PROD_URL }}
+      CAFE_ID: shop-xo-vsevolozhsk
+    steps:
+      - uses: actions/checkout@v4
+      - name: validate
+        run: |
+          [ -n "$PROD_URL" ] || { echo "::error::PROD_URL не задан"; exit 1; }
+          python3 -m py_compile deploy/timeweb/verify-external-domains.py
+          node --check scripts/ops/verify-external-domains.cjs
+      - name: wait for deploy of this commit (push only)
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Как в verify-home-colors: успешный deploy именно текущей вершины ветки, и она не сдвинулась.
+          for i in $(seq 1 60); do
+            head=$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | cut -f1)
+            state=$(gh run list -R "$GITHUB_REPOSITORY" --workflow deploy.yml --commit "$head" \
+              --json status,conclusion --jq '.[0] | "\(.status) \(.conclusion)"' || true)
+            case "$state" in
+              "completed success")
+                if [ "$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | cut -f1)" = "$head" ]; then
+                  echo "прод на $head (содержит $GITHUB_SHA)"; exit 0
+                fi;;
+              completed*) echo "::error::deploy $head: $state"; exit 1;;
+            esac
+            sleep 20
+          done
+          echo "::error::за 20 минут deploy вершины ветки не завершился"
+          exit 1
+      - uses: ./.github/actions/ssh-setup
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      - name: сервер — куда ходит сам (без значений)
+        run: |
+          set -o pipefail
+          remote=$(ssh prod 'mktemp /tmp/verify-external-domains.XXXXXX')
+          ssh prod "cat > $remote" < deploy/timeweb/verify-external-domains.py
+          echo "REMOTE=$remote" >> "$GITHUB_ENV"
+          ssh prod "python3 $remote egress" | node scripts/ops/redact.mjs | tee "$RUNNER_TEMP/egress.txt"
+      - name: временные учётки
+        id: temp
+        run: |
+          umask 077
+          declare -A pw
+          for k in guest cafe roaster admin; do pw[$k]="Ed$(openssl rand -hex 12)!a"; echo "::add-mask::${pw[$k]}"; done
+          printf '{"guest":{"email":"ext-domains-guest-%s@example.com","password":"%s","role":"enthusiast"},' "$GITHUB_RUN_ID" "${pw[guest]}" > "$RUNNER_TEMP/temp.json"
+          printf '"cafe":{"email":"ext-domains-cafe-%s@example.com","password":"%s","role":"cafe_admin","cafe_id":"%s"},' "$GITHUB_RUN_ID" "${pw[cafe]}" "$CAFE_ID" >> "$RUNNER_TEMP/temp.json"
+          printf '"roaster":{"email":"ext-domains-roaster-%s@example.com","password":"%s","role":"roaster_admin"},' "$GITHUB_RUN_ID" "${pw[roaster]}" >> "$RUNNER_TEMP/temp.json"
+          printf '"admin":{"email":"ext-domains-admin-%s@example.com","password":"%s","role":"admin"}}' "$GITHUB_RUN_ID" "${pw[admin]}" >> "$RUNNER_TEMP/temp.json"
+          echo "created=1" >> "$GITHUB_OUTPUT"
+          ssh prod "python3 $REMOTE create" < "$RUNNER_TEMP/temp.json"
+      - name: playwright
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw" && npm init -y > /dev/null
+          npm install --silent --no-audit --no-fund playwright@1.64.0
+          npx playwright install --with-deps chromium > /dev/null
+      - name: замер
+        env:
+          OUT_DIR: ${{ runner.temp }}/external-domains
+          KNOWN_HOSTS: ${{ inputs.known_hosts }}
+        run: TEMP_JSON="$RUNNER_TEMP/temp.json" node scripts/ops/verify-external-domains.cjs "$RUNNER_TEMP/pw/node_modules/playwright"
+      - name: удалить временные учётки
+        if: always() && steps.temp.outputs.created == '1'
+        run: ssh prod "python3 $REMOTE delete" < "$RUNNER_TEMP/temp.json"
+      - name: убрать скрипт с сервера
+        if: always() && env.REMOTE != ''
+        run: ssh prod "rm -f $REMOTE"
+      - name: summary
+        if: always()
+        run: |
+          { [ -f "$RUNNER_TEMP/external-domains/report.md" ] && cat "$RUNNER_TEMP/external-domains/report.md"
+            echo; echo '## Сервер: исходящие адреса'; echo; echo '```'; cat "$RUNNER_TEMP/egress.txt" 2>/dev/null; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY" || true
+      - name: artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-external-domains-${{ github.event_name }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/external-domains
+          if-no-files-found: ignore
+          retention-days: 14
