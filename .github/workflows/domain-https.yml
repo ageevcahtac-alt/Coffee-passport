@@ -62,7 +62,7 @@ jobs:
       - name: тайлы карты через прокси (блок location из nginx-domain.conf, живой запрос к OSM)
         run: |
           t=deploy/timeweb
-          awk '/location ~ \^\/tiles\//,/^    }$/' "$t/nginx-domain.conf" > "$RUNNER_TEMP/tiles-location.conf"
+          awk '/location ~ "\^\/tiles\//,/^    }$/' "$t/nginx-domain.conf" > "$RUNNER_TEMP/tiles-location.conf"
           grep -q proxy_cache "$RUNNER_TEMP/tiles-location.conf" || { echo "FAIL блок location /tiles/ не найден"; exit 1; }
           printf 'server {\n    listen 8080;\n    include /etc/nginx/tiles-location.conf;\n    location / { return 404; }\n}\n' > "$RUNNER_TEMP/tiles-test.conf"
           docker run -d --name tiles -p 8080:8080 \
