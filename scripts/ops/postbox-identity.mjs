@@ -58,17 +58,28 @@ if (mode === 'roles') {
   // Роли сервисного аккаунта на его каталоге — только id ролей, без секретов.
   const sa = JSON.parse(process.env.YC_SA_KEY).service_account_id;
   const auth = { Authorization: `Bearer ${token}` };
+  console.log(`service_account_id из ключа: ${sa}`);
   const info = await fetch(`https://iam.api.cloud.yandex.net/iam/v1/serviceAccounts/${sa}`, { headers: auth });
   const { folderId } = await info.json().catch(() => ({}));
   console.log(`serviceAccounts.get HTTP ${info.status}, folderId ${folderId || '?'}`);
-  if (folderId) {
-    const list = await fetch(
-      `https://resource-manager.api.cloud.yandex.net/resource-manager/v1/folders/${folderId}:listAccessBindings`,
-      { headers: auth });
-    const body = await list.json().catch(() => ({}));
-    const mine = (body.accessBindings || []).filter((b) => b.subject?.id === sa).map((b) => b.roleId);
-    console.log(`listAccessBindings HTTP ${list.status}, роли аккаунта: ${mine.join(', ') || '(нет)'}`);
+  const folder = process.env.FOLDER_ID || folderId;
+  for (const [name, url] of [
+    [`folders/${folder}:listAccessBindings`,
+      `https://resource-manager.api.cloud.yandex.net/resource-manager/v1/folders/${folder}:listAccessBindings`],
+    [`serviceAccounts/${sa}:listAccessBindings`,
+      `https://iam.api.cloud.yandex.net/iam/v1/serviceAccounts/${sa}:listAccessBindings`],
+  ]) {
+    const list = await fetch(url, { headers: auth });
+    const text = await list.text();
+    let roles = '';
+    try {
+      roles = (JSON.parse(text).accessBindings || []).filter((b) => b.subject?.id === sa).map((b) => b.roleId).join(', ');
+    } catch { /* не JSON — печатаем как есть ниже */ }
+    console.log(`${name} HTTP ${list.status}, роли аккаунта: ${roles || '(нет)'}${list.ok ? '' : ` — ${text.slice(0, 200)}`}`);
   }
+  // Тот же список адресов Postbox через IAM-токен: 200 = доступ к Postbox в каталоге аккаунта есть.
+  const listed = await postbox(token, 'GET', API);
+  console.log(`ListEmailIdentities HTTP ${listed.status} ${listed.text.slice(0, 300)}`);
   process.exit(0);
 }
 const url = `${API}/${encodeURIComponent(domain)}`;

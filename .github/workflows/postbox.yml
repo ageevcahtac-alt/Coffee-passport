@@ -48,7 +48,17 @@ jobs:
         if: inputs.mode == 'identity' || inputs.mode == 'status' || inputs.mode == 'roles'
         env:
           YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
+          FOLDER_ID: b1gqj0apun7iprjohdj7
         run: node scripts/ops/postbox-identity.mjs "${{ inputs.mode == 'identity' && 'create' || inputs.mode }}" "$DOMAIN"
+      - name: roles — статический ключ (SigV4)
+        if: inputs.mode == 'roles'
+        env:
+          KEY_ID: ${{ secrets.POSTBOX_ACCESS_KEY_ID }}
+          KEY_SECRET: ${{ secrets.POSTBOX_SECRET_ACCESS_KEY }}
+        run: |
+          code=$(curl -sS -o "$RUNNER_TEMP/list.txt" -w '%{http_code}' --max-time 30 --user "$KEY_ID:$KEY_SECRET" \
+            --aws-sigv4 "aws:amz:ru-central1:ses" https://postbox.cloud.yandex.net/v2/email/identities)
+          echo "ListEmailIdentities (статический ключ) HTTP $code $(head -c 300 "$RUNNER_TEMP/list.txt")"
       - uses: ./.github/actions/ssh-setup
         if: inputs.mode == 'install' || inputs.mode == 'test-partner' || inputs.mode == 'test-auth'
         with:
