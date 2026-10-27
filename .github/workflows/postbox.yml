@@ -2,6 +2,7 @@ name: postbox
 # Почта сайта через Yandex Cloud Postbox (отправитель noreply@coffeepassport.ru).
 # Запуск: gh workflow run postbox -f mode=<режим> --ref fix/pre-pilot-shortlist
 #   identity     — создать адрес-домен в Postbox (Easy DKIM), если его нет; ответ Postbox дословно + DNS-записи
+#   roles        — роли сервисного аккаунта на его каталоге (диагностика 403)
 #   status       — статус адреса в Postbox дословно (VerifiedForSendingStatus, DkimAttributes.Status)
 #   install      — статический ключ на сервер: .env.local приложения (уведомления о заявках) и SMTP Supabase
 #                  Auth (пароль SMTP выводится из секрета на сервере); бэкапы в /opt/coffee-passport/backups/
@@ -19,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "identity | status | install | test-partner | test-auth"
+        description: "identity | status | roles | install | test-partner | test-auth"
         required: true
         default: status
 permissions:
@@ -42,12 +43,12 @@ jobs:
         run: |
           node --check scripts/ops/postbox-identity.mjs
           python3 -m py_compile deploy/timeweb/postbox-mail.py
-          case "${{ inputs.mode }}" in ""|identity|status|install|test-partner|test-auth) ;; *) echo "::error::неизвестный mode"; exit 1;; esac
+          case "${{ inputs.mode }}" in ""|identity|status|roles|install|test-partner|test-auth) ;; *) echo "::error::неизвестный mode"; exit 1;; esac
       - name: identity / status
-        if: inputs.mode == 'identity' || inputs.mode == 'status'
+        if: inputs.mode == 'identity' || inputs.mode == 'status' || inputs.mode == 'roles'
         env:
           YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
-        run: node scripts/ops/postbox-identity.mjs "${{ inputs.mode == 'identity' && 'create' || 'status' }}" "$DOMAIN"
+        run: node scripts/ops/postbox-identity.mjs "${{ inputs.mode == 'identity' && 'create' || inputs.mode }}" "$DOMAIN"
       - uses: ./.github/actions/ssh-setup
         if: inputs.mode == 'install' || inputs.mode == 'test-partner' || inputs.mode == 'test-auth'
         with:
