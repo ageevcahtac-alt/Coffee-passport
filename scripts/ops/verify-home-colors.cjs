@@ -75,7 +75,13 @@ async function imageSection(browser, width) {
   try {
     await page.goto(base + '/', { waitUntil: 'networkidle' });
     const block = page.locator(BLOCK);
-    await block.waitFor();
+    // Замер «до» на PR снимает прод, где блока может ещё не быть; с порогом (после deploy) это красный.
+    if ((await block.count()) === 0) {
+      log(`### ${width} px — блока ${BLOCK} на странице нет`);
+      log('');
+      if (strict) failed += 1;
+      return;
+    }
     const box = await block.evaluate((el) => {
       const r = el.getBoundingClientRect();
       return { x: r.left + scrollX, y: r.top + scrollY, w: r.width, h: r.height, bg: getComputedStyle(el).backgroundColor };
