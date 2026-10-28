@@ -1,12 +1,18 @@
 name: verify-admin-access
 # Доступ к /admin по роли admin — на проде, через настоящую форму входа. Только вручную.
-# Сервер: заявки партнёров за сегодня (id, роль, статус, время, компания, город — без контакта,
-# email и телефона), строка XO Coffee, Всеволожск. Заявки только читаются.
+# Сервер: заявка XO Coffee по id (input xo_request_id, без привязки к дате; id, роль, статус, время, компания,
+# город — без контакта, email и телефона). Заявки нет — красный. Заявки только читаются.
 # Временные учётки прогона (admin-verify-*-<run>@example.com): роль admin и роль кофейни shop-xo-vsevolozhsk.
 # Браузер: без входа и кофейней /admin и /api/admin закрыты; admin из /dashboard/admin по ссылке
 # попадает в /admin и видит заявку XO. Учётки удаляются в конце при любом исходе.
 on:
   workflow_dispatch:
+    inputs:
+      xo_request_id:
+        description: "id заявки XO Coffee"
+        required: false
+        default: ab107366-51ea-4cbf-bba0-c4fb8b83872c
+        type: string
   pull_request:
     paths:
       - .github/workflows/verify-admin-access.yml
@@ -33,10 +39,11 @@ jobs:
     env:
       PROD_URL: ${{ vars.PROD_URL }}
       CAFE_ID: shop-xo-vsevolozhsk
+      XO_ID: ${{ inputs.xo_request_id }}
     steps:
       - uses: actions/checkout@v4
       - name: validate
-        run: '[ -n "$PROD_URL" ] || { echo "::error::PROD_URL не задан"; exit 1; }'
+        run: '[ -n "$PROD_URL" ] || { echo "::error::PROD_URL не задан"; exit 1; }; [[ "$XO_ID" =~ ^[0-9a-f-]{36}$ ]] || { echo "::error::xo_request_id — не uuid"; exit 1; }'
       - uses: ./.github/actions/ssh-setup
         with:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -49,13 +56,13 @@ jobs:
           cafe_pw="Cv$(openssl rand -hex 12)!a"
           echo "::add-mask::$admin_pw"
           echo "::add-mask::$cafe_pw"
-          printf '{"admin":{"email":"admin-verify-admin-%s@example.com","password":"%s"},"cafe":{"email":"admin-verify-cafe-%s@example.com","password":"%s"},"cafe_id":"%s"}' \
-            "$GITHUB_RUN_ID" "$admin_pw" "$GITHUB_RUN_ID" "$cafe_pw" "$CAFE_ID" > "$RUNNER_TEMP/temp.json"
+          printf '{"admin":{"email":"admin-verify-admin-%s@example.com","password":"%s"},"cafe":{"email":"admin-verify-cafe-%s@example.com","password":"%s"},"cafe_id":"%s","xo_request_id":"%s"}' \
+            "$GITHUB_RUN_ID" "$admin_pw" "$GITHUB_RUN_ID" "$cafe_pw" "$CAFE_ID" "$XO_ID" > "$RUNNER_TEMP/temp.json"
           remote=$(ssh prod 'mktemp /tmp/verify-admin-access.XXXXXX')
           ssh prod "cat > $remote" < deploy/timeweb/verify-admin-access.py
           echo "remote=$remote" >> "$GITHUB_OUTPUT"
           ssh prod "python3 $remote create" < "$RUNNER_TEMP/temp.json"
-      - name: заявки за сегодня (без персональных данных)
+      - name: заявка XO по id (без персональных данных)
         id: lookup
         run: |
           set -o pipefail

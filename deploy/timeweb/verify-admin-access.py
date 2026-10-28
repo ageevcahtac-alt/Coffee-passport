@@ -2,19 +2,19 @@
 """Временные учётки и чтение заявок для workflow verify-admin-access.
 
 Запускается на сервере. Адрес Supabase и service_role — из /opt/coffee-passport/app/.env.local.
-На stdin — JSON {"admin": {email, password}, "cafe": {email, password}, "cafe_id"}; email и пароли не печатаются.
+На stdin — JSON {"admin": {email, password}, "cafe": {email, password}, "cafe_id", "xo_request_id"}; email и пароли не печатаются.
   create — создать подтверждённые учётки: роль admin и роль cafe_admin этой кофейни
-  lookup — заявки партнёров за сегодня (МСК): id, роль, статус, время, компания, город.
-           Контакт, email, телефон, комментарий не запрашиваются. Строку XO Coffee печатает как XO_REQUEST_ID=<id>.
+  lookup — заявка XO Coffee по id (xo_request_id), без привязки к дате: id, роль, статус, время, компания, город.
+           Контакт, email, телефон, комментарий не запрашиваются. Печатает XO_REQUEST_ID=<id>; заявки нет — FAIL.
            Только чтение: заявки не меняются.
   delete — удалить обе учётки (профили удаляются каскадом); повторный вызов без учёток — ok
 """
 import json
+import re
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.error import HTTPError
-from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 env = {}
@@ -64,22 +64,17 @@ def create(account, role, cafe_id=None):
     print(f'created {role} user {user["id"]}' + (f' cafe_id={cafe_id}' if cafe_id else ''))
 
 
-def lookup():
-    start = datetime.now(MSK).replace(hour=0, minute=0, second=0, microsecond=0)
-    since = quote(start.isoformat())
+def lookup(request_id):
+    if not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', request_id or ''):
+        sys.exit('FAIL xo_request_id — не uuid')
     rows = call('GET', '/rest/v1/partner_requests?select=id,role_requested,status,created_at,company_name,city'
-                       f'&created_at=gte.{since}&order=created_at.desc')
-    print(f'partner_requests since {start.isoformat()}: {len(rows)}')
-    xo = None
-    for row in rows:
-        local = datetime.fromisoformat(row['created_at'].replace('Z', '+00:00')).astimezone(MSK)
-        print(json.dumps({**row, 'created_at_msk': local.isoformat(timespec='seconds')}, ensure_ascii=False))
-        text = f'{row["company_name"]} {row.get("city") or ""}'.lower()
-        if xo is None and row['role_requested'] == 'coffee_shop' and 'xo' in text and 'всеволожск' in text:
-            xo = row
-    if not xo:
-        sys.exit('FAIL нет сегодняшней заявки кофейни XO Coffee, Всеволожск')
-    print(f'XO_REQUEST_ID={xo["id"]}')
+                       f'&id=eq.{request_id}')
+    if not rows:
+        sys.exit(f'FAIL нет заявки XO Coffee с id {request_id}')
+    row = rows[0]
+    local = datetime.fromisoformat(row['created_at'].replace('Z', '+00:00')).astimezone(MSK)
+    print(json.dumps({**row, 'created_at_msk': local.isoformat(timespec='seconds')}, ensure_ascii=False))
+    print(f'XO_REQUEST_ID={row["id"]}')
 
 
 temp = json.load(sys.stdin)
@@ -88,7 +83,7 @@ if sys.argv[1] == 'create':
     create(temp['admin'], 'admin')
     create(temp['cafe'], 'cafe_admin', temp['cafe_id'])
 elif sys.argv[1] == 'lookup':
-    lookup()
+    lookup(temp.get('xo_request_id'))
 elif sys.argv[1] == 'delete':
     for label in ('admin', 'cafe'):
         user = find(temp[label]['email'])
