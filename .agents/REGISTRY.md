@@ -28,6 +28,7 @@
 | 2026-10-25 | main (Claude) | codex | 20261025-1800-admin-role-access: /admin по роли admin через обычный вход, Basic Auth убран; фикс 500 в /admin (HeadersAdapter); workflow verify-admin-access; заявка XO найдена | fix | 1+1+1 (PR #31, #32, #33; #35 — health) |
 | 2026-10-26 | main (Claude) | codex | 20261026-1200-pd-russia-only: аудит внешних доменов прода (verify-external-domains, красный на новом домене), redact — email и телефоны, server-ops весь вывод через redact, правило «данные только в России» в CLAUDE.md | fix | 2 (PR #41) |
 | 2026-10-26 | main (Claude) | codex | 20261026-1500-pd-russia-map-geocode: тайлы OSM через свой nginx с кэшем, Nominatim только с сервера (/api/cafe/geocode), «Маршрут» — Яндекс, сравнение российской почты; сторож — 0 внешних доменов | fix | 2 (PR #44, доводка #45–#47) |
+| 2026-10-28 | main (Claude) | — | 20261028-1200-postbox-mail: почта через Yandex Cloud Postbox (PR #54, черновик) — blocked: платёжный аккаунт Yandex Cloud на проверке документов | blocked | 0 |
 
 ## Замены
 | дата | агент | было → стало | причина |
