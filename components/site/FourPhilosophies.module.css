@@ -1,0 +1,541 @@
+/*
+ * «Один лот. Четыре философии». Все числа в calc(N * var(--u)) — пиксели исходной картинки 1672×941:
+ * --u = ширина контейнера / ширина куска в исходнике, поэтому текст стоит там же, где был вшит,
+ * а масштаб идёт за шириной блока. max(Npx, …) — нижний предел, чтобы мелкий текст оставался читаемым.
+ * Компьютер (≥1024 px) — композиция исходника; телефон и планшет — лента карточек с прокруткой вбок.
+ */
+
+.root {
+  --bg: #f5f2eb;
+  --ink: #1f1a14;
+  --cream: #f3ead9;
+  --gold: #d8b678;
+  --paper-ink: #2c241b;
+  position: relative;
+  width: 100%;
+  max-width: 1672px;
+  margin: 0 auto;
+  background: var(--bg);
+  color: var(--ink);
+  container-type: inline-size;
+}
+
+.root p,
+.root h2,
+.root h3,
+.root ul,
+.root dl,
+.root dd {
+  margin: 0;
+  padding: 0;
+}
+
+.root ul {
+  list-style: none;
+}
+
+.root img {
+  display: block;
+  max-width: none;
+}
+
+/* Шапка */
+.brand,
+.subtitle,
+.aside,
+.eyebrow,
+.items li span,
+.cardBrand,
+.cardKind,
+.cardNumber,
+.scoreLabel,
+.facts dt,
+.descriptorsLabel,
+.canonicalTitle {
+  font-family: var(--fp-caps), system-ui, sans-serif;
+  text-transform: uppercase;
+}
+
+.brand {
+  font-weight: 500;
+  letter-spacing: 0.42em;
+}
+
+.title,
+.titleLine,
+.cardName,
+.scoreValue {
+  font-family: var(--fp-display), Georgia, serif;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.subtitle {
+  font-weight: 500;
+  letter-spacing: 0.36em;
+}
+
+.aside {
+  display: flex;
+  flex-direction: column;
+  font-weight: 500;
+  letter-spacing: 0.34em;
+}
+
+/* Колонки философий: --u считается от ширины колонки */
+.column {
+  --u: calc(100cqw / var(--w));
+  position: relative;
+  container-type: inline-size;
+  color: var(--cream);
+}
+
+.photo {
+  position: absolute;
+  top: 0;
+  left: calc(-1 * var(--photo-shift) * var(--u));
+  width: calc(var(--photo-w) * var(--u));
+  height: auto;
+}
+
+.columnTitle {
+  font-weight: inherit;
+}
+
+.eyebrow,
+.titleLine {
+  position: absolute;
+  left: calc(var(--x) * var(--u));
+  white-space: nowrap;
+  transform: translateY(-50%);
+}
+
+.eyebrow {
+  top: calc(40 * var(--u));
+  font-size: max(9.5px, calc(14 * var(--u)));
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  line-height: 1;
+}
+
+.titleLine {
+  top: calc(var(--title-y) * var(--u));
+  font-size: max(22px, calc(38 * var(--u)));
+  letter-spacing: 0.01em;
+}
+
+.titleLine:nth-child(3) {
+  top: calc((var(--title-y) + 38) * var(--u));
+}
+
+.lines {
+  position: absolute;
+  left: calc(var(--x) * var(--u));
+  top: calc(var(--lines-y) * var(--u) - 0.625em);
+  font-family: var(--fp-text), Georgia, serif;
+  font-size: max(13px, calc(18 * var(--u)));
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.lines span,
+.canonicalText span {
+  display: block;
+}
+
+.items {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc((var(--items-y) - 18.5) * var(--u));
+}
+
+.items li {
+  position: relative;
+  height: calc(37 * var(--u));
+}
+
+.icon,
+.items li span {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.icon {
+  left: calc((var(--icon-x) - 14) * var(--u));
+  width: max(20px, calc(28 * var(--u)));
+  height: max(20px, calc(28 * var(--u)));
+  color: var(--gold);
+}
+
+.items li span {
+  left: calc(var(--label-x) * var(--u));
+  font-size: max(10.5px, calc(14 * var(--u)));
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* Центр: карточка лота, зёрна, подпись. --u лота — от ширины 410, карточки — от 310 */
+.lot {
+  --u: calc(100cqw / 410);
+  position: relative;
+  container-type: inline-size;
+  aspect-ratio: 410 / 730;
+  color: var(--paper-ink);
+}
+
+.card {
+  --u: calc(100cqw / 310);
+  position: absolute;
+  left: calc(50 / 410 * 100%);
+  top: 0;
+  width: calc(310 / 410 * 100%);
+  aspect-ratio: 310 / 497;
+  container-type: inline-size;
+}
+
+.cardImage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.cardBrand,
+.cardKind,
+.cardName,
+.cardNumber {
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+  line-height: 1;
+  white-space: nowrap;
+  transform: translateY(-50%);
+}
+
+.cardBrand {
+  top: calc(32.5 * var(--u));
+  padding-left: 0.4em;
+  font-size: max(7px, calc(9.5 * var(--u)));
+  font-weight: 500;
+  letter-spacing: 0.4em;
+  color: #a98549;
+}
+
+.cardKind {
+  top: calc(51 * var(--u));
+  padding-left: 0.14em;
+  font-size: max(7.5px, calc(10.5 * var(--u)));
+  font-weight: 500;
+  letter-spacing: 0.14em;
+}
+
+.cardName {
+  top: calc(96 * var(--u));
+  font-size: max(18px, calc(32 * var(--u)));
+  letter-spacing: 0.01em;
+}
+
+.cardNumber {
+  top: calc(120 * var(--u));
+  padding-left: 0.22em;
+  font-size: max(7.5px, calc(11.5 * var(--u)));
+  font-weight: 500;
+  letter-spacing: 0.22em;
+}
+
+.score {
+  position: absolute;
+  left: calc(242 * var(--u));
+  top: calc(229 * var(--u));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #3a2a12;
+  transform: translate(-50%, -50%);
+}
+
+.scoreLabel {
+  font-size: max(7px, calc(10 * var(--u)));
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+.scoreValue {
+  margin-top: calc(9 * var(--u));
+  font-size: max(18px, calc(34 * var(--u)));
+  font-variant-numeric: lining-nums;
+}
+
+.facts div {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc((264 + var(--row) * 25) * var(--u));
+  transform: translateY(-50%);
+  line-height: 1;
+}
+
+.facts dt,
+.descriptorsLabel {
+  position: absolute;
+  left: calc(32 * var(--u));
+  font-size: max(7px, calc(9.5 * var(--u)));
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  transform: translateY(-50%);
+}
+
+.facts dd,
+.descriptors li {
+  font-family: var(--fp-text), Georgia, serif;
+  font-size: max(8.5px, calc(13 * var(--u)));
+  white-space: nowrap;
+}
+
+.facts dd {
+  position: absolute;
+  left: calc(145 * var(--u));
+  transform: translateY(-50%);
+}
+
+.descriptorsLabel {
+  top: calc(390 * var(--u));
+  line-height: 1;
+}
+
+.descriptors li {
+  position: absolute;
+  top: calc(420 * var(--u));
+  left: calc(var(--cx) * var(--u));
+  line-height: 1;
+  transform: translate(-50%, -50%);
+}
+
+.beans {
+  position: absolute;
+  left: 0;
+  top: calc(439 * var(--u));
+  width: calc(410 * var(--u));
+  height: auto;
+}
+
+.canonicalRule {
+  position: absolute;
+  left: calc(205 * var(--u) - 0.5px);
+  top: calc(554 * var(--u));
+  width: 1px;
+  height: calc(20 * var(--u));
+  background: var(--paper-ink);
+}
+
+.canonicalTitle {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(594 * var(--u));
+  padding-left: 0.46em;
+  font-size: max(10px, calc(13 * var(--u)));
+  font-weight: 600;
+  letter-spacing: 0.46em;
+  line-height: 1;
+  text-align: center;
+  transform: translateY(-50%);
+}
+
+.canonicalText {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(619 * var(--u));
+  font-family: var(--fp-text), Georgia, serif;
+  font-size: max(12px, calc(14.5 * var(--u)));
+  line-height: 1.34;
+  text-align: center;
+}
+
+/* Компьютер: композиция исходной картинки, --u корня — от 1672 */
+@media (min-width: 1024px) {
+  .root {
+    --U: calc(100cqw / 1672);
+    aspect-ratio: 1672 / 941;
+  }
+
+  .header > * {
+    position: absolute;
+    transform: translateY(-50%);
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .brand,
+  .title,
+  .subtitle {
+    left: 0;
+    right: 0;
+    text-align: center;
+  }
+
+  .brand {
+    top: calc(40 * var(--U));
+    padding-left: 0.42em;
+    font-size: max(10px, calc(15 * var(--U)));
+  }
+
+  .title {
+    top: calc(99 * var(--U));
+    font-size: calc(63 * var(--U));
+  }
+
+  .subtitle {
+    top: calc(148 * var(--U));
+    padding-left: 0.36em;
+    font-size: max(10px, calc(15 * var(--U)));
+  }
+
+  .aside {
+    top: calc(101 * var(--U));
+    font-size: max(8.5px, calc(12.5 * var(--U)));
+    line-height: calc(17 * var(--U));
+  }
+
+  .asideLeft {
+    left: calc(45 * var(--U));
+  }
+
+  .asideRight {
+    right: calc(45 * var(--U) - 0.34em);
+    text-align: right;
+  }
+
+  .strip > * {
+    position: absolute;
+    top: calc(var(--photo-top) * var(--U));
+  }
+
+  .column {
+    left: calc(var(--left) * var(--U));
+    width: calc(var(--w) * var(--U));
+    aspect-ratio: var(--w) / 755;
+  }
+
+  /* Карточка лота лежит поверх краёв фото обжарщика и кофейни, как в исходнике. */
+  .lotFrame {
+    display: contents;
+  }
+
+  .lot {
+    position: absolute;
+    z-index: 1;
+    left: calc(630 * var(--U));
+    top: calc(211 * var(--U));
+    width: calc(410 * var(--U));
+  }
+}
+
+/* Телефон и планшет */
+@media (max-width: 1023.98px) {
+  .root {
+    padding: 40px 16px 8px;
+  }
+
+  .header {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    row-gap: 12px;
+    text-align: center;
+  }
+
+  .brand,
+  .title,
+  .subtitle {
+    grid-column: 1 / -1;
+  }
+
+  .brand {
+    padding-left: 0.42em;
+    font-size: 11px;
+  }
+
+  .title {
+    font-size: clamp(30px, 8.6vw, 52px);
+    line-height: 1.08;
+  }
+
+  .subtitle {
+    padding-left: 0.36em;
+    font-size: 10px;
+    line-height: 1.8;
+  }
+
+  .aside {
+    margin-top: 6px;
+    font-size: 9.5px;
+    line-height: 1.6;
+  }
+
+  .asideLeft {
+    text-align: left;
+  }
+
+  .asideRight {
+    margin-right: -0.34em;
+    text-align: right;
+  }
+
+  /* Лента карточек: листается вбок, карточка встаёт к краю */
+  .strip {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin: 28px -16px 0;
+    padding: 0 16px 12px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 16px;
+    overscroll-behavior-x: contain;
+  }
+
+  .strip:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: -2px;
+  }
+
+  .strip > * {
+    flex: 0 0 min(300px, 80%);
+    scroll-snap-align: start;
+  }
+
+  .column {
+    width: 100%;
+    aspect-ratio: var(--w) / 755;
+    overflow: hidden;
+    border-radius: 6px;
+  }
+
+  .lotFrame {
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Карточка во всю ширину: поля лота (зёрна за краями карточки) уходят за рамку */
+  .lot {
+    width: calc(100% * 410 / 310);
+    margin-left: calc(-100% * 50 / 310);
+  }
+
+  .cardImage {
+    clip-path: inset(calc(2 * var(--u)) calc(1 * var(--u)) 0 round calc(10 * var(--u)));
+  }
+
+  .beans {
+    -webkit-mask-image: linear-gradient(90deg, transparent 13%, #000 17%, #000 83%, transparent 87%);
+    mask-image: linear-gradient(90deg, transparent 13%, #000 17%, #000 83%, transparent 87%);
+  }
+}
