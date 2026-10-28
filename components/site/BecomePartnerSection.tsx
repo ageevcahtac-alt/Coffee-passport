@@ -7,7 +7,7 @@ export function BecomePartnerSection() {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="mt-10 pt-8 border-t border-ink-200 text-center">
+    <div id="partners" className="mt-10 pt-8 border-t border-ink-200 text-center scroll-mt-4">
       <p className="font-display text-lg text-ink-900 mb-2">Стать партнёром</p>
       <p className="text-ink-500 text-sm max-w-sm mx-auto mb-5">
         Подключите свою кофейню или ростерию к платформе — оставьте заявку, и менеджер свяжется с

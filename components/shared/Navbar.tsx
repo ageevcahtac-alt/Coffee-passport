@@ -4,12 +4,17 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { signOut } from '@/app/auth/actions';
+import { navItemsFor, type NavItem } from '@/lib/auth/cabinet';
+import type { ProfileRole } from '@/lib/types/database';
 import { EnthusiastFeedbackWidget } from './EnthusiastFeedbackWidget';
 import { NotificationBell, NotificationCenterPanel } from './NotificationCenter';
 
 const NAV_LINK_CLASSES = 'hover:text-ink-900';
 
-export function Navbar({ userEmail }: { userEmail: string | null }) {
+// Пункты меню — из navItemsFor (lib/auth/cabinet.ts): гость видит только общее,
+// вошедший — пункты своей роли и «Выйти». Состояние входа — только серверная
+// сессия (app/(site)/layout.tsx), не данные гостя в браузере.
+export function Navbar({ session }: { session: { role: ProfileRole } | null }) {
   const [menuOpen, setMenuOpen] = useState(false);
   // GAP 1 (docs/reports/IDENTITY_SESSION_CONTINUITY_IMPLEMENTATION.md) — "Log in" is
   // reachable from every (site) page, including the Public Passport, but
@@ -20,7 +25,7 @@ export function Navbar({ userEmail }: { userEmail: string | null }) {
   const searchParams = useSearchParams();
   const search = searchParams.toString();
   const currentPath = `${pathname}${search ? `?${search}` : ''}`;
-  const loginHref = `/auth/login?next=${encodeURIComponent(currentPath)}`;
+  const items = navItemsFor(session, currentPath);
 
   return (
     <header className="relative px-4 sm:px-6 py-4 border-b border-ink-100/0">
@@ -36,21 +41,10 @@ export function Navbar({ userEmail }: { userEmail: string | null }) {
             overlap the logo (see the reported mobile layout bug). */}
         <div className="hidden md:flex md:flex-col md:items-end md:gap-1.5">
           <nav className="flex items-center gap-4 text-sm text-ink-500">
-            <Link href="/map" className={NAV_LINK_CLASSES}>🗺️ Карта кофеен</Link>
-            <Link href="/recipes" className={NAV_LINK_CLASSES}>🏆 Топовые рецепты</Link>
-            {userEmail ? (
-              <>
-                <Link href="/journey" className={NAV_LINK_CLASSES}>🧳 Journey</Link>
-                <Link href="/coffee-kitchen" className={NAV_LINK_CLASSES}>🍳 Coffee Kitchen</Link>
-                <Link href="/loyalty" className={NAV_LINK_CLASSES}>💳 Мои карты</Link>
-                <NotificationBell />
-                <form action={signOut}>
-                  <button type="submit" className={NAV_LINK_CLASSES}>Sign out</button>
-                </form>
-              </>
-            ) : (
-              <Link href={loginHref} className={NAV_LINK_CLASSES}>Log in</Link>
-            )}
+            {items.map((item) => (
+              <NavEntry key={item.label} item={item} className={NAV_LINK_CLASSES} />
+            ))}
+            {session && <NotificationBell />}
           </nav>
           {/* Right under Log in/Sign out — reachable from every guest-facing
               page via this shared header, not just /journey. */}
@@ -102,58 +96,14 @@ export function Navbar({ userEmail }: { userEmail: string | null }) {
             </div>
 
             <nav className="flex flex-col gap-1 text-base text-ink-700">
-              <Link
-                href="/map"
-                onClick={() => setMenuOpen(false)}
-                className="py-3 border-b border-ink-100 hover:text-ink-900"
-              >
-                🗺️ Карта кофеен
-              </Link>
-              <Link
-                href="/recipes"
-                onClick={() => setMenuOpen(false)}
-                className="py-3 border-b border-ink-100 hover:text-ink-900"
-              >
-                🏆 Топовые рецепты
-              </Link>
-              {userEmail ? (
-                <>
-                  <Link
-                    href="/journey"
-                    onClick={() => setMenuOpen(false)}
-                    className="py-3 border-b border-ink-100 hover:text-ink-900"
-                  >
-                    🧳 Journey
-                  </Link>
-                  <Link
-                    href="/coffee-kitchen"
-                    onClick={() => setMenuOpen(false)}
-                    className="py-3 border-b border-ink-100 hover:text-ink-900"
-                  >
-                    🍳 Coffee Kitchen
-                  </Link>
-                  <Link
-                    href="/loyalty"
-                    onClick={() => setMenuOpen(false)}
-                    className="py-3 border-b border-ink-100 hover:text-ink-900"
-                  >
-                    💳 Мои карты
-                  </Link>
-                  <form action={signOut}>
-                    <button type="submit" className="w-full text-left py-3 border-b border-ink-100 hover:text-ink-900">
-                      Sign out
-                    </button>
-                  </form>
-                </>
-              ) : (
-                <Link
-                  href={loginHref}
-                  onClick={() => setMenuOpen(false)}
-                  className="py-3 border-b border-ink-100 hover:text-ink-900"
-                >
-                  Log in
-                </Link>
-              )}
+              {items.map((item) => (
+                <NavEntry
+                  key={item.label}
+                  item={item}
+                  onNavigate={() => setMenuOpen(false)}
+                  className="w-full text-left py-3 border-b border-ink-100 hover:text-ink-900"
+                />
+              ))}
             </nav>
 
             <div className="mt-4">
@@ -165,5 +115,22 @@ export function Navbar({ userEmail }: { userEmail: string | null }) {
 
       <NotificationCenterPanel />
     </header>
+  );
+}
+
+function NavEntry({ item, className, onNavigate }: { item: NavItem; className: string; onNavigate?: () => void }) {
+  if (item.kind === 'signOut') {
+    return (
+      <form action={signOut}>
+        <button type="submit" className={className}>
+          {item.label}
+        </button>
+      </form>
+    );
+  }
+  return (
+    <Link href={item.href} onClick={onNavigate} className={className}>
+      {item.label}
+    </Link>
   );
 }

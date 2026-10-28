@@ -13,7 +13,7 @@ import { EnthusiastAuthForm } from '@/components/site/EnthusiastAuthForm';
 export default function LoginPage({
   searchParams,
 }: {
-  searchParams: { next?: string; error?: string };
+  searchParams: { next?: string; error?: string; mode?: string };
 }) {
   const next = searchParams.next ?? '/';
   // Preserve `next` across a failed attempt too, so retrying after a typo
@@ -31,7 +31,12 @@ export default function LoginPage({
           Одна и та же форма для входа в уже существующий аккаунт или для регистрации нового.
         </p>
 
-        <EnthusiastAuthForm error={searchParams.error} next={next} errorRedirect={errorRedirect} />
+        <EnthusiastAuthForm
+          error={searchParams.error}
+          next={next}
+          errorRedirect={errorRedirect}
+          initialMode={searchParams.mode === 'signup' ? 'signup' : 'login'}
+        />
       </div>
     </main>
   );
