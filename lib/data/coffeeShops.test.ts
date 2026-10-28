@@ -60,6 +60,13 @@ describe('coffeeShops store reads the database, not this browser', () => {
     expect(store.getMapCoffeeShops(store.getCoffeeShopsSnapshot()).map((shop) => shop.id)).not.toContain('shop-xo-vsevolozhsk');
   });
 
+  it('loads the database on a plain lookup too, without a subscriber (cabinet pages)', async () => {
+    result = { data: [{ slug: 'shop-new', name: 'Новая', status: 'active' }], error: null };
+    const store = await loadStore();
+    expect(store.getCoffeeShopById('shop-new')).toBeUndefined();
+    await vi.waitFor(() => expect(store.getCoffeeShopById('shop-new')?.name).toBe('Новая'));
+  });
+
   it('keeps the built-in cards when the database is unreachable', async () => {
     result = { data: null, error: { message: 'relation does not exist' } };
     const store = await loadStore();

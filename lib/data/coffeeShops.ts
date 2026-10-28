@@ -55,6 +55,9 @@ export function refreshCoffeeShops(): Promise<void> {
 
 function read(): CoffeeShop[] {
   if (typeof window === 'undefined') return SEED_COFFEE_SHOPS;
+  // Lookups without a subscriber (getById on cabinet pages) load the
+  // database too; the next render picks the rows up.
+  if (!loaded && !loading) void refreshCoffeeShops();
   if (!cache) cache = mergePartners(SEED_COFFEE_SHOPS, remote);
   return cache;
 }

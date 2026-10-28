@@ -44,6 +44,9 @@ export function refreshRoasters(): Promise<void> {
 
 function read(): Roaster[] {
   if (typeof window === 'undefined') return SEED_ROASTERS;
+  // Lookups without a subscriber (getById on cabinet pages) load the
+  // database too; the next render picks the rows up.
+  if (!loaded && !loading) void refreshRoasters();
   if (!cache) cache = mergePartners(SEED_ROASTERS, remote);
   return cache;
 }
