@@ -26,3 +26,24 @@ Claude (UI). Ревью — Codex.
 
 ## Не трогать
 Формы входа и заявки, глобальные шрифты сайта (`app/layout.tsx`), исходную картинку.
+
+## Итог 20261028-1530-four-philosophies-html
+Запланировано: 1. Куски фото без изменения пикселей вне букв. 2. Весь текст блока — HTML, значки SVG, шрифты со своего домена.
+3. Компьютер — композиция картинки; телефон — лента карточек (выбор владельца). 4. Проверки прода на блок. 5. Тест дословности.
+Доводка по просьбе владельца (390 px): карточки одной высоты, сплошная золотая линия через ленту с точкой у каждой философии.
+Написал: Claude — `scripts/images/split_four_philosophies.py`, `public/images/four-philosophies/*.png` (+ `*-m.png` для телефона,
+без вшитой линии), `components/site/FourPhilosophies.{tsx,module.css,test.ts}`, `app/(site)/page.tsx`,
+`scripts/ops/verify-home-colors.cjs`, `.github/workflows/verify-home-colors.yml`, `deploy/timeweb/check-landing.cjs`.
+Ревью: Codex, 2/2 по основному diff + 1/2 по доводке для телефона
+  принято: маска описания задевала волосы энтузиаста → рамка на строку (`split_four_philosophies.py`)
+  принято: тест проверял только наличие строк → полная последовательность строк по порядку (`FourPhilosophies.test.ts`)
+  доводка: findings none
+Проверки:
+  скрипт нарезки → «Вне маски букв изменено пикселей: 0» (включая -m копии)
+  npm test → «Test Files 58 passed (58), Tests 515 passed (515)»; tsc — без ошибок; lint — «lint ok: no new findings»; build — код 0
+  390 px, все 5 карточек 286.39 × 612.53 px (было 612.53 / 659.22 / 674.38 / 655.22 / 612.53), линия 335.88 px от верха каждой
+  карточки, в зазорах 335.89 px; на 320–1000 px совпадает (≤ 0.01 px); компьютер 1280/1920 — 0 px отличий от локальной сборки (1920), 21 px (1280)
+  прод после деплоя: verify-home-colors → «Расхождений: 0»; verify-external-domains → «Все внешние домены: нет (0)»;
+  site-health → «checked 89 urls, pages 18, fails 0»; на проде те же замеры 390 px
+Merge: PR #63 (merge 669982a), CI check pass, verify pass; deploy success
+Результат: done
