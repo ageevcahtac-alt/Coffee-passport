@@ -143,7 +143,10 @@ async function role(browser, label, account) {
       const items = await readMenu(page, `menu-${label}.png`);
       const labels = items.map((item) => item.label);
       const personal = items.filter((item) => item.href && PERSONAL.test(item.href)).map((item) => item.href);
-      const ok = personal.includes(account.cabinet) && labels.includes('Выйти') && !labels.includes('Войти') && !labels.includes('Регистрация');
+      // Ровно личные ссылки своей роли — ни кабинетов чужих ролей, ни дневника у сотрудника (ревью Codex, раунд 2).
+      const expected = account.cabinet === '/journey' ? ['/journey', '/coffee-kitchen', '/loyalty'] : [account.cabinet];
+      const exact = [...personal].sort().join(',') === [...expected].sort().join(',');
+      const ok = exact && labels.includes('Выйти') && !labels.includes('Войти') && !labels.includes('Регистрация');
       if (!ok) throw new Error(`нет кабинета/«Выйти» или есть «Войти»: ${labels.join(' | ')}`);
       return `пункты: ${labels.join(' | ')}`;
     });
@@ -157,8 +160,10 @@ async function role(browser, label, account) {
       const direct = await page.goto(base + account.cabinet, { waitUntil: 'networkidle' });
       const landed = new URL(page.url()).pathname;
       const broken = await page.getByText(/Application error|Something went wrong|Что-то пошло не так/).count();
-      if (landed !== account.cabinet || !direct || direct.status() >= 400 || broken) {
-        throw new Error(`открылось ${landed} (HTTP ${direct ? direct.status() : '—'}, экран ошибки=${broken})`);
+      // Кабинет не пустой: есть заголовок (у бариста без карточки страница рендерит null — ревью Codex, раунд 2).
+      const heading = await page.locator('h1, h2').filter({ hasText: /\S/ }).count();
+      if (landed !== account.cabinet || !direct || direct.status() >= 400 || broken || !heading) {
+        throw new Error(`открылось ${landed} (HTTP ${direct ? direct.status() : '—'}, экран ошибки=${broken}, заголовков=${heading})`);
       }
       return `${landed} (HTTP ${direct.status()})`;
     });

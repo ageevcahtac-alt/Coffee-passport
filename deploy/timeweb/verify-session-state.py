@@ -18,6 +18,7 @@ from urllib.request import Request, urlopen
 
 APP_ENV = Path('/opt/coffee-passport/app/.env.local')
 PREFIX, DOMAIN = 'session-state-', '@example.com'
+TEMP_BARISTA = 'session-state-temp-barista'
 
 
 def read_env(path):
@@ -80,9 +81,16 @@ def purge():
         except (SystemExit, Exception) as error:  # следующая учётка всё равно удаляется
             print(f'{error} ({label(user)})')
             failed = True
+    try:
+        removed = call('DELETE', f'/rest/v1/barista_profiles?id=eq.{TEMP_BARISTA}', prefer='return=representation')
+        print(f'deleted temp barista card: {len(removed or [])}')
+    except (SystemExit, Exception) as error:
+        print(f'{error} (barista card)')
+        failed = True
     left = len(temp_users())
-    print(f'temp accounts left: {left}')
-    if failed or left:
+    cards = len(call('GET', f'/rest/v1/barista_profiles?select=id&id=eq.{TEMP_BARISTA}') or [])
+    print(f'temp accounts left: {left}, temp barista cards left: {cards}')
+    if failed or left or cards:
         sys.exit(1)
 
 
@@ -109,8 +117,14 @@ def create(accounts):
         roaster = roaster_slug() if account['role'] == 'roaster_admin' else None
         profile = {'id': user['id'], 'role': account['role'], 'cafe_id': account.get('cafe_id'),
                    'roaster_id': roaster,
-                   # profiles_role_scope (0007): у бариста barista_id обязателен; текст без FK — временный id.
-                   'barista_id': 'session-state-temp-barista' if account['role'] == 'barista' else None}
+                   'barista_id': None}
+        if account['role'] == 'barista':
+            # profiles (0007): у бариста barista_id обязателен; кабинет показывает его карточку из
+            # barista_profiles — временная карточка, purge её удаляет (ревью Codex, раунд 2).
+            profile['barista_id'] = TEMP_BARISTA
+            call('POST', '/rest/v1/barista_profiles?on_conflict=id',
+                 {'id': TEMP_BARISTA, 'coffee_shop_id': account['cafe_id'], 'name': 'Проверка входа (временно)'},
+                 prefer='resolution=merge-duplicates')
         rows = call('POST', '/rest/v1/profiles?on_conflict=id', profile,
                     prefer='resolution=merge-duplicates,return=representation')
         if not rows or rows[0].get('role') != account['role']:
