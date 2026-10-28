@@ -104,14 +104,21 @@ export default function CafeMapProfilePage() {
     setLegacy(cafeId ? getLegacyCoffeeShops().find((item) => item.id === cafeId) ?? null : null);
   }, [cafeId]);
 
-  // Only re-seed the form from the store on a real shop-id change (staff
-  // session switching cafes) — not on every store notification, which
-  // would otherwise clobber in-progress edits with the just-saved snapshot
-  // right after handleSubmit's own saveCoffeeShop call.
+  // The card first renders from the built-in seed, then the coffee_shops row
+  // arrives (lib/data/coffeeShops.ts). Re-seed the form from every new
+  // snapshot while it still shows the previous one untouched (or the cafe
+  // changed) — but never clobber in-progress edits.
+  const [seededFrom, setSeededFrom] = useState<CoffeeShop | undefined>(shop);
   useEffect(() => {
-    if (shop) setForm(toFormState(shop));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-seed only when the shop id itself changes
-  }, [shop?.id]);
+    if (!shop || shop === seededFrom) return;
+    setForm((prev) =>
+      !prev || !seededFrom || seededFrom.id !== shop.id ||
+      JSON.stringify(prev) === JSON.stringify(toFormState(seededFrom))
+        ? toFormState(shop)
+        : prev
+    );
+    setSeededFrom(shop);
+  }, [shop, seededFrom]);
 
   if (!shop || !form) return null;
 

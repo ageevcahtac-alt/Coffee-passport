@@ -22,9 +22,13 @@ const json = (body: unknown, method = 'POST') =>
 
 let rows: { coffee_shops: Record<string, unknown>[]; roasters: Record<string, unknown>[] };
 let db: ReturnType<typeof fakeSupabase>;
+let request: { status: string; updateFails: boolean };
 
 function handler(query: FakeQuery): FakeResult {
-  if (query.table === 'partner_requests') return { data: { id: query.filters.id }, error: null };
+  if (query.table === 'partner_requests') {
+    if (query.op === 'update' && request.updateFails) return { data: null, error: { message: 'timeout' } };
+    return { data: { id: query.filters.id, status: request.status }, error: null };
+  }
   const table = rows[query.table as 'coffee_shops' | 'roasters'];
   if (query.op === 'select') {
     const found = table.filter((row) => Object.entries(query.filters).every(([key, value]) => row[key] === value));
@@ -41,6 +45,7 @@ beforeEach(() => {
   mocks.user.mockReset().mockReturnValue({ id: 'u1', app_metadata: {} });
   mocks.profile.mockReset().mockReturnValue(profile('admin'));
   rows = { coffee_shops: [], roasters: [] };
+  request = { status: 'new', updateFails: false };
   db = fakeSupabase(handler);
   createClient.mockReset().mockReturnValue(db.client);
 });
@@ -100,16 +105,40 @@ describe('POST /api/admin/partners — activation writes the database', () => {
     expect(writes('insert', 'roasters')).toHaveLength(0);
     const [update] = writes('update', 'roasters');
     expect(update.filters).toEqual({ slug: 'roaster-xo' });
-    expect(update.payload).toMatchObject({ color: '#d4af37', status: 'active', philosophy: expect.any(String) });
+    expect(update.payload).toMatchObject({ color: '#d4af37', status: 'active', city: 'Всеволожск' });
+    expect(update.payload).not.toHaveProperty('philosophy');
   });
 
   it('refuses an unknown built-in card, a card already linked to a request, and a request already activated', async () => {
     expect((await POST(json({ kind: 'coffee_shop', bindId: 'shop-nope', name: 'T', city: 'C', color: '#000000' }))).status).toBe(400);
     rows.coffee_shops.push({ slug: 'shop-xo-vsevolozhsk', partner_request_id: 'other' });
     expect((await POST(json({ kind: 'coffee_shop', bindId: 'shop-xo-vsevolozhsk', name: 'T', city: 'C', color: '#000000' }))).status).toBe(409);
+    request.status = 'activated';
     expect((await POST(json({ kind: 'coffee_shop', requestId: 'other', name: 'T', city: 'C', color: '#000000' }))).status).toBe(409);
     expect(writes('insert')).toHaveLength(0);
     expect(writes('update')).toHaveLength(0);
+  });
+
+  it('binding an existing row keeps its saved profile: only name, city, colour, status, link and a new point change', async () => {
+    rows.coffee_shops.push({ slug: 'shop-xo-vsevolozhsk', name: 'XO', partner_request_id: null, address: 'Сохранённый адрес', lat: 60.1, lng: 30.7 });
+    const response = await POST(json({ kind: 'coffee_shop', bindId: 'shop-xo-vsevolozhsk', requestId: 'req-2', name: 'XO Coffee', city: 'Всеволожск', color: '#AB12CD' }));
+    expect(response.status).toBe(201);
+    const [update] = writes('update', 'coffee_shops');
+    expect(Object.keys(update.payload as object).sort()).toEqual(['brand_color', 'city', 'name', 'partner_request_id', 'status', 'updated_at']);
+  });
+
+  it('reports a failed request update and finishes the activation on retry instead of 409', async () => {
+    request.updateFails = true;
+    const first = await POST(json({ kind: 'coffee_shop', requestId: 'req-3', name: 'Тест', city: 'Казань', color: '#112233' }));
+    expect(first.status).toBe(500);
+    expect((await first.json()).error).toMatch(/заявк/i);
+    rows.coffee_shops.push({ slug: 'shop-тест', name: 'Тест', partner_request_id: 'req-3' });
+    request.updateFails = false;
+    const retry = await POST(json({ kind: 'coffee_shop', requestId: 'req-3', name: 'Тест', city: 'Казань', color: '#112233' }));
+    expect(retry.status).toBe(200);
+    expect((await retry.json()).partner).toMatchObject({ id: 'shop-тест' });
+    expect(writes('insert', 'coffee_shops')).toHaveLength(1);
+    expect(writes('update', 'partner_requests')).toHaveLength(2);
   });
 
   it('rejects a bad colour before opening the database', async () => {

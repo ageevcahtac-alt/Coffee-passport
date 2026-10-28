@@ -79,6 +79,50 @@ function rowFor(input: Activation, slug: string) {
   });
 }
 
+function toCard(table: 'coffee_shops' | 'roasters', data: unknown) {
+  if (table === 'roasters') {
+    const row = data as RoasterOrgRow;
+    return rowToRoaster(row, seedRoaster(row.slug));
+  }
+  const row = data as CoffeeShopOrgRow;
+  return rowToCoffeeShop(row, seedShop(row.slug));
+}
+
+// What activation sets on a card that already has a database row.
+function activationFields(input: Activation): Record<string, string | number> {
+  const fields: Record<string, string | number> = { name: input.name, city: input.city, status: 'active' };
+  if (input.kind === 'roaster') {
+    fields.color = input.color;
+    fields.country = input.country;
+    if (input.philosophy) fields.philosophy = input.philosophy;
+  } else {
+    fields.brand_color = input.color;
+    if (input.lat !== null && input.lng !== null) {
+      fields.lat = input.lat;
+      fields.lng = input.lng;
+    }
+  }
+  return fields;
+}
+
+async function markActivated(supabase: ReturnType<typeof createAdminSupabaseClient>, requestId: string) {
+  const { error } = await supabase
+    .from('partner_requests')
+    .update({ status: 'activated', updated_at: new Date().toISOString() })
+    .eq('id', requestId)
+    .select('id')
+    .single();
+  if (error) console.error('[admin/partners] request status not updated', error);
+  return !error;
+}
+
+function requestNotMarked() {
+  return NextResponse.json(
+    { error: 'Партнёр сохранён, но заявка не отмечена активированной — нажмите «Активировать» ещё раз.' },
+    { status: 500 }
+  );
+}
+
 // POST — "Активировать партнёра": creates the card (or fills a built-in /
 // backfilled one chosen by bindId, e.g. 'shop-xo-vsevolozhsk' so the cafe
 // cabinet keeps its profiles.cafe_id) and marks the lead activated.
@@ -106,10 +150,25 @@ export async function POST(request: Request) {
     for (const linkedTable of ['coffee_shops', 'roasters'] as const) {
       const { data: linked } = await supabase
         .from(linkedTable)
-        .select('slug')
+        .select(linkedTable === 'roasters' ? ROASTER_COLUMNS : COFFEE_SHOP_COLUMNS)
         .eq('partner_request_id', input.requestId)
         .maybeSingle();
-      if (linked) return NextResponse.json({ error: 'Эта заявка уже активирована.' }, { status: 409 });
+      if (!linked) continue;
+      const { data: lead } = await supabase
+        .from('partner_requests')
+        .select('status')
+        .eq('id', input.requestId)
+        .maybeSingle();
+      if ((lead as { status?: string } | null)?.status === 'activated') {
+        return NextResponse.json({ error: 'Эта заявка уже активирована.' }, { status: 409 });
+      }
+      // The partner row was written but marking the lead failed last time —
+      // finish that step instead of refusing the retry.
+      if (!(await markActivated(supabase, input.requestId))) return requestNotMarked();
+      return NextResponse.json({
+        kind: linkedTable === 'roasters' ? 'roaster' : 'coffee_shop',
+        partner: toCard(linkedTable, linked),
+      });
     }
   }
 
@@ -126,13 +185,15 @@ export async function POST(request: Request) {
   const slug =
     input.bindId ??
     generatePartnerSlug(input.kind, input.name, new Set([...rows.map((row) => row.slug), ...seeds.map((seed) => seed.id)]));
-  const row = { ...rowFor(input, slug), partner_request_id: input.requestId, updated_at: new Date().toISOString() };
+  const columns = table === 'roasters' ? ROASTER_COLUMNS : COFFEE_SHOP_COLUMNS;
+  const link = { partner_request_id: input.requestId, updated_at: new Date().toISOString() };
 
-  // A bound card can already exist as a thin anchor (0022 lot backfill,
-  // e.g. 'roaster-xo') — fill it instead of inserting a duplicate slug.
+  // A bound card can already exist — a thin anchor from the 0022 lot
+  // backfill ('roaster-xo') or a profile the cafe saved itself. Only the
+  // admin's fields change there; its saved address, contacts and photos stay.
   const write = bound
-    ? supabase.from(table).update(row).eq('slug', slug).select(table === 'roasters' ? ROASTER_COLUMNS : COFFEE_SHOP_COLUMNS).single()
-    : supabase.from(table).insert(row).select(table === 'roasters' ? ROASTER_COLUMNS : COFFEE_SHOP_COLUMNS).single();
+    ? supabase.from(table).update({ ...activationFields(input), ...link }).eq('slug', slug).select(columns).single()
+    : supabase.from(table).insert({ ...rowFor(input, slug), ...link }).select(columns).single();
   const { data, error } = await write;
   if (error || !data) {
     console.error('[admin/partners] activation failed', error);
@@ -143,19 +204,7 @@ export async function POST(request: Request) {
     );
   }
 
-  if (input.requestId) {
-    const { error: requestError } = await supabase
-      .from('partner_requests')
-      .update({ status: 'activated', updated_at: new Date().toISOString() })
-      .eq('id', input.requestId)
-      .select('id')
-      .single();
-    if (requestError) console.error('[admin/partners] request status not updated', requestError);
-  }
+  if (input.requestId && !(await markActivated(supabase, input.requestId))) return requestNotMarked();
 
-  const partner =
-    input.kind === 'roaster'
-      ? rowToRoaster(data as unknown as RoasterOrgRow, seedRoaster(slug))
-      : rowToCoffeeShop(data as unknown as CoffeeShopOrgRow, seedShop(slug));
-  return NextResponse.json({ kind: input.kind, partner }, { status: 201 });
+  return NextResponse.json({ kind: input.kind, partner: toCard(table, { ...(data as object), slug }) }, { status: 201 });
 }
