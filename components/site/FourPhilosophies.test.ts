@@ -54,6 +54,11 @@ describe('FourPhilosophies', () => {
     expect(sources.sort()).toEqual(
       ['barista', 'beans', 'cafe', 'enthusiast', 'lot-card', 'roaster'].map((n) => `/images/four-philosophies/${n}.png`),
     );
+    // На телефоне фото колонок — копии без золотой линии к карточке лота.
+    const mobile = [...markup.matchAll(/<source media="\(max-width: 1023.98px\)" srcSet="([^"]+)"/g)].map((m) => m[1]);
+    expect(mobile).toEqual(
+      ['barista', 'roaster', 'cafe', 'enthusiast'].map((n) => `/images/four-philosophies/${n}-m.png`),
+    );
     expect(markup).not.toMatch(/https?:\/\//);
     expect(markup.match(/<li><svg/g)).toHaveLength(20);
   });

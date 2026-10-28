@@ -489,8 +489,15 @@
     text-align: right;
   }
 
-  /* Лента карточек: листается вбок, карточка встаёт к краю */
+  /*
+   * Лента карточек: листается вбок, карточка встаёт к краю.
+   * Золотая линия к лоту — на высоте 414 из 755 (y 600 исходника) во всех карточках: в зазорах и по бокам
+   * карточки лота это фон ленты (local — прокручивается вместе с карточками), на фото — ::after колонки.
+   */
   .strip {
+    --line-y: calc(min(300px, 80cqw) * 414 / 353);
+    background: linear-gradient(var(--gold), var(--gold)) 16px calc(var(--line-y) - 1px) / calc(100% - 32px) 2px
+      no-repeat local;
     display: flex;
     align-items: flex-start;
     gap: 12px;
@@ -512,22 +519,87 @@
     scroll-snap-align: start;
   }
 
+  /*
+   * Все карточки одной высоты: общая пропорция 353×755 и общий --u. Видимая часть фото (--w) растягивается
+   * на ширину карточки с сохранением пропорций (как object-fit: cover, низ обрезается), а текст и пункты
+   * стоят на одних и тех же местах во всех карточках.
+   */
   .column {
+    --u: calc(100cqw / 353);
+    --k: calc(353 / var(--w));
     width: 100%;
-    aspect-ratio: var(--w) / 755;
+    aspect-ratio: 353 / 755;
     overflow: hidden;
     border-radius: 6px;
   }
 
+  .photo {
+    left: calc(-1 * var(--photo-shift) * var(--k) * var(--u));
+    width: calc(var(--photo-w) * var(--k) * var(--u));
+  }
+
+  .eyebrow,
+  .titleLine,
+  .lines {
+    left: calc(44 * var(--u));
+  }
+
+  .titleLine {
+    top: calc(69 * var(--u));
+  }
+
+  .titleLine:nth-child(3) {
+    top: calc((69 + 38) * var(--u));
+  }
+
+  .items {
+    top: calc((535 - 18.5) * var(--u));
+  }
+
+  .icon {
+    left: calc(50 * var(--u));
+  }
+
+  .items li span {
+    left: calc(109 * var(--u));
+  }
+
+  .column::before,
+  .column::after {
+    content: '';
+    position: absolute;
+    z-index: 1;
+    background: var(--gold);
+    box-shadow: 0 0 calc(3 * var(--u)) rgb(0 0 0 / 0.6);
+  }
+
+  /* Линия: от --line-from до --line-to (из 353), у крайних карточек — до точки */
+  .column::after {
+    left: calc(var(--line-from) * var(--u));
+    width: calc((var(--line-to) - var(--line-from)) * var(--u));
+    top: calc(414 * var(--u) - 1px);
+    height: 2px;
+  }
+
+  .column::before {
+    z-index: 2;
+    left: calc((var(--dot) - 7) * var(--u));
+    top: calc((414 - 7) * var(--u));
+    width: calc(14 * var(--u));
+    height: calc(14 * var(--u));
+    border-radius: 50%;
+  }
+
   .lotFrame {
     position: relative;
+    aspect-ratio: 353 / 755;
     overflow: hidden;
   }
 
-  /* Карточка во всю ширину: поля лота (зёрна за краями карточки) уходят за рамку */
+  /* Лот (410×730) ровно по высоте рамки 353×755, по центру; края зёрен уходят за рамку */
   .lot {
-    width: calc(100% * 410 / 310);
-    margin-left: calc(-100% * 50 / 310);
+    width: calc(100% * 410 * 755 / (730 * 353));
+    margin-left: calc(50% - 100% * 410 * 755 / (730 * 353) / 2);
   }
 
   .cardImage {

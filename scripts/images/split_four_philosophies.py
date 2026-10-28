@@ -8,6 +8,9 @@
 # порога, плюс 2 px вокруг; заливка — cv2.inpaint (Telea) по соседям. Вне маски разница с исходником 0 —
 # скрипт это проверяет и печатает отчёт (код выхода 1, если вне маски есть хоть один изменённый пиксель).
 # Шапка и нижняя подпись лежат на фоне — их не режем, там только HTML.
+# Для телефона фото колонок пишутся ещё раз как <имя>-m.png без вшитой золотой линии с точкой (на компьютере
+# она ведёт от колонок к карточке лота): в ленте фото растянуты по-разному и линия сползла бы, поэтому там её
+# рисует CSS сплошной через всю ленту. Маска = буквы + рамки линии.
 import json
 import sys
 from pathlib import Path
@@ -62,6 +65,17 @@ BOXES = (
         (720, 621, 952, 642, DARK),   # дескрипторы
     ]
 )
+# Золотая линия с точкой (y 600 исходника) и её тень: рамки закрашиваются целиком.
+CONNECTORS = [
+    (226, 590, 247, 611),    # точка у бариста
+    (240, 596, 560, 606),    # линия бариста → обжарщик → карточка
+    (1106, 596, 1426, 606),  # линия карточка → кофейня → энтузиаст
+    (1419, 590, 1441, 611),  # точка у энтузиаста
+]
+# Изгибы линии от прямой к краям карточки лота: (x начала, x конца, шаг) — ведутся по цвету столбец за столбцом.
+CURVES = [(548, 679, 1), (1121, 990, -1)]
+LINE_GOLD = np.array([120, 182, 216])  # BGR
+MOBILE = ('barista', 'roaster', 'cafe', 'enthusiast')
 THRESHOLD = 18
 GROW = 2
 
@@ -82,30 +96,63 @@ def text_mask(gray):
     return cv2.dilate(mask, np.ones((2 * GROW + 1, 2 * GROW + 1), np.uint8))
 
 
-def main(src, out_dir):
-    source = cv2.imread(src, cv2.IMREAD_COLOR)
-    if source is None or source.shape[:2] != (941, 1672):
-        sys.exit(f'{src}: ожидается картинка 1672×941')
-    mask = text_mask(cv2.cvtColor(source, cv2.COLOR_BGR2GRAY))
+def curve_mask(source):
+    # Ищем самый золотой пиксель рядом с прошлым (с учётом наклона); на бликах, где цвета нет, идём по наклону.
+    dist = np.sqrt(((source.astype(int) - LINE_GOLD) ** 2).sum(axis=2))
+    mask = np.zeros(source.shape[:2], np.uint8)
+    for x_start, x_end, step in CURVES:
+        y, dy, misses = 600, 0, 0
+        for x in range(x_start, x_end, step):
+            lo = y + dy - 4
+            col = dist[lo:lo + 9, x]
+            if col.min() > 110:
+                ny, misses = y + dy, misses + 1
+                if misses > 12:
+                    break
+            else:
+                ny, misses = lo + int(col.argmin()), 0
+                dy = ny - y if abs(ny - y) <= 3 else dy
+            mask[min(y, ny) - 3:max(y, ny) + 4, x] = 1
+            y = ny
+    return cv2.dilate(mask, np.ones((3, 3), np.uint8))
+
+
+def write_slices(source, mask, out, names, suffix, report):
     cleaned = cv2.inpaint(source, mask * 255, 5, cv2.INPAINT_TELEA)
-    out = Path(out_dir)
-    out.mkdir(parents=True, exist_ok=True)
-    report, bad = {}, 0
-    for name, (x0, y0, x1, y1) in SLICES.items():
+    bad = 0
+    for name in names:
+        x0, y0, x1, y1 = SLICES[name]
         piece = cleaned[y0:y1, x0:x1]
-        cv2.imwrite(str(out / f'{name}.png'), piece, [cv2.IMWRITE_PNG_COMPRESSION, 9])
-        written = cv2.imread(str(out / f'{name}.png'), cv2.IMREAD_COLOR)
+        path = out / f'{name}{suffix}.png'
+        cv2.imwrite(str(path), piece, [cv2.IMWRITE_PNG_COMPRESSION, 9])
+        written = cv2.imread(str(path), cv2.IMREAD_COLOR)
         changed = (written != source[y0:y1, x0:x1]).any(axis=2)
         inside = mask[y0:y1, x0:x1].astype(bool)
         outside_changed = int((changed & ~inside).sum())
         bad += outside_changed
-        report[name] = {
+        report[f'{name}{suffix}'] = {
             'box': [x0, y0, x1, y1],
             'pixels': int(changed.size),
             'text_mask': int(inside.sum()),
             'changed_under_text': int((changed & inside).sum()),
             'changed_outside_text': outside_changed,
         }
+    return bad
+
+
+def main(src, out_dir):
+    source = cv2.imread(src, cv2.IMREAD_COLOR)
+    if source is None or source.shape[:2] != (941, 1672):
+        sys.exit(f'{src}: ожидается картинка 1672×941')
+    mask = text_mask(cv2.cvtColor(source, cv2.COLOR_BGR2GRAY))
+    mobile_mask = mask | curve_mask(source)
+    for x0, y0, x1, y1 in CONNECTORS:
+        mobile_mask[y0:y1, x0:x1] = 1
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    report = {}
+    bad = write_slices(source, mask, out, SLICES, '', report)
+    bad += write_slices(source, mobile_mask, out, MOBILE, '-m', report)
     print(json.dumps(report, ensure_ascii=False, indent=1))
     print(f'Вне маски букв изменено пикселей: {bad}')
     return 1 if bad else 0

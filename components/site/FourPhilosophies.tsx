@@ -19,6 +19,8 @@ const caps = Manrope({
 });
 
 const IMAGES = '/images/four-philosophies';
+// Та же граница, что у ленты карточек в FourPhilosophies.module.css.
+const MOBILE = '(max-width: 1023.98px)';
 
 type Icon = (props: { className?: string }) => ReactNode;
 
@@ -166,6 +168,9 @@ type Column = {
   linesY: number;
   items: [Icon, string][];
   itemsY: number;
+  // Телефон: золотая линия к лоту — точка и отрезок линии внутри карточки 353 px шириной.
+  dot: number;
+  line: [number, number];
 };
 
 const PHOTO_TOP = 186;
@@ -193,6 +198,8 @@ const COLUMNS: Column[] = [
       [icons.sliders, 'ДИСЦИПЛИНА'],
     ],
     itemsY: 535,
+    dot: 236,
+    line: [236, 353],
   },
   {
     id: 'roaster',
@@ -216,6 +223,8 @@ const COLUMNS: Column[] = [
       [icons.globe, 'УНИКАЛЬНЫЙ ХАРАКТЕР'],
     ],
     itemsY: 535,
+    dot: 236,
+    line: [0, 353],
   },
   {
     id: 'cafe',
@@ -239,6 +248,8 @@ const COLUMNS: Column[] = [
       [icons.compass, 'КОМАНДА'],
     ],
     itemsY: 535,
+    dot: 111,
+    line: [0, 353],
   },
   {
     id: 'enthusiast',
@@ -262,6 +273,8 @@ const COLUMNS: Column[] = [
       [icons.star, 'СВОЯ ИСТОРИЯ'],
     ],
     itemsY: 537,
+    dot: 111,
+    line: [0, 111],
   },
 ];
 
@@ -293,12 +306,19 @@ function PhilosophyColumn({ column }: { column: Column }) {
     '--title-y': column.titleY,
     '--lines-y': column.linesY,
     '--items-y': column.itemsY,
+    '--dot': column.dot,
+    '--line-from': column.line[0],
+    '--line-to': column.line[1],
   };
   return (
     <article className={styles.column} style={style} aria-labelledby={`fp-${column.id}`}>
-      {/* Фото — фон под текстом, смысловой подписи у него нет. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img className={styles.photo} src={`${IMAGES}/${column.image}`} alt="" width={column.photoWidth} height={755} />
+      {/* Фото — фон под текстом, смысловой подписи у него нет. На телефоне — копия без вшитой золотой линии:
+          у растянутых фото она сползла бы, линию рисует CSS на одной высоте через всю ленту. */}
+      <picture>
+        <source media={MOBILE} srcSet={`${IMAGES}/${column.image.replace('.png', '-m.png')}`} />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img className={styles.photo} src={`${IMAGES}/${column.image}`} alt="" width={column.photoWidth} height={755} />
+      </picture>
       <h3 className={styles.columnTitle} id={`fp-${column.id}`}>
         <span className={styles.eyebrow}>ФИЛОСОФИЯ</span>
         {column.title.map((line) => (
