@@ -1,0 +1,86 @@
+name: postbox
+# Почта сайта через Yandex Cloud Postbox (отправитель noreply@coffeepassport.ru).
+# Запуск: gh workflow run postbox -f mode=<режим> --ref fix/pre-pilot-shortlist
+#   identity     — создать адрес-домен в Postbox (Easy DKIM), если его нет; ответ Postbox дословно + DNS-записи
+#   roles        — роли сервисного аккаунта на его каталоге (диагностика 403)
+#   status       — статус адреса в Postbox дословно (VerifiedForSendingStatus, DkimAttributes.Status)
+#   install      — статический ключ на сервер: .env.local приложения (уведомления о заявках) и SMTP Supabase
+#                  Auth (пароль SMTP выводится из секрета на сервере); бэкапы в /opt/coffee-passport/backups/
+#   test-partner — тестовая заявка на проде → id письма в Postbox из журнала приложения → заявка удалена
+#   test-auth    — временная учётка → письмо восстановления через Supabase Auth (SMTP Postbox) → учётка удалена
+# Секреты: YC_SA_KEY (ключ сервисного аккаунта), POSTBOX_ACCESS_KEY_ID, POSTBOX_SECRET_ACCESS_KEY,
+# DEPLOY_SSH_KEY, DEPLOY_KNOWN_HOSTS. Вывод с сервера — через scripts/ops/redact.mjs.
+# PR — только синтаксис скриптов (так workflow регистрируется для запуска с ветки).
+on:
+  pull_request:
+    paths:
+      - .github/workflows/postbox.yml
+      - scripts/ops/postbox-identity.mjs
+      - deploy/timeweb/postbox-mail.py
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "identity | status | roles | install | test-partner | test-auth"
+        required: true
+        default: status
+permissions:
+  contents: read
+concurrency:
+  group: postbox
+  cancel-in-progress: false
+env:
+  DOMAIN: coffeepassport.ru
+  PARTNER_NOTIFY_EMAIL: ageev@list.ru
+jobs:
+  postbox:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: validate
+        run: |
+          node --check scripts/ops/postbox-identity.mjs
+          python3 -m py_compile deploy/timeweb/postbox-mail.py
+          case "${{ inputs.mode }}" in ""|identity|status|roles|install|test-partner|test-auth) ;; *) echo "::error::неизвестный mode"; exit 1;; esac
+      - name: identity / status
+        if: inputs.mode == 'identity' || inputs.mode == 'status' || inputs.mode == 'roles'
+        env:
+          YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
+          FOLDER_ID: b1gqj0apun7iprjohdj7
+        run: node scripts/ops/postbox-identity.mjs "${{ inputs.mode == 'identity' && 'create' || inputs.mode }}" "$DOMAIN"
+      - name: roles — статический ключ (SigV4)
+        if: inputs.mode == 'roles'
+        env:
+          KEY_ID: ${{ secrets.POSTBOX_ACCESS_KEY_ID }}
+          KEY_SECRET: ${{ secrets.POSTBOX_SECRET_ACCESS_KEY }}
+        run: |
+          code=$(curl -sS -o "$RUNNER_TEMP/list.txt" -w '%{http_code}' --max-time 30 --user "$KEY_ID:$KEY_SECRET" \
+            --aws-sigv4 "aws:amz:ru-central1:ses" https://postbox.cloud.yandex.net/v2/email/identities)
+          echo "ListEmailIdentities (статический ключ) HTTP $code $(head -c 300 "$RUNNER_TEMP/list.txt")"
+      - uses: ./.github/actions/ssh-setup
+        if: inputs.mode == 'install' || inputs.mode == 'test-partner' || inputs.mode == 'test-auth'
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      - name: server
+        if: inputs.mode == 'install' || inputs.mode == 'test-partner' || inputs.mode == 'test-auth'
+        env:
+          KEY_ID: ${{ secrets.POSTBOX_ACCESS_KEY_ID }}
+          KEY_SECRET: ${{ secrets.POSTBOX_SECRET_ACCESS_KEY }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          set -o pipefail
+          remote=$(ssh prod 'mktemp /tmp/postbox-mail.XXXXXX')
+          ssh prod "cat > $remote" < deploy/timeweb/postbox-mail.py
+          # Ключ — только через stdin (не в командной строке и не в выводе).
+          umask 077
+          node -e 'process.stdout.write(JSON.stringify({key_id: process.env.KEY_ID, secret: process.env.KEY_SECRET,
+            notify_email: process.env.PARTNER_NOTIFY_EMAIL, domain: process.env.DOMAIN, run: process.env.GITHUB_RUN_ID}))' \
+            > "$RUNNER_TEMP/in.json"
+          rc=0
+          ssh prod "python3 $remote $MODE" < "$RUNNER_TEMP/in.json" 2>&1 | node scripts/ops/redact.mjs || rc=$?
+          ssh prod "rm -f $remote"
+          rm -f "$RUNNER_TEMP/in.json"
+          exit $rc
