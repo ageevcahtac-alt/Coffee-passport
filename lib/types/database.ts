@@ -482,21 +482,50 @@ export type LotNotificationReadInsert = LotNotificationReadRow;
 // and untouched by this migration.
 // =========================================================
 
+// Profile columns from 0036_partner_directory.sql: null = not set in the
+// database, fall back to the built-in card (lib/data/partnerRows.ts).
+export type PartnerStatus = 'active' | 'paused';
+
 export type RoasterOrgRow = {
   id: string;
   slug: string;
   name: string;
+  status: PartnerStatus;
+  color: string | null;
+  city: string | null;
+  country: string | null;
+  philosophy: string | null;
+  partner_request_id: string | null;
   created_at: string;
+  updated_at: string;
 };
-export type RoasterOrgInsert = Omit<RoasterOrgRow, 'id' | 'created_at'>;
+export type RoasterOrgInsert = Pick<RoasterOrgRow, 'slug' | 'name'> &
+  Partial<Omit<RoasterOrgRow, 'id' | 'created_at' | 'slug' | 'name'>>;
 
 export type CoffeeShopOrgRow = {
   id: string;
   slug: string;
   name: string;
+  status: PartnerStatus;
+  brand_color: string | null;
+  city: string | null;
+  lat: number | null;
+  lng: number | null;
+  address: string | null;
+  phone: string | null;
+  website: string | null;
+  instagram_url: string | null;
+  telegram_url: string | null;
+  vk_url: string | null;
+  description: string | null;
+  working_hours: string | null;
+  photos: string[] | null;
+  partner_request_id: string | null;
   created_at: string;
+  updated_at: string;
 };
-export type CoffeeShopOrgInsert = Omit<CoffeeShopOrgRow, 'id' | 'created_at'>;
+export type CoffeeShopOrgInsert = Pick<CoffeeShopOrgRow, 'slug' | 'name'> &
+  Partial<Omit<CoffeeShopOrgRow, 'id' | 'created_at' | 'slug' | 'name'>>;
 
 export type CoffeeRow = {
   id: string;

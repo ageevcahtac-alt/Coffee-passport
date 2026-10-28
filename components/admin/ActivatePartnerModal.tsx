@@ -1,24 +1,56 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useState } from 'react';
 import type { PartnerRoleRequested } from '@/lib/types/partnerRequest';
-import { saveRoaster, generateRoasterId } from '@/lib/data/roasters';
-import { saveCoffeeShop, generateCoffeeShopId } from '@/lib/data/coffeeShops';
+import { SEED_ROASTERS, refreshRoasters } from '@/lib/data/roasters';
+import { SEED_COFFEE_SHOPS, refreshCoffeeShops } from '@/lib/data/coffeeShops';
+import { sameCompanyName } from '@/lib/data/partnerRows';
 import { generateInvitePassword } from '@/lib/utils/generateInvitePassword';
 
+// Leaflet needs `window` at import time — same as the cafe's map profile.
+const CoordinatePicker = dynamic(
+  () => import('@/components/map/CoordinatePicker').then((mod) => mod.CoordinatePicker),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-full flex items-center justify-center text-ink-400 text-sm">
+        Загрузка карты…
+      </div>
+    ),
+  }
+);
+
 const SWATCHES = ['#D4AF37', '#00A896', '#E63946', '#5C6B4F', '#4A6FA5', '#B5657A'];
+const NEW_CARD = '';
 
 const fieldClasses =
   'w-full rounded-md border border-ink-200 bg-parchment-100 px-4 py-3 text-sm ' +
   'text-ink-900 placeholder:text-ink-300 focus:border-gold-400';
 
+function builtInCards(kind: PartnerRoleRequested) {
+  return kind === 'roaster' ? SEED_ROASTERS : SEED_COFFEE_SHOPS;
+}
+
+// A lead whose name matches a built-in card (e.g. "Xocoffee" → XO Coffee,
+// shop-xo-vsevolozhsk) is bound to it by default, so the cafe cabinet that
+// already runs on profiles.cafe_id keeps working after activation.
+function matchingCard(kind: PartnerRoleRequested, name: string): string {
+  return builtInCards(kind).find((card) => sameCompanyName(name, card.name))?.id ?? NEW_CARD;
+}
+
+// Writes the partner into coffee_shops / roasters via /api/admin/partners
+// (0036_partner_directory.sql) — visible on /map and in the product for
+// every visitor, not just this browser.
 export function ActivatePartnerModal({
+  requestId,
   initialCompanyName = '',
   initialCity = '',
   initialRole = 'coffee_shop',
   onClose,
   onActivated,
 }: {
+  requestId?: string;
   initialCompanyName?: string;
   initialCity?: string;
   initialRole?: PartnerRoleRequested;
@@ -26,54 +58,63 @@ export function ActivatePartnerModal({
   onActivated?: (result: { kind: PartnerRoleRequested; id: string; invitePassword: string }) => void;
 }) {
   const [kind, setKind] = useState<PartnerRoleRequested>(initialRole);
+  const [bindId, setBindId] = useState(() => matchingCard(initialRole, initialCompanyName));
   const [name, setName] = useState(initialCompanyName);
   const [city, setCity] = useState(initialCity);
   const [country, setCountry] = useState('Россия');
   const [brandColor, setBrandColor] = useState(SWATCHES[0]);
   const [philosophy, setPhilosophy] = useState('');
+  const [point, setPoint] = useState<{ lat: number; lng: number } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [activatedId, setActivatedId] = useState('');
   const [invitePassword, setInvitePassword] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const canSubmit = name.trim().length > 0 && city.trim().length > 0;
+  const canSubmit = name.trim().length > 0 && city.trim().length > 0 && !submitting;
+  const boundShop = kind === 'coffee_shop' ? SEED_COFFEE_SHOPS.find((shop) => shop.id === bindId) : undefined;
+  const builtInPoint = Boolean(boundShop && boundShop.lat !== null && boundShop.lng !== null);
 
-  function handleActivate() {
+  function changeKind(next: PartnerRoleRequested) {
+    setKind(next);
+    setBindId(matchingCard(next, name));
+  }
+
+  async function handleActivate() {
     if (!canSubmit) return;
-    const password = generateInvitePassword();
-
-    if (kind === 'roaster') {
-      const id = generateRoasterId(name);
-      saveRoaster({
-        id,
-        name: name.trim(),
-        slug: id.replace(/^roaster-/, ''),
-        color: brandColor,
-        philosophy: philosophy.trim() || 'Партнёр платформы Coffee Passport.',
-        city: city.trim(),
-        country: country.trim() || 'Россия',
+    setSubmitting(true);
+    setError('');
+    try {
+      const response = await fetch('/api/admin/partners', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind,
+          requestId: requestId ?? null,
+          bindId: bindId || null,
+          name,
+          city,
+          country,
+          philosophy,
+          color: brandColor,
+          lat: kind === 'coffee_shop' ? point?.lat ?? null : null,
+          lng: kind === 'coffee_shop' ? point?.lng ?? null : null,
+        }),
       });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(body.error ?? 'Не удалось активировать партнёра.');
+        return;
+      }
+      await (kind === 'roaster' ? refreshRoasters() : refreshCoffeeShops());
+      const password = generateInvitePassword();
+      setActivatedId(body.partner.id);
       setInvitePassword(password);
-      onActivated?.({ kind, id, invitePassword: password });
-    } else {
-      const id = generateCoffeeShopId(name);
-      saveCoffeeShop({
-        id,
-        name: name.trim(),
-        city: city.trim(),
-        brandColor,
-        lat: null,
-        lng: null,
-        address: '',
-        phone: '',
-        website: '',
-        instagramUrl: '',
-        telegramUrl: '',
-        vkUrl: '',
-        description: '',
-        workingHours: '',
-        photos: [],
-      });
-      setInvitePassword(password);
-      onActivated?.({ kind, id, invitePassword: password });
+      onActivated?.({ kind, id: body.partner.id, invitePassword: password });
+    } catch {
+      setError('Нет связи с сервером — попробуйте ещё раз.');
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -120,9 +161,13 @@ export function ActivatePartnerModal({
             </p>
             <p className="font-display text-lg text-ink-900 mb-2">Партнёр активирован</p>
             <p className="text-sm text-ink-500 mb-5">
-              {name} уже виден(-а) в продукте. Отправьте этот инвайт-код клиенту после подписания
-              договора.
+              {name} сохранён(-а) в базе и виден(-а) всем посетителям
+              {kind === 'coffee_shop' && !point && !builtInPoint
+                ? ' (на карте — после того как кофейня поставит точку)'
+                : ''}
+              . Отправьте этот инвайт-код клиенту после подписания договора.
             </p>
+            <p className="data-value text-xs text-ink-400 mb-5">{activatedId}</p>
             <div className="rounded-md border border-ink-200 bg-parchment-200 px-4 py-3 mb-3">
               <p className="data-value text-lg text-ink-900 tracking-wide">{invitePassword}</p>
             </div>
@@ -165,7 +210,7 @@ export function ActivatePartnerModal({
                         type="radio"
                         name="partner_kind"
                         checked={checked}
-                        onChange={() => setKind(option.id)}
+                        onChange={() => changeKind(option.id)}
                         className="sr-only"
                       />
                       {option.label}
@@ -173,6 +218,30 @@ export function ActivatePartnerModal({
                   );
                 })}
               </div>
+            </div>
+
+            <div>
+              <label htmlFor="partner-card" className="block text-xs text-ink-400 mb-1.5">
+                Карточка в базе
+              </label>
+              <select
+                id="partner-card"
+                value={bindId}
+                onChange={(e) => setBindId(e.target.value)}
+                className={fieldClasses}
+              >
+                <option value={NEW_CARD}>Новая карточка</option>
+                {builtInCards(kind).map((card) => (
+                  <option key={card.id} value={card.id}>
+                    {card.name} — {card.id}
+                  </option>
+                ))}
+              </select>
+              {bindId && (
+                <p className="text-[11px] text-ink-400 mt-1">
+                  Привязка к существующей карточке: кабинет с этим id продолжит работать.
+                </p>
+              )}
             </div>
 
             <div>
@@ -232,6 +301,27 @@ export function ActivatePartnerModal({
               </div>
             )}
 
+            {kind === 'coffee_shop' && (
+              <div>
+                <span className="block text-xs text-ink-400 mb-2">Точка на карте</span>
+                <div className="h-48 rounded-md border border-ink-200 overflow-hidden">
+                  <CoordinatePicker
+                    lat={point?.lat ?? boundShop?.lat ?? null}
+                    lng={point?.lng ?? boundShop?.lng ?? null}
+                    recenterSignal={0}
+                    onChange={(lat, lng) => setPoint({ lat, lng })}
+                  />
+                </div>
+                <p className="text-[11px] text-ink-400 mt-1">
+                  {point
+                    ? `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`
+                    : builtInPoint
+                      ? 'Точка из карточки — кликните по карте, чтобы изменить.'
+                      : 'Кликните по карте. Без точки кофейня не появится на карте, пока не поставит её сама.'}
+                </p>
+              </div>
+            )}
+
             <div>
               <span className="block text-xs text-ink-400 mb-2">Брендовый цвет 🎨</span>
               <div className="flex items-center gap-2 flex-wrap">
@@ -269,8 +359,13 @@ export function ActivatePartnerModal({
                          hover:bg-gold-400 transition-colors
                          disabled:opacity-40 disabled:pointer-events-none"
             >
-              Активировать и создать инвайт-код
+              {submitting ? 'Сохраняем…' : 'Активировать и создать инвайт-код'}
             </button>
+            {error && (
+              <p role="alert" className="text-sm text-ink-700">
+                ⚠ {error}
+              </p>
+            )}
           </div>
         )}
       </div>
