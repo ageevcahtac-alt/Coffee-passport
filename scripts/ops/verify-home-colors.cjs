@@ -1,8 +1,8 @@
 // Цвета главной на проде — по пикселям скриншота, как видит человек.
-// 1) Картинка «Один лот. Четыре философии» на 390 и 1280 px: RGB фона страницы рядом с картинкой
-//    и RGB фона внутри картинки (верхняя полоса, полоса над карточкой между колонками, нижняя панель).
-//    Точки — в координатах файла 1672×941, взяты в глубине маски фона (≥12 px до текста и фото).
-//    Плюс как отдаётся файл: content-type, размер, цветовые блоки PNG (iCCP / sRGB / gAMA / cHRM).
+// 1) Блок «Один лот. Четыре философии» (components/site/FourPhilosophies.tsx) на 390 и 1280 px: RGB фона
+//    страницы рядом с блоком и RGB фона внутри блока. На 1280 — точки в координатах исходной картинки
+//    1672×941 (верхняя полоса, полоса над карточкой между колонками, нижняя панель), на 390 — поля шапки.
+//    Плюс как отдаётся кусок картинки (карточка лота): content-type, размер, цветовые блоки PNG.
 // 2) Форма входа на 390 px: email заполняется настоящим автозаполнением Chrome (CDP Autofill.trigger),
 //    поле в состоянии :autofill; RGB фона заполненного поля сравнивается с пустым полем пароля
 //    и с этим же полем до заполнения. Скриншоты до/после заполнения.
@@ -16,8 +16,14 @@ const { PNG } = require(process.argv[3]);
 const base = process.env.PROD_URL.replace(/\/$/, '');
 const out = process.env.OUT_DIR;
 const strict = process.env.EXPECT === 'match';
-const IMAGE = '/images/coffee-passport-four-philosophies.png';
+const IMAGE = '/images/four-philosophies/lot-card.png';
+const BLOCK = '[data-four-philosophies]';
 const NATURAL = { w: 1672, h: 941 };
+// На телефоне блок перестроен — берём поля шапки в CSS px от левого верхнего угла блока.
+const MOBILE_POINTS = [
+  ['шапка, слева', 6, 12],
+  ['шапка, справа', -6, 12],
+];
 const POINTS = [
   ['верхняя полоса, слева', 120, 36],
   ['верхняя полоса, справа', 1550, 36],
@@ -68,24 +74,34 @@ async function imageSection(browser, width) {
   const page = await browser.newPage({ viewport: { width, height: 900 }, deviceScaleFactor: 1 });
   try {
     await page.goto(base + '/', { waitUntil: 'networkidle' });
-    const img = page.locator(`img[src="${IMAGE}"]`);
-    await img.evaluate((el) => (el.complete ? null : new Promise((r) => el.addEventListener('load', r))));
-    const box = await img.evaluate((el) => {
+    const block = page.locator(BLOCK);
+    // Замер «до» на PR снимает прод, где блока может ещё не быть; с порогом (после deploy) это красный.
+    if ((await block.count()) === 0) {
+      log(`### ${width} px — блока ${BLOCK} на странице нет`);
+      log('');
+      if (strict) failed += 1;
+      return;
+    }
+    const box = await block.evaluate((el) => {
       const r = el.getBoundingClientRect();
-      return { x: r.left + scrollX, y: r.top + scrollY, w: r.width, h: r.height, src: el.currentSrc };
+      return { x: r.left + scrollX, y: r.top + scrollY, w: r.width, h: r.height, bg: getComputedStyle(el).backgroundColor };
     });
     const png = await shot(page, `home-${width}.png`);
-    const page1 = pixel(png, box.x / 2, box.y + box.h / 2);
-    const page2 = pixel(png, box.x + box.w + (width - box.x - box.w) / 2, box.y + box.h / 2);
-    log(`### ${width} px — картинка ${Math.round(box.w)}×${Math.round(box.h)} CSS px, src ${box.src.replace(base, '')}`);
+    // Слева и справа от блока страница есть только на широком экране; иначе — фон под блоком.
+    const page1 = box.x >= 4 ? pixel(png, box.x / 2, box.y + box.h / 2) : pixel(png, width / 2, box.y + box.h + 6);
+    const page2 = box.x >= 4
+      ? pixel(png, box.x + box.w + (width - box.x - box.w) / 2, box.y + box.h / 2)
+      : pixel(png, width - 6, box.y + box.h + 6);
+    log(`### ${width} px — блок ${Math.round(box.w)}×${Math.round(box.h)} CSS px, background-color ${box.bg}`);
     log('');
-    log(`Фон страницы слева от картинки ${fmt(page1)}, справа ${fmt(page2)}`);
+    log(`Фон страницы ${fmt(page1)} и ${fmt(page2)}`);
     log('');
-    log('| Точка | Фон страницы | Фон картинки | Макс. разница |');
+    log('| Точка | Фон страницы | Фон блока | Макс. разница |');
     log('|---|---|---|---|');
-    for (const [label, ix, iy] of POINTS) {
-      const sx = box.x + ((ix + 0.5) * box.w) / NATURAL.w - 0.5;
-      const sy = box.y + ((iy + 0.5) * box.h) / NATURAL.h - 0.5;
+    const mobile = width < 1024;
+    for (const [label, ix, iy] of mobile ? MOBILE_POINTS : POINTS) {
+      const sx = mobile ? box.x + (ix < 0 ? box.w + ix : ix) : box.x + ((ix + 0.5) * box.w) / NATURAL.w - 0.5;
+      const sy = mobile ? box.y + iy : box.y + ((iy + 0.5) * box.h) / NATURAL.h - 0.5;
       const rgb = pixel(png, sx, sy);
       const diff = maxDiff(rgb, page1);
       if (strict && diff > TOLERANCE) failed += 1;

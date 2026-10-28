@@ -1,6 +1,6 @@
 name: verify-home-colors
 # Цвета главной на проде по пикселям скриншота (scripts/ops/verify-home-colors.cjs):
-# фон картинки «Один лот. Четыре философии» против фона страницы на 390 и 1280 px,
+# фон блока «Один лот. Четыре философии» против фона страницы на 390 и 1280 px,
 # поля входа при настоящем автозаполнении Chrome против пустого поля на 390 px.
 # PR — замер прода как есть («до», без порога). Push в ветку прода — ждёт успешный deploy
 # этого коммита и проверяет с порогом («после»). Вручную — expect=match|none.
@@ -10,14 +10,16 @@ on:
     paths:
       - .github/workflows/verify-home-colors.yml
       - scripts/ops/verify-home-colors.cjs
-      - public/images/coffee-passport-four-philosophies.png
+      - public/images/four-philosophies/**
+      - components/site/FourPhilosophies.*
       - app/globals.css
   push:
     branches: [fix/pre-pilot-shortlist]
     paths:
       - .github/workflows/verify-home-colors.yml
       - scripts/ops/verify-home-colors.cjs
-      - public/images/coffee-passport-four-philosophies.png
+      - public/images/four-philosophies/**
+      - components/site/FourPhilosophies.*
       - app/globals.css
   workflow_dispatch:
     inputs:

@@ -10,26 +10,25 @@ const fs = require('node:fs');
       const errors = [];
       page.on('pageerror', e => errors.push(e.message));
       const response = await page.goto(process.argv[3], { waitUntil: 'networkidle' });
-      const img = page.locator('img[src="/images/coffee-passport-four-philosophies.png"]');
-      await img.waitFor();
-      const info = await img.evaluate(i => {
-        const r = i.getBoundingClientRect();
-        return { width: r.width, height: r.height, naturalWidth: i.naturalWidth, naturalHeight: i.naturalHeight,
-          background: getComputedStyle(document.querySelector('main')).backgroundColor,
-          left: r.left, right: r.right, overflow: document.documentElement.scrollWidth > innerWidth,
-          link: i.parentElement.getAttribute('href') };
+      // Блок «Один лот. Четыре философии»: текст — HTML, фото загружены, без горизонтальной прокрутки страницы.
+      const block = page.locator('[data-four-philosophies]');
+      await block.waitFor();
+      const info = await block.evaluate(s => {
+        const r = s.getBoundingClientRect();
+        const imgs = [...s.querySelectorAll('img')];
+        return { width: r.width, height: r.height, left: r.left, right: r.right,
+          title: s.querySelector('h2')?.textContent, columns: s.querySelectorAll('article').length,
+          imagesLoaded: imgs.filter(i => i.complete && i.naturalWidth > 0).length, images: imgs.length,
+          background: getComputedStyle(s).backgroundColor,
+          pageBackground: getComputedStyle(document.querySelector('main')).backgroundColor,
+          overflow: document.documentElement.scrollWidth > innerWidth };
       });
-      if (response.status() !== 200 || info.background !== 'rgb(245, 242, 235)' || info.overflow ||
-          info.left < 0 || info.right > width || info.naturalWidth !== 1672 || info.naturalHeight !== 941 ||
-          Math.abs(info.height / info.width - 941 / 1672) > .002 || errors.length) throw Error(JSON.stringify({width,info,errors}));
-      const popupPromise = page.waitForEvent('popup');
-      await img.click();
-      const popup = await popupPromise;
-      await popup.waitForLoadState();
-      if (!popup.url().endsWith(info.link)) throw Error('Original link failed');
-      await popup.close();
+      if (response.status() !== 200 || info.background !== 'rgb(245, 242, 235)' ||
+          info.pageBackground !== 'rgb(245, 242, 235)' || info.overflow || info.left < 0 || info.right > width ||
+          info.title !== 'ОДИН LOT. ЧЕТЫРЕ ФИЛОСОФИИ.' || info.columns !== 4 || info.imagesLoaded !== info.images ||
+          errors.length) throw Error(JSON.stringify({width,info,errors}));
       await page.screenshot({ path: `${process.argv[4]}/${width}.png`, fullPage: true });
-      results.push({width, ...info, originalOpens: true, errors});
+      results.push({width, ...info, errors});
       await page.close();
     }
     console.log(JSON.stringify(results));
