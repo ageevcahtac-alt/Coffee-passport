@@ -33,7 +33,9 @@ async function step(line, fn) {
     const detail = await fn();
     verdict(true, typeof detail === 'string' ? `${line}: ${detail}` : line);
   } catch (error) {
-    verdict(false, `${line}: ${error.message.split('\n')[0]}`);
+    // Playwright пишет локатор во второй строке («waiting for …») — без него таймаут клика не найти.
+    const where = (error.message.match(/waiting for (.+)/) || [])[1];
+    verdict(false, `${line}: ${error.message.split('\n')[0]}${where ? ` [${where.slice(0, 120)}]` : ''}`);
   }
 }
 
@@ -148,29 +150,35 @@ async function role(browser, label, account) {
 
     await step(`${label}: «Перейти в кабинет» → ${account.cabinet}`, async () => {
       await page.goto(base + '/', { waitUntil: 'networkidle' });
-      const [response] = await Promise.all([
-        page.waitForResponse((res) => new URL(res.url()).pathname === account.cabinet && res.request().isNavigationRequest(), { timeout: 30000 }).catch(() => null),
-        page.getByRole('link', { name: 'Перейти в кабинет' }).click(),
-      ]);
+      await page.getByRole('link', { name: 'Перейти в кабинет' }).click();
       await page.waitForURL((url) => url.pathname === account.cabinet, { timeout: 30000 });
       await page.waitForLoadState('networkidle');
+      // Next Link идёт через RSC — статус кабинета берём прямым заходом, и он не должен быть экраном ошибки.
+      const direct = await page.goto(base + account.cabinet, { waitUntil: 'networkidle' });
       const landed = new URL(page.url()).pathname;
-      if (landed !== account.cabinet || (response && response.status() >= 400)) {
-        throw new Error(`открылось ${landed} (HTTP ${response ? response.status() : '—'})`);
+      const broken = await page.getByText(/Application error|Something went wrong|Что-то пошло не так/).count();
+      if (landed !== account.cabinet || !direct || direct.status() >= 400 || broken) {
+        throw new Error(`открылось ${landed} (HTTP ${direct ? direct.status() : '—'}, экран ошибки=${broken})`);
       }
-      return `${landed} (HTTP ${response ? response.status() : 'переход в браузере'})`;
+      return `${landed} (HTTP ${direct.status()})`;
     });
 
     await step(`${label}: истёкший access-токен обновлён middleware, вход на месте`, async () => {
+      // Без JS: страница браузера уходит на about:blank (её Supabase-клиент не обновит токен сам),
+      // запросы — через context.request (общие cookie с браузером). Новый токен обязан прийти Set-Cookie
+      // в ответе сервера — это и есть middleware.
+      await page.goto('about:blank');
       const before = await expireAccessToken(context);
-      const state = await homeState(page);
+      const first = await context.request.get(base + '/');
+      const setCookie = first.headersArray().filter((h) => h.name.toLowerCase() === 'set-cookie' && /^sb-.+-auth-token/.test(h.value)).length;
+      const signedIn = (await first.text()).includes('Вы вошли как');
       const after = await readAuthCookie(context);
       const rotated = after && after.session.refresh_token !== before && after.session.expires_at * 1000 > Date.now();
-      const again = await homeState(page); // новый refresh-токен рабочий — второй заход тоже с входом
-      if (state.signedIn !== 1 || !rotated || again.signedIn !== 1) {
-        throw new Error(`вход=${state.signedIn} токен обновлён=${Boolean(rotated)} второй заход=${again.signedIn}`);
+      const again = (await (await context.request.get(base + '/')).text()).includes('Вы вошли как');
+      if (!signedIn || !setCookie || !rotated || !again) {
+        throw new Error(`вход=${signedIn} Set-Cookie sb=${setCookie} токен обновлён=${Boolean(rotated)} второй запрос=${again}`);
       }
-      return 'refresh-токен сменился, новый срок в будущем';
+      return `Set-Cookie sb: ${setCookie}, refresh-токен сменился, второй запрос с входом`;
     });
 
     await step(`${label}: перезапуск браузера — вход сохранился`, async () => {
@@ -231,9 +239,13 @@ async function guestClaim(browser, account) {
         return own.length ? { count: own.length } : null;
       }, null, { timeout: 30000 });
       const { count } = await local.jsonValue();
-      checkGuestMenu(await readMenu(page, 'menu-guest-after-cupping.png'));
       await page.waitForLoadState('networkidle');
-      return `оценок гостя на устройстве: ${count}; меню общее`;
+      return `оценок гостя на устройстве: ${count} (экран ${new URL(page.url()).pathname})`;
+    });
+
+    await step('гость после оценки: меню на главной без личного', async () => {
+      await page.goto(base + '/', { waitUntil: 'networkidle' });
+      return checkGuestMenu(await readMenu(page, 'menu-guest-after-cupping.png'));
     });
 
     await step('гость входит — оценка уходит в его аккаунт (POST checkins)', async () => {

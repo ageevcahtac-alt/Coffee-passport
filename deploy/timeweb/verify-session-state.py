@@ -67,11 +67,17 @@ def label(user):
 def purge():
     failed = False
     for user in temp_users():
+        # Оценки и учётка — отдельно: сбой на оценках не оставляет учётку (ревью Codex).
+        deleted = None
         try:
             deleted = call('DELETE', f'/rest/v1/checkins?owner_user_id=eq.{user["id"]}', prefer='return=representation')
+        except (SystemExit, Exception) as error:  # HTTP, сеть, таймаут
+            print(f'{error} ({label(user)}: checkins)')
+            failed = True
+        try:
             call('DELETE', f'/auth/v1/admin/users/{user["id"]}')
-            print(f'deleted {label(user)} (checkins={len(deleted or [])})')
-        except (SystemExit, Exception) as error:  # HTTP, сеть, таймаут — следующая учётка всё равно удаляется
+            print(f'deleted {label(user)} (checkins={"?" if deleted is None else len(deleted)})')
+        except (SystemExit, Exception) as error:  # следующая учётка всё равно удаляется
             print(f'{error} ({label(user)})')
             failed = True
     left = len(temp_users())
