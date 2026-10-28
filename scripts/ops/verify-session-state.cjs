@@ -47,7 +47,14 @@ async function readMenu(page, shot) {
   const items = await dialog.locator('nav a, nav button').evaluateAll((nodes) =>
     nodes.map((node) => ({ label: node.textContent.trim(), href: node.getAttribute('href') }))
   );
-  if (shot) await page.screenshot({ path: path.join(out, shot) });
+  if (shot) {
+    // Дроуэр появляется анимацией (reveal-fade): снимок — когда он уже непрозрачен.
+    await page.waitForFunction(() => {
+      const node = document.querySelector('[role="dialog"][aria-label="Меню"]');
+      return node && getComputedStyle(node).opacity === '1';
+    }, null, { timeout: 5000 });
+    await page.screenshot({ path: path.join(out, shot) });
+  }
   await page.getByRole('button', { name: 'Закрыть меню' }).click();
   return items;
 }
