@@ -27,7 +27,7 @@
 // historical reference-profile version that cannot be reconstructed.
 
 import { createClient } from '@supabase/supabase-js';
-import { SEED_ROASTERS } from '../lib/data/roasters';
+import { SEED_ROASTERS } from '../lib/data/roasterSeed';
 import { LOTS as SEED_LOTS } from '../lib/data/lots';
 import {
   resolveLegacyLotIds,

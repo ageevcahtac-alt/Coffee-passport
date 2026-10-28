@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useCoffeeShops } from '@/lib/data/useCoffeeShops';
+import { getMapCoffeeShops } from '@/lib/data/coffeeShops';
 import { CafeDetailPanel } from '@/components/map/CafeDetailPanel';
 import { EventsBoard } from '@/components/coffee/EventsBoard';
 import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
@@ -36,14 +37,16 @@ function hasValidCoords(lat: unknown, lng: unknown): lat is number {
 // /map" requirement. Every "Карта кофеен" entry point elsewhere in the app
 // (Navbar, roaster/cafe dashboards) is a plain link here, not an embed.
 export default function MapPage() {
-  const shops = useCoffeeShops();
+  const allShops = useCoffeeShops();
+  // Partners the admin paused ("Реестр партнёров") stay off the public map.
+  const shops = useMemo(() => getMapCoffeeShops(allShops), [allShops]);
   const [view, setView] = useState<'map' | 'events'>('map');
   const [selectedCity, setSelectedCity] = useState('all');
   // Holding just the id (not a snapshot of the whole CoffeeShop object)
   // means the open detail panel re-derives from the live `shops` list on
   // every render — so saving an edit in the cafe cabinet's "Профиль на
-  // карте" (same tab, or another tab via the storage-event sync in
-  // lib/data/coffeeShops.ts) updates an already-open panel instead of
+  // карте" (same tab — lib/data/coffeeShops.ts re-reads the database after
+  // the save) updates an already-open panel instead of
   // showing a stale snapshot from the moment the pin was clicked.
   const [selectedShopId, setSelectedShopId] = useState<string | null>(null);
   const selectedShop = selectedShopId ? shops.find((shop) => shop.id === selectedShopId) ?? null : null;

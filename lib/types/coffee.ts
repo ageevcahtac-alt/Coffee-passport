@@ -6,6 +6,8 @@
 // prepared with a specific brewing method. The same lot can have many
 // tasting records — never overwrite, always append.
 
+import type { PartnerStatus } from './database';
+
 export interface Roaster {
   id: string;
   name: string;
@@ -14,6 +16,9 @@ export interface Roaster {
   philosophy: string; // short brand statement, shown on the roaster profile card
   city: string; // production/roastery location
   country: string;
+  // coffee_shops/roasters.status (0036_partner_directory.sql) — 'paused'
+  // keeps the card resolvable by id but hides a shop from the public map.
+  status: PartnerStatus;
 }
 
 export type RoastType = 'filter' | 'espresso' | 'omni' | 'alternative';
@@ -121,6 +126,7 @@ export interface CoffeeShop {
   description: string;
   workingHours: string; // free text, e.g. "Пн–Вс 8:00–20:00"
   photos: string[]; // up to 3 photo URLs
+  status: PartnerStatus; // see Roaster.status
 }
 
 export interface Barista {

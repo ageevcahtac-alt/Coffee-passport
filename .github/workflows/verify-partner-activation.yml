@@ -1,0 +1,80 @@
+name: verify-partner-activation
+# Активация партнёра пишет в базу — на проде, через настоящий интерфейс. Только вручную.
+# Временные данные прогона: учётка admin (partner-verify-admin-<run>@example.com) и заявка кофейни
+# «Проверка активации <run>». Браузер: admin «Активировать» с точкой и цветом → кофейня в базе, заявка
+# activated → /map без входа в новом контексте показывает булавку этого цвета. Заявку XO Coffee только
+# читает (id и статус). Всё временное удаляется в конце при любом исходе.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/verify-partner-activation.yml
+      - deploy/timeweb/verify-partner-activation.py
+      - scripts/ops/verify-partner-activation.cjs
+permissions:
+  contents: read
+concurrency:
+  group: verify-partner-activation
+  cancel-in-progress: false
+jobs:
+  syntax:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python3 -m py_compile deploy/timeweb/verify-partner-activation.py
+          node --check scripts/ops/verify-partner-activation.cjs
+  verify:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PROD_URL: ${{ vars.PROD_URL }}
+      PIN_COLOR: '#7b2cbf'
+    steps:
+      - uses: actions/checkout@v4
+      - name: validate
+        run: '[ -n "$PROD_URL" ] || { echo "::error::PROD_URL не задан"; exit 1; }'
+      - uses: ./.github/actions/ssh-setup
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      - name: временные учётка и заявка
+        id: temp
+        run: |
+          set -o pipefail
+          umask 077
+          admin_pw="Pv$(openssl rand -hex 12)!a"
+          echo "::add-mask::$admin_pw"
+          printf '{"admin":{"email":"partner-verify-admin-%s@example.com","password":"%s"},"company":"Проверка активации %s"}' \
+            "$GITHUB_RUN_ID" "$admin_pw" "$GITHUB_RUN_ID" > "$RUNNER_TEMP/temp.json"
+          remote=$(ssh prod 'mktemp /tmp/verify-partner-activation.XXXXXX')
+          ssh prod "cat > $remote" < deploy/timeweb/verify-partner-activation.py
+          echo "remote=$remote" >> "$GITHUB_OUTPUT"
+          ssh prod "python3 $remote xo" < "$RUNNER_TEMP/temp.json"
+          ssh prod "python3 $remote create" < "$RUNNER_TEMP/temp.json" | tee "$RUNNER_TEMP/create.txt"
+          grep -m1 '^REQUEST_ID=' "$RUNNER_TEMP/create.txt" | sed 's/^REQUEST_ID=/id=/' >> "$GITHUB_OUTPUT"
+      - name: playwright
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw" && npm init -y > /dev/null
+          npm install --silent --no-audit --no-fund playwright@1.48.2
+          npx playwright install --with-deps chromium > /dev/null
+      - name: активация → карта без входа
+        env:
+          REQUEST_ID: ${{ steps.temp.outputs.id }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/shots"
+          TEMP_JSON="$RUNNER_TEMP/temp.json" SHOT_DIR="$RUNNER_TEMP/shots" \
+            node scripts/ops/verify-partner-activation.cjs "$RUNNER_TEMP/pw/node_modules/playwright"
+      - name: скриншоты
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: partner-activation-shots
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: ignore
+      - name: уборка временных данных
+        if: always() && steps.temp.outputs.remote != ''
+        run: |
+          ssh prod "python3 ${{ steps.temp.outputs.remote }} cleanup; rc=\$?; python3 ${{ steps.temp.outputs.remote }} xo; rm -f ${{ steps.temp.outputs.remote }}; exit \$rc" < "$RUNNER_TEMP/temp.json"

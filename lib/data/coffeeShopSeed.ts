@@ -21,6 +21,7 @@ export const SEED_COFFEE_SHOPS: CoffeeShop[] = [
     description: 'Пилотная кофейня программы Coffee Passport — зерно от нескольких обжарщиков, фильтр и эспрессо.',
     workingHours: 'Пн–Вс 8:00–20:00',
     photos: [],
+    status: 'active',
   },
   {
     id: 'shop-a-spb',
@@ -38,6 +39,7 @@ export const SEED_COFFEE_SHOPS: CoffeeShop[] = [
     description: '',
     workingHours: '',
     photos: [],
+    status: 'active',
   },
   {
     id: 'shop-b-peterhof',
@@ -55,5 +57,6 @@ export const SEED_COFFEE_SHOPS: CoffeeShop[] = [
     description: '',
     workingHours: '',
     photos: [],
+    status: 'active',
   },
 ];

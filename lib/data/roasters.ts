@@ -1,63 +1,56 @@
 'use client';
 
 import type { Roaster } from '@/lib/types/coffee';
+import type { RoasterOrgRow } from '@/lib/types/database';
+import { getBrowserSupabaseClient } from '@/lib/supabase/browserClient';
 
-export const SEED_ROASTERS: Roaster[] = [
-  {
-    id: 'roaster-xo',
-    name: 'XO COFFEE Roasting',
-    slug: 'xo-coffee',
-    color: '#D4AF37',
-    philosophy: 'Прозрачная цепочка от фермера до чашки — у каждого лота есть имя и история.',
-    city: 'Всеволожск',
-    country: 'Россия',
-  },
-  {
-    id: 'roaster-north',
-    name: 'North Star Roasters',
-    slug: 'north-star',
-    color: '#5C6B4F',
-    philosophy: 'Светлая обжарка, которая раскрывает терруар лота, а не прячет его под жаром.',
-    city: 'Санкт-Петербург',
-    country: 'Россия',
-  },
-];
+import { ROASTER_COLUMNS, mergePartners, rowToRoaster } from './partnerRows';
+import { SEED_ROASTERS } from './roasterSeed';
 
-// Seed roasters merged with anything the admin panel (Реестр партнёров /
-// Активировать партнёра) saved to localStorage — same override-on-seed
-// idiom as lib/data/lotsStore.ts, chosen so every one of the ~15 existing
-// getRoasterById() call sites across the app picks up admin edits for
-// free, with no import-path changes anywhere else.
+export { SEED_ROASTERS };
+
+// Built-in roasters merged with public.roasters (0036_partner_directory.sql)
+// — same model as coffeeShops.ts: a database row replaces the built-in card
+// with the same id (roasters.slug = Roaster.id, e.g. 'roaster-xo'), so every
+// one of the getRoasterById() call sites picks up admin edits with no
+// import-path changes. Writes go through app/api/admin/partners/**; after
+// one, call refreshRoasters(). Old localStorage edits are offered for
+// transfer only (getLegacyRoasters).
 const STORAGE_KEY = 'coffee-passport:roasters';
+const TRANSFERRED_KEY = `${STORAGE_KEY}:transferred`;
 
+let remote: Roaster[] = [];
 let cache: Roaster[] | null = null;
+let loading: Promise<void> | null = null;
+let loaded = false;
 const listeners = new Set<() => void>();
 
-function readOverrides(): Roaster[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Roaster[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function computeAll(): Roaster[] {
-  const merged = new Map<string, Roaster>();
-  for (const roaster of SEED_ROASTERS) merged.set(roaster.id, roaster);
-  for (const roaster of readOverrides()) merged.set(roaster.id, roaster);
-  return Array.from(merged.values());
+export function refreshRoasters(): Promise<void> {
+  loading = (async () => {
+    const { data, error } = await getBrowserSupabaseClient().from('roasters').select(ROASTER_COLUMNS);
+    loaded = true;
+    if (error || !data) {
+      console.warn('[roasters] database read failed', error?.message);
+      return;
+    }
+    remote = (data as unknown as RoasterOrgRow[]).map((row) =>
+      rowToRoaster(row, SEED_ROASTERS.find((roaster) => roaster.id === row.slug))
+    );
+    cache = null;
+    listeners.forEach((listener) => listener());
+  })();
+  return loading;
 }
 
 function read(): Roaster[] {
   if (typeof window === 'undefined') return SEED_ROASTERS;
-  if (!cache) cache = computeAll();
+  if (!cache) cache = mergePartners(SEED_ROASTERS, remote);
   return cache;
 }
 
 export function subscribeRoasters(listener: () => void): () => void {
   listeners.add(listener);
+  if (!loaded && !loading && typeof window !== 'undefined') void refreshRoasters();
   return () => listeners.delete(listener);
 }
 
@@ -73,35 +66,39 @@ export function getRoasterById(id: string): Roaster | undefined {
   return read().find((roaster) => roaster.id === id);
 }
 
-export function saveRoaster(roaster: Roaster): void {
-  const overrides = readOverrides();
-  const index = overrides.findIndex((existing) => existing.id === roaster.id);
-  if (index >= 0) overrides[index] = roaster;
-  else overrides.push(roaster);
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(overrides));
-  } catch {
-    // Storage unavailable — the in-memory cache below still reflects the
-    // save for the rest of this session.
-  }
-  cache = computeAll();
-  listeners.forEach((listener) => listener());
+export function isRoasterInDatabase(id: string): boolean {
+  return remote.some((roaster) => roaster.id === id);
 }
 
-export function generateRoasterId(name: string): string {
-  const slug = name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9а-яё]+/gi, '-')
-    .replace(/^-+|-+$/g, '');
-  const existingIds = new Set(read().map((roaster) => roaster.id));
-  let id = `roaster-${slug || 'partner'}`;
-  let sequence = 2;
-  while (existingIds.has(id)) {
-    id = `roaster-${slug || 'partner'}-${sequence}`;
-    sequence += 1;
+function readJson(key: string): Roaster[] {
+  try {
+    const raw = window.localStorage.getItem(key);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? (parsed as Roaster[]) : [];
+  } catch {
+    return [];
   }
-  return id;
+}
+
+export function getLegacyRoasters(): Roaster[] {
+  if (typeof window === 'undefined') return [];
+  return readJson(STORAGE_KEY);
+}
+
+export function archiveLegacyRoasters(ids: string[]): void {
+  const moving = new Set(ids);
+  const legacy = readJson(STORAGE_KEY);
+  try {
+    window.localStorage.setItem(
+      TRANSFERRED_KEY,
+      JSON.stringify([...readJson(TRANSFERRED_KEY), ...legacy.filter((roaster) => moving.has(roaster.id))])
+    );
+    const rest = legacy.filter((roaster) => !moving.has(roaster.id));
+    if (rest.length > 0) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(rest));
+    else window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Storage unavailable — see archiveLegacyCoffeeShops.
+  }
 }
 
 // Backward-compatible alias — most of the app still imports ROASTERS

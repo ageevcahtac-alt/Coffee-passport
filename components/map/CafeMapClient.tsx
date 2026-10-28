@@ -123,6 +123,8 @@ export function CafeMapClient({
             key={shop.id}
             position={[shop.lat as number, shop.lng as number]}
             icon={icons.get(shop.id)}
+            title={shop.name}
+            alt={shop.name}
             eventHandlers={handlersById.get(shop.id)}
           />
         ))}

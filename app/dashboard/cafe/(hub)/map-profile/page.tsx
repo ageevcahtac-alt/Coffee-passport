@@ -2,7 +2,12 @@
 
 import dynamic from 'next/dynamic';
 import { useEffect, useState, type FormEvent } from 'react';
-import { getCoffeeShopById, saveCoffeeShop } from '@/lib/data/coffeeShops';
+import {
+  archiveLegacyCoffeeShops,
+  getCoffeeShopById,
+  getLegacyCoffeeShops,
+  refreshCoffeeShops,
+} from '@/lib/data/coffeeShops';
 import { useCoffeeShops } from '@/lib/data/useCoffeeShops';
 import { useStaffSession } from '@/lib/auth/staffSession';
 import { geocodeAddress } from '@/lib/utils/geocode';
@@ -71,10 +76,10 @@ function toFormState(shop: CoffeeShop): ProfileFormState {
 // for this shop's pin and detail panel. Deliberately owned entirely by the
 // coffee shop, not the roaster: per the catalog-separation rule elsewhere
 // in this app (see Lot.inRoasterCatalog), a shop's own storefront details
-// are the shop's call to make. Saving here writes straight to the same
-// coffeeShops store /map reads — no extra sync step, though see that
-// store's `storage`-event listener for the cross-TAB case (this dashboard
-// open in one tab, /map open in another).
+// are the shop's call to make. Saving goes to coffee_shops through
+// /api/cafe/map-profile (the row is the session's cafe_id), which /map reads
+// for every visitor. A profile the old version of this screen kept only in
+// this browser's localStorage is offered for transfer with one button.
 export default function CafeMapProfilePage() {
   const { cafeId } = useStaffSession();
   // useCoffeeShops() only for its subscription — re-renders this page after
@@ -90,6 +95,14 @@ export default function CafeMapProfilePage() {
   const [recenterSignal, setRecenterSignal] = useState(0);
   const [uploadingSlot, setUploadingSlot] = useState<1 | 2 | 3 | null>(null);
   const [uploadError, setUploadError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [legacy, setLegacy] = useState<CoffeeShop | null>(null);
+
+  // localStorage only exists after mount (see PartnersRegistryTab).
+  useEffect(() => {
+    setLegacy(cafeId ? getLegacyCoffeeShops().find((item) => item.id === cafeId) ?? null : null);
+  }, [cafeId]);
 
   // Only re-seed the form from the store on a real shop-id change (staff
   // session switching cafes) — not on every store notification, which
@@ -150,9 +163,43 @@ export default function CafeMapProfilePage() {
     setRecenterSignal((prev) => prev + 1);
   }
 
-  function handleSubmit(event: FormEvent) {
+  async function save(updated: CoffeeShop): Promise<boolean> {
+    setSaving(true);
+    setSaveError('');
+    try {
+      const response = await fetch('/api/cafe/map-profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setSaveError(body.error ?? 'Не удалось сохранить профиль.');
+        return false;
+      }
+      await refreshCoffeeShops();
+      return true;
+    } catch {
+      setSaveError('Нет связи с сервером — попробуйте ещё раз.');
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleTransferLegacy() {
+    if (!shop || !legacy) return;
+    const merged: CoffeeShop = { ...shop, ...legacy, id: shop.id };
+    if (await save(merged)) {
+      archiveLegacyCoffeeShops([shop.id]);
+      setLegacy(null);
+      setForm(toFormState(merged));
+    }
+  }
+
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!shop || !form || !canSave) return;
+    if (!shop || !form || !canSave || saving) return;
 
     const updated: CoffeeShop = {
       ...shop,
@@ -170,13 +217,31 @@ export default function CafeMapProfilePage() {
       lat: form.lat,
       lng: form.lng,
     };
-    saveCoffeeShop(updated);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    if (await save(updated)) {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    }
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-10">
+      {legacy && (
+        <div className="rounded-md border border-gold-400 bg-gold-400/10 p-5">
+          <p className="text-sm text-ink-700 mb-3">
+            В этом браузере есть профиль на карте, сохранённый только здесь — гости его не видят.
+          </p>
+          <button
+            type="button"
+            onClick={handleTransferLegacy}
+            disabled={saving}
+            className="inline-flex items-center justify-center rounded-md bg-ink-900 text-parchment-100
+                       font-body font-medium text-sm px-4 py-2.5 hover:bg-ink-800 transition-colors
+                       disabled:opacity-40 disabled:pointer-events-none"
+          >
+            Перенести в базу
+          </button>
+        </div>
+      )}
       <div>
         <p className="section-label mb-4">Название и город</p>
         <div className="flex flex-col gap-3">
@@ -406,14 +471,19 @@ export default function CafeMapProfilePage() {
         {uploadError && <p className="text-xs text-ink-500 mt-3">⚠ {uploadError}</p>}
       </div>
 
+      {saveError && (
+        <p role="alert" className="text-sm text-ink-700">
+          ⚠ {saveError}
+        </p>
+      )}
       <button
         type="submit"
-        disabled={!canSave}
+        disabled={!canSave || saving}
         className="inline-flex items-center justify-center rounded-md bg-ink-900
                    text-parchment-100 font-body font-medium text-sm px-6 py-4
                    hover:bg-ink-800 transition-colors disabled:opacity-40 disabled:pointer-events-none"
       >
-        {saved ? 'Сохранено!' : 'Сохранить профиль на карте'}
+        {saving ? 'Сохраняем…' : saved ? 'Сохранено!' : 'Сохранить профиль на карте'}
       </button>
     </form>
   );

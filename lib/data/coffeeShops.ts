@@ -1,89 +1,67 @@
 'use client';
 
 import type { CoffeeShop } from '@/lib/types/coffee';
+import type { CoffeeShopOrgRow } from '@/lib/types/database';
+import { getBrowserSupabaseClient } from '@/lib/supabase/browserClient';
 
 import { SEED_COFFEE_SHOPS } from './coffeeShopSeed';
+import { COFFEE_SHOP_COLUMNS, mergePartners, rowToCoffeeShop } from './partnerRows';
 
 export { SEED_COFFEE_SHOPS };
 
-// Seed shops merged with anything the admin panel (Реестр партнёров /
-// Активировать партнёра) or a shop's own "Профиль на карте" screen
-// (app/dashboard/cafe/(hub)/map-profile) saved to localStorage — same
-// override-on-seed idiom as lib/data/lotsStore.ts / lib/data/roasters.ts.
+// Built-in shops merged with public.coffee_shops (0036_partner_directory.sql)
+// — a database row replaces the built-in card with the same id. Every guest
+// reads the same rows (public select), so the admin's "Активировать
+// партнёра" / "Реестр партнёров" and a shop's own "Профиль на карте" reach
+// /map for everyone. Writes go through server routes
+// (app/api/admin/partners/**, app/api/cafe/map-profile); after one, call
+// refreshCoffeeShops().
+//
+// The old screens kept their edits in this browser's localStorage under
+// STORAGE_KEY. Those are no longer shown as live data — only offered for
+// transfer (getLegacyCoffeeShops → /api/admin/partners/import), then moved
+// to a backup key so nothing is lost.
 const STORAGE_KEY = 'coffee-passport:coffee-shops';
+const TRANSFERRED_KEY = `${STORAGE_KEY}:transferred`;
 
-// CoffeeShop has grown fields since this store's earliest deploys (map
-// profile: lat/lng/address/etc.) — a browser with an old-shaped override in
-// localStorage would otherwise hand out a shop missing them. Backfilling
-// here, once, means every consumer trusts the CoffeeShop type instead of
-// re-guessing a fallback (same idiom as lotsStore.ts's normalizeLot).
-function normalizeShop(shop: CoffeeShop): CoffeeShop {
-  const lat = typeof shop.lat === 'number' && Number.isFinite(shop.lat) ? shop.lat : null;
-  const lng = typeof shop.lng === 'number' && Number.isFinite(shop.lng) ? shop.lng : null;
-  return {
-    ...shop,
-    // A pin needs BOTH coordinates or neither — a half-set pair (e.g. from
-    // hand-edited localStorage, or a save that raced a partial form state)
-    // would otherwise crash Leaflet's `[lat, lng]` tuple downstream.
-    lat: lat !== null && lng !== null ? lat : null,
-    lng: lat !== null && lng !== null ? lng : null,
-    address: shop.address ?? '',
-    phone: shop.phone ?? '',
-    website: shop.website ?? '',
-    instagramUrl: shop.instagramUrl ?? '',
-    telegramUrl: shop.telegramUrl ?? '',
-    vkUrl: shop.vkUrl ?? '',
-    description: shop.description ?? '',
-    workingHours: shop.workingHours ?? '',
-    photos: Array.isArray(shop.photos) ? shop.photos.filter((url) => typeof url === 'string' && url) : [],
-  };
-}
-
+let remote: CoffeeShop[] = [];
 let cache: CoffeeShop[] | null = null;
+let loading: Promise<void> | null = null;
+let loaded = false;
 const listeners = new Set<() => void>();
 
-function readOverrides(): CoffeeShop[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    const parsed = raw ? (JSON.parse(raw) as CoffeeShop[]) : [];
-    return parsed.map(normalizeShop);
-  } catch {
-    return [];
-  }
+function notify() {
+  cache = null;
+  listeners.forEach((listener) => listener());
 }
 
-// Another tab saving this shop's map profile (e.g. the cafe cabinet in one
-// tab, /map open in another) only reaches this module's in-memory `cache`
-// via the browser's cross-tab `storage` event — same-tab writes already go
-// through saveCoffeeShop()'s own listener notification below. Registered
-// once at module scope; harmless if this module is evaluated more than
-// once (Next.js Fast Refresh) since duplicate listeners just re-notify the
-// same (idempotent) invalidation.
-if (typeof window !== 'undefined') {
-  window.addEventListener('storage', (event) => {
-    if (event.key === STORAGE_KEY) {
-      cache = null;
-      listeners.forEach((listener) => listener());
+export function refreshCoffeeShops(): Promise<void> {
+  loading = (async () => {
+    const { data, error } = await getBrowserSupabaseClient().from('coffee_shops').select(COFFEE_SHOP_COLUMNS);
+    loaded = true;
+    if (error || !data) {
+      // Database unreachable (or 0036 not applied yet) — keep the built-in
+      // cards rather than emptying the map.
+      console.warn('[coffeeShops] database read failed', error?.message);
+      return;
     }
-  });
-}
-
-function computeAll(): CoffeeShop[] {
-  const merged = new Map<string, CoffeeShop>();
-  for (const shop of SEED_COFFEE_SHOPS) merged.set(shop.id, shop);
-  for (const shop of readOverrides()) merged.set(shop.id, shop);
-  return Array.from(merged.values());
+    remote = (data as unknown as CoffeeShopOrgRow[]).map((row) =>
+      rowToCoffeeShop(row, SEED_COFFEE_SHOPS.find((shop) => shop.id === row.slug))
+    );
+    notify();
+  })();
+  return loading;
 }
 
 function read(): CoffeeShop[] {
   if (typeof window === 'undefined') return SEED_COFFEE_SHOPS;
-  if (!cache) cache = computeAll();
+  if (!cache) cache = mergePartners(SEED_COFFEE_SHOPS, remote);
   return cache;
 }
 
 export function subscribeCoffeeShops(listener: () => void): () => void {
   listeners.add(listener);
+  if (!loaded && !loading && typeof window !== 'undefined') void refreshCoffeeShops();
   return () => listeners.delete(listener);
 }
 
@@ -99,39 +77,50 @@ export function getCoffeeShopById(id: string): CoffeeShop | undefined {
   return read().find((shop) => shop.id === id);
 }
 
-export function saveCoffeeShop(shop: CoffeeShop): void {
-  const overrides = readOverrides();
-  const index = overrides.findIndex((existing) => existing.id === shop.id);
-  if (index >= 0) overrides[index] = shop;
-  else overrides.push(shop);
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(overrides));
-  } catch {
-    // Storage unavailable — the in-memory cache below still reflects the
-    // save for the rest of this session.
-  }
-  cache = computeAll();
-  listeners.forEach((listener) => listener());
+// Ids that already have a coffee_shops row (vs. built-in cards only).
+export function isCoffeeShopInDatabase(id: string): boolean {
+  return remote.some((shop) => shop.id === id);
 }
 
-export function generateCoffeeShopId(name: string): string {
-  const slug = name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9а-яё]+/gi, '-')
-    .replace(/^-+|-+$/g, '');
-  const existingIds = new Set(read().map((shop) => shop.id));
-  let id = `shop-${slug || 'partner'}`;
-  let sequence = 2;
-  while (existingIds.has(id)) {
-    id = `shop-${slug || 'partner'}-${sequence}`;
-    sequence += 1;
+// /map and other guest-facing pins: paused partners are hidden.
+export function getMapCoffeeShops(shops: CoffeeShop[]): CoffeeShop[] {
+  return shops.filter((shop) => shop.status === 'active');
+}
+
+function readJson(key: string): CoffeeShop[] {
+  try {
+    const raw = window.localStorage.getItem(key);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? (parsed as CoffeeShop[]) : [];
+  } catch {
+    return [];
   }
-  return id;
+}
+
+export function getLegacyCoffeeShops(): CoffeeShop[] {
+  if (typeof window === 'undefined') return [];
+  return readJson(STORAGE_KEY);
+}
+
+export function archiveLegacyCoffeeShops(ids: string[]): void {
+  const moving = new Set(ids);
+  const legacy = readJson(STORAGE_KEY);
+  try {
+    window.localStorage.setItem(
+      TRANSFERRED_KEY,
+      JSON.stringify([...readJson(TRANSFERRED_KEY), ...legacy.filter((shop) => moving.has(shop.id))])
+    );
+    const rest = legacy.filter((shop) => !moving.has(shop.id));
+    if (rest.length > 0) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(rest));
+    else window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Storage unavailable — the cards stay offered for transfer; the
+    // import route skips ids already in the database.
+  }
 }
 
 // Backward-compatible alias — most of the app still imports COFFEE_SHOPS
 // expecting the static seed list (e.g. the shop picker in the taste flow).
-// Anything that needs live admin edits should use
+// Anything that needs live partner data should use
 // getCoffeeShopById/getCoffeeShopsSnapshot instead.
 export const COFFEE_SHOPS = SEED_COFFEE_SHOPS;

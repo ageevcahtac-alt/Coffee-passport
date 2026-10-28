@@ -177,14 +177,15 @@ export function PartnerRequestsTab() {
 
       {activateFor && (
         <ActivatePartnerModal
+          requestId={activateFor === 'blank' ? undefined : activateFor.id}
           initialCompanyName={activateFor === 'blank' ? '' : activateFor.company_name}
           initialCity={activateFor === 'blank' ? '' : activateFor.city ?? ''}
           initialRole={activateFor === 'blank' ? 'coffee_shop' : activateFor.role_requested}
           onClose={() => setActivateFor(null)}
+          // /api/admin/partners already marked the lead activated together
+          // with the new partner row — just re-read the list.
           onActivated={() => {
-            if (activateFor !== 'blank') {
-              patchRequest(activateFor.id, { status: 'activated' });
-            }
+            void load();
           }}
         />
       )}

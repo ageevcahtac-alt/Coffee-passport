@@ -79,7 +79,7 @@ React 18 + TypeScript 5 + Tailwind CSS 4 (токены — `tailwind.config.ts`,
 `app/globals.css`, обоснование — `DESIGN.md`). Данные и вход — Supabase
 (`@supabase/supabase-js`, `@supabase/ssr`), доступ к таблицам регулирует RLS;
 ORM и прямого драйвера PostgreSQL нет. Схема — только SQL-миграции
-`supabase/migrations/NNNN_*.sql` (сейчас 0001…0034; на прод — workflow `db-migrate` (вручную, по одному файлу; журнал `/opt/coffee-passport/logs/db-migrate.log`), таблицы учёта нет), сид —
+`supabase/migrations/NNNN_*.sql` (сейчас 0001…0036; на прод — workflow `db-migrate` (вручную, по одному файлу; журнал `/opt/coffee-passport/logs/db-migrate.log`), таблицы учёта нет), сид —
 `supabase/seed/seed.sql`. Тесты — Vitest 2 (`vitest.config.ts`, алиас `@/*`).
 Node 22 (на сервере `v22.23.3`, в CI — 22). Пилотный обжарщик — XO Coffee; интеграции с
 XO COFFEE Admin (`lib/integrations/xoAdmin.ts`, исходящая) и XO Store
@@ -146,6 +146,7 @@ email/паролю (`app/auth/actions.ts`). Верить коду, а не READM
 | `.github/workflows/health.yml` (`site-health`) | каждый час, вручную и на PR с правкой проверки: `scripts/health/check.mjs` по `vars.PROD_URL` — маршруты и тексты из `.agents/health.config.json`, `/api/health` с `"status":"ok"`; при поломке (не на PR) открывает issue. Без `PROD_URL` — зелёный пропуск | нет |
 | `.github/workflows/deploy.yml` | push в `fix/pre-pilot-shortlist` и вручную: `update-app.sh` на сервере по SSH, сверка HEAD, ожидание `/api/health` `"status":"ok"` | нет (после merge); красный = прод не обновился или нездоров |
 | `.github/workflows/verify-external-domains.yml` | на PR с правкой проверки, на push в ветку прода (после deploy) при правке шрифтов/карты/next.config и вручную: внешние домены браузера по страницам и кабинетам (временные учётки), хосты исходящих адресов сервера, скриншоты 390 px | нет |
+| `.github/workflows/verify-partner-activation.yml` | только вручную: временные admin и заявка → «Активировать» с точкой и цветом → строка `coffee_shops`, заявка `activated` → `/map` без входа показывает булавку этого цвета → уборка; заявку XO только читает | нет |
 | `.github/workflows/server-ops.yml` | только вручную, только чтение: логи (с фильтром секретов, email и телефонов), `ss -tlnp`, `df -h`, контейнеры | нет |
 | `.github/workflows/db-migrate.yml` | только вручную, по одному файлу: бэкап `pg_dump` в `/opt/coffee-passport/backups/`, накат `psql -1 ON_ERROR_STOP`; ошибки SQL — только в приватный лог на сервере; проверка колонки `verify_table`/`verify_column` | нет |
 | `.github/workflows/events-cron.yml` | ежедневно 03:00 UTC: POST в `/api/cron/events-archive`, `events-aggregate`, `cafe-menu-expire` с `EVENTS_CRON_SECRET`; секреты репо `APP_URL`, `EVENTS_CRON_SECRET` | нет (планировщик). Работает с 2026-10-20. Секрет на сервере — `/opt/coffee-passport/secrets/events_cron_secret` и `.env.local`; в GitHub ставить через bash `gh secret set EVENTS_CRON_SECRET < файл`, не через `\|` из PowerShell 5.1 (дописывает перевод строки → 401 / битый URL) |
