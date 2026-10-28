@@ -24,12 +24,14 @@ export function EnthusiastAuthForm({
   error,
   next = '/journey',
   errorRedirect = '/',
+  initialMode = 'login',
 }: {
   error?: string;
   next?: string;
   errorRedirect?: string;
+  initialMode?: 'login' | 'signup';
 }) {
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [mode, setMode] = useState<'login' | 'signup'>(initialMode);
 
   return (
     <div className="max-w-sm mx-auto w-full rounded-md border border-ink-200 bg-parchment-100 p-6">

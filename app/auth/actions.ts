@@ -8,6 +8,7 @@ import { authErrorPath, safeNextPath } from '@/lib/auth/safeRedirect'
 import { TEMPORARY_PASSWORD_EXPIRED_MESSAGE, pendingBaristaBinding, temporaryPasswordState } from '@/lib/auth/temporaryPassword'
 import { grantPendingBaristaRights } from '@/lib/auth/grantBaristaRights'
 import { createAdminSupabaseClient } from '@/lib/supabase/adminClient'
+import { cabinetPathFor, isStaffRole } from '@/lib/auth/cabinet'
 import type { ProfileRole } from '@/lib/types/database'
 
 export async function signInWithPassword(formData: FormData) {
@@ -67,18 +68,12 @@ export async function signInWithPassword(formData: FormData) {
       .select('role')
       .eq('id', data.user.id)
       .maybeSingle()
-    destination = (profile && STAFF_DASHBOARD[profile.role as ProfileRole]) || next
+    const role = profile?.role as ProfileRole | undefined
+    destination = role && isStaffRole(role) ? cabinetPathFor(role) : next
   }
 
   revalidatePath('/', 'layout')
   redirect(destination)
-}
-
-const STAFF_DASHBOARD: Partial<Record<ProfileRole, string>> = {
-  admin: '/dashboard/admin',
-  roaster_admin: '/dashboard/roaster',
-  cafe_admin: '/dashboard/cafe',
-  barista: '/dashboard/barista',
 }
 
 export async function signUpWithPassword(formData: FormData) {

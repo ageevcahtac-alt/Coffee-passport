@@ -1,5 +1,5 @@
 import { Navbar } from '@/components/shared/Navbar';
-import { createClient } from '@/lib/supabase/server';
+import { getSiteSession } from '@/lib/auth/siteSession';
 import { CurrentUserProvider } from '@/lib/auth/currentUser';
 
 export default async function SiteLayout({
@@ -7,14 +7,11 @@ export default async function SiteLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const session = await getSiteSession();
 
   return (
-    <CurrentUserProvider authUserId={user?.id ?? null}>
-      <Navbar userEmail={user?.email ?? null} />
+    <CurrentUserProvider authUserId={session?.userId ?? null}>
+      <Navbar session={session ? { role: session.role } : null} />
       {children}
     </CurrentUserProvider>
   );

@@ -1,0 +1,149 @@
+name: verify-session-state
+# Главная и меню: «вошёл / не вошёл» — на проде, через настоящий интерфейс, 390 px (scripts/ops/verify-session-state.cjs).
+# Без входа — меню без личного, на главной формы. Каждая роль (временные учётки session-state-<роль>-<run>@example.com):
+# главная без форм, «Перейти в кабинет» в свой кабинет, меню роли, истёкший токен обновляется, перезапуск браузера —
+# вход на месте, «Выйти» — меню общее. Гость без входа оценивает лот, входит — оценка в его аккаунте (checkins).
+# Уборка всех session-state-* до и после при любом исходе, каждая учётка отдельно (deploy/timeweb/verify-session-state.py).
+# PR — замер прода как есть («до»). Push в ветку прода — ждёт успешный deploy вершины ветки («после»).
+on:
+  pull_request:
+    paths:
+      - .github/workflows/verify-session-state.yml
+      - scripts/ops/verify-session-state.cjs
+      - deploy/timeweb/verify-session-state.py
+  push:
+    branches: [fix/pre-pilot-shortlist]
+    paths:
+      - .github/workflows/verify-session-state.yml
+      - scripts/ops/verify-session-state.cjs
+      - deploy/timeweb/verify-session-state.py
+      - middleware.ts
+      - app/(site)/layout.tsx
+      - app/(site)/page.tsx
+      - components/shared/Navbar.tsx
+      - lib/auth/cabinet.ts
+      - lib/auth/siteSession.ts
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: verify-session-state
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      PROD_URL: ${{ vars.PROD_URL }}
+      CAFE_ID: shop-xo-vsevolozhsk
+    steps:
+      - uses: actions/checkout@v4
+      - name: validate
+        run: |
+          [ -n "$PROD_URL" ] || { echo "::error::PROD_URL не задан"; exit 1; }
+          python3 -m py_compile deploy/timeweb/verify-session-state.py
+          node --check scripts/ops/verify-session-state.cjs
+      - name: wait for deploy of this commit (push only)
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Как в verify-external-domains: успешный deploy именно текущей вершины ветки, и она не сдвинулась.
+          for i in $(seq 1 60); do
+            head=$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | cut -f1)
+            state=$(gh run list -R "$GITHUB_REPOSITORY" --workflow deploy.yml --commit "$head" \
+              --json status,conclusion --jq '.[0] | "\(.status) \(.conclusion)"' || true)
+            case "$state" in
+              "completed success")
+                if [ "$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | cut -f1)" = "$head" ]; then
+                  echo "прод на $head (содержит $GITHUB_SHA)"; exit 0
+                fi;;
+              completed*) echo "::error::deploy $head: $state"; exit 1;;
+            esac
+            sleep 20
+          done
+          echo "::error::за 20 минут deploy вершины ветки не завершился"
+          exit 1
+      - uses: ./.github/actions/ssh-setup
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      - name: upload script
+        run: |
+          remote=$(ssh prod 'mktemp /tmp/verify-session-state.XXXXXX')
+          # Путь — до загрузки: если она упадёт, уборка всё равно удалит файл.
+          echo "REMOTE=$remote" >> "$GITHUB_ENV"
+          scp -q deploy/timeweb/verify-session-state.py "prod:$remote"
+      - name: уборка до (все session-state-*)
+        run: |
+          set -o pipefail
+          ssh prod "python3 $REMOTE purge" | tee "$RUNNER_TEMP/purge-before.txt"
+      - name: временные учётки
+        id: temp
+        run: |
+          umask 077
+          python3 - <<'PY'
+          import json, os, secrets
+          run, tmp = os.environ['GITHUB_RUN_ID'], os.environ['RUNNER_TEMP']
+          roles = {
+              'enthusiast': ('enthusiast', '/journey', None),
+              'roaster': ('roaster_admin', '/dashboard/roaster', None),
+              'cafe': ('cafe_admin', '/dashboard/cafe', os.environ['CAFE_ID']),
+              'barista': ('barista', '/dashboard/barista', os.environ['CAFE_ID']),
+              'admin': ('admin', '/dashboard/admin', None),
+              'guest': ('enthusiast', '/journey', None),
+          }
+          accounts = {}
+          for label, (role, cabinet, cafe) in roles.items():
+              password = 'Ss' + secrets.token_hex(14) + '!a'
+              print(f'::add-mask::{password}')
+              accounts[label] = {'email': f'session-state-{label}-{run}@example.com', 'password': password,
+                                 'role': role, 'cabinet': cabinet, **({'cafe_id': cafe} if cafe else {})}
+          json.dump(accounts, open(f'{tmp}/temp.json', 'w'))
+          json.dump({'email': accounts['guest']['email']}, open(f'{tmp}/guest.json', 'w'))
+          PY
+          echo "created=1" >> "$GITHUB_OUTPUT"
+          set -o pipefail
+          ssh prod "python3 $REMOTE create" < "$RUNNER_TEMP/temp.json" | tee "$RUNNER_TEMP/create.txt"
+          echo "LOT_ID=$(sed -n 's/^LOT_ID=//p' "$RUNNER_TEMP/create.txt")" >> "$GITHUB_ENV"
+      - name: playwright
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw" && npm init -y > /dev/null
+          npm install --silent --no-audit --no-fund playwright@1.64.0
+          npx playwright install --with-deps chromium > /dev/null
+      - name: прогон на проде (390 px)
+        env:
+          OUT_DIR: ${{ runner.temp }}/session-state
+        run: TEMP_JSON="$RUNNER_TEMP/temp.json" node scripts/ops/verify-session-state.cjs "$RUNNER_TEMP/pw/node_modules/playwright"
+      - name: оценка гостя в его аккаунте (checkins)
+        if: always() && steps.temp.outputs.created == '1'
+        run: |
+          set -o pipefail
+          ssh prod "python3 $REMOTE claimed '$LOT_ID'" < "$RUNNER_TEMP/guest.json" | tee "$RUNNER_TEMP/claimed.txt"
+          claimed=$(sed -n 's/^CLAIMED=\([0-9]*\).*/\1/p' "$RUNNER_TEMP/claimed.txt")
+          [ "${claimed:-0}" -ge 1 ] || { echo "::error::оценки гостя нет в его аккаунте"; exit 1; }
+      - name: уборка после (все session-state-*)
+        if: always() && env.REMOTE != ''
+        run: |
+          set -o pipefail
+          ssh prod "python3 $REMOTE purge" | tee "$RUNNER_TEMP/purge-after.txt"
+      - name: убрать скрипт с сервера
+        if: always() && env.REMOTE != ''
+        run: ssh prod "rm -f $REMOTE"
+      - name: summary
+        if: always()
+        run: |
+          { [ -f "$RUNNER_TEMP/session-state/report.md" ] && cat "$RUNNER_TEMP/session-state/report.md"
+            for f in purge-before create claimed purge-after; do
+              echo; echo "### $f"; echo '```'; cat "$RUNNER_TEMP/$f.txt" 2>/dev/null; echo '```'
+            done
+          } >> "$GITHUB_STEP_SUMMARY" || true
+      - name: artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-session-state-${{ github.event_name }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/session-state
+          if-no-files-found: ignore
+          retention-days: 14
