@@ -102,7 +102,9 @@ def create(accounts):
                     {'email': account['email'], 'password': account['password'], 'email_confirm': True})
         roaster = roaster_slug() if account['role'] == 'roaster_admin' else None
         profile = {'id': user['id'], 'role': account['role'], 'cafe_id': account.get('cafe_id'),
-                   'roaster_id': roaster, 'barista_id': None}
+                   'roaster_id': roaster,
+                   # profiles_role_scope (0007): у бариста barista_id обязателен; текст без FK — временный id.
+                   'barista_id': 'session-state-temp-barista' if account['role'] == 'barista' else None}
         rows = call('POST', '/rest/v1/profiles?on_conflict=id', profile,
                     prefer='resolution=merge-duplicates,return=representation')
         if not rows or rows[0].get('role') != account['role']:
