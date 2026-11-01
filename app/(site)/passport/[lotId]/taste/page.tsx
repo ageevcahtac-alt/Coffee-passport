@@ -27,6 +27,7 @@ import { markPinJustActivated } from '@/lib/journey/mapFlag';
 import { consumePendingShop, markPendingShop } from '@/lib/journey/pendingShopFlag';
 import { consumePendingRoaster, markPendingRoaster } from '@/lib/journey/pendingRoasterFlag';
 import { hasSeenLotProfile } from '@/lib/journey/profileSeenFlag';
+import { sharedTastingIsPublic } from '@/lib/journey/communityConsent';
 import { getMergedLotById } from '@/lib/data/lotsStore';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { useCurrentUser } from '@/lib/auth/currentUser';
@@ -72,13 +73,19 @@ export default function TasteLotPage({ params }: { params: { lotId: string } }) 
 function TasteLotFlow({ lot }: { lot: Lot }) {
   const coffeeShops = useCoffeeShops();
   const roasters = useRoasters();
-  const { userId, ready } = useCurrentUser();
+  const { userId, isAuthenticated, ready } = useCurrentUser();
   const [step, setStep] = useState<Step>('location');
   const [coffeeShopId, setCoffeeShopId] = useState<string | null>(null);
   const [roasterId, setRoasterId] = useState<string | null>(null);
   const [baristaId, setBaristaId] = useState<string | null>(null);
   const [baristaRating, setBaristaRating] = useState(0);
   const [baristaNote, setBaristaNote] = useState('');
+  // Community Layer (docs/reports/COMMUNITY_LAYER_PRODUCT_AUDIT.md) —
+  // explicit opt-in consent, same "never automatic" rule as
+  // BrewingRecipe.isPublic; default off, never retroactive. Resolved through
+  // sharedTastingIsPublic so an anonymous tasting can never be flagged
+  // public (it never reaches Supabase at all — see that function's comment).
+  const [shareWithCommunity, setShareWithCommunity] = useState(false);
   // Re-read the roster on reaching this step: a barista the cafe created
   // after the page loaded must already be a choice.
   const baristaRoster = useBaristaProfiles();
@@ -179,8 +186,11 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
         fatContentPercent: drinkSelection.fatContentPercent,
         plantMilkType: drinkSelection.plantMilkType,
         // Sharing is explicit opt-in only ("never automatic", same rule as
-        // BrewingRecipe.isPublic); this form has no consent control.
-        isPublic: false,
+        // BrewingRecipe.isPublic) — the consent checkbox on the barista step
+        // (shown only to a signed-in guest), gated through
+        // sharedTastingIsPublic so an anonymous tasting can never be
+        // flagged public.
+        isPublic: sharedTastingIsPublic(isAuthenticated, shareWithCommunity),
         // Store path ("Я в магазине") opened the lot's profile before this
         // cupping — see passportView.ts / profileSeenFlag.ts.
         profileSeenBeforeTasting: hasSeenLotProfile(lot.id),
@@ -319,6 +329,22 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
                   />
                 </div>
               </div>
+            )}
+
+            {isAuthenticated && (
+              <label className="flex items-start gap-3 rounded-md border border-ink-200 bg-parchment-100 p-4 mt-8 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={shareWithCommunity}
+                  onChange={(event) => setShareWithCommunity(event.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-current text-gold-500 shrink-0"
+                />
+                <span className="text-xs text-ink-700 leading-relaxed">
+                  Поделиться этой дегустацией с другими гостями — на странице паспорта этого лота, анонимно.
+                  Увидят только оценку, впечатления и способ приготовления; имя, кофейня и бариста останутся
+                  скрыты. Можно отключить только до сохранения — уже опубликованную запись это не изменит.
+                </span>
+              </label>
             )}
 
             <div className="flex gap-3 mt-8">
