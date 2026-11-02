@@ -3,6 +3,8 @@ name: verify-session-state
 # Без входа — меню без личного, на главной формы. Каждая роль (временные учётки session-state-<роль>-<run>@example.com):
 # главная без форм, «Перейти в кабинет» в свой кабинет, меню роли, истёкший токен обновляется, перезапуск браузера —
 # вход на месте, «Выйти» — меню общее. Гость без входа оценивает лот, входит — оценка в его аккаунте (checkins).
+# Меню сверяется с lib/auth/cabinet.ts (точный набор пункта роли, без лишних), кабинет — по характерному
+# содержимому роли, а не только HTTP 200 (F-2); самопроверка логики — шаг validate, `node verify-session-state.cjs --selftest`.
 # Уборка всех session-state-* до и после при любом исходе, каждая учётка отдельно (deploy/timeweb/verify-session-state.py).
 # PR — замер прода как есть («до»). Push в ветку прода — ждёт успешный deploy вершины ветки («после»).
 on:
@@ -44,6 +46,9 @@ jobs:
           [ -n "$PROD_URL" ] || { echo "::error::PROD_URL не задан"; exit 1; }
           python3 -m py_compile deploy/timeweb/verify-session-state.py
           node --check scripts/ops/verify-session-state.cjs
+          # Чистые проверки меню/кабинета на фикстурах: разбор lib/auth/cabinet.ts не сломан,
+          # пустой кабинет и лишние личные пункты меню отклоняются (F-2). Без прода и секретов.
+          node scripts/ops/verify-session-state.cjs --selftest
       - name: wait for deploy of this commit (push only)
         if: github.event_name == 'push'
         env:
