@@ -45,4 +45,17 @@ Claude (по таблице ролей ORCHESTRATION.md: фикс логики �
 - verify-barista-access.cjs / verify-admin-access.cjs — там кабинет уже проверяется по содержимому.
 
 ## Итог 20261102-1100-verify-content-checks
-(заполняется по ходу)
+Запланировано: 1. разбор cabinet.ts + точное меню — done (scripts/ops/verify-session-state.cjs)
+2. маркеры содержимого кабинетов — done (CABINET_MARKERS, 5 ролей)
+3. --selftest — done, в шаг validate workflow добавлен
+4. Codex review → PR → REGISTRY → закрыть F-2 — blocked.
+Написал: Claude — scripts/ops/verify-session-state.cjs, .github/workflows/verify-session-state.yml
+(validate: +selftest), .agents/tasks/20261102-1100-verify-content-checks.md. Коммит 1c828bb на
+ветке fix/verify-scripts-content-checks (локально, не запушено).
+Ревью: Codex раунд 1 не состоялся — codex-run.ps1 упал с HTTP 403 (блокировка IP VPN-узла
+176.15.162.132, Cloudflare «Unable to load site»). По указанию владельца не обходим: нужен
+другой VPN-узел, затем повторить запуск тем же промтом (.agents/runs/…/prompt.next.md).
+Проверки: node --check — OK; --selftest — 9/9 PASS (пустой кабинет и нейтральный заголовок
+отклонены, меню с лишним личным пунктом отклонено); отсутствие cabinet.ts рядом со скриптом —
+exit 1 (fail-closed).
+Merge: не мержено — ревью не пройдено.
