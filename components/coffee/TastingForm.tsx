@@ -9,17 +9,35 @@ import type {
   SensoryEvaluationValues,
   SensoryTagId,
 } from '@/lib/types/coffee';
+import { HOME_GRINDER_MODELS } from '@/lib/types/coffee';
 import { RatingInput } from './RatingInput';
 import { SensoryTagPicker } from './SensoryTagPicker';
 import { FlavorSlider } from './FlavorSlider';
 import { BodyTextureSelector } from './BodyTextureSelector';
 import { DefectsAccordion } from './DefectsAccordion';
+import { ComboSelect } from '@/components/shared/ComboSelect';
 
 // Alias kept for every existing caller/import site — the canonical shape
 // now lives as SensoryEvaluationValues (lib/types/coffee.ts) so it can be
 // reused outside this component too (see components/kitchen/
 // CustomCoffeeCuppingForm.tsx, the isolated "Мой кофе" cupping flow).
-export type TastingFormValues = SensoryEvaluationValues;
+// The two optional grinder fields are workflow metadata for the grind
+// converter (PRODUCT_BACKLOG #2, phase 2): the user's own grinder, captured
+// only when the caller passes a source recipe to convert from. The store
+// strips them before persisting — a TastingRecord never carries them.
+export type TastingFormValues = SensoryEvaluationValues & {
+  grinderModel?: string | null;
+  grinderSetting?: string | null;
+};
+
+// The adapt-source recipe's grinder (e.g. a roaster benchmark written for an
+// EK43) — when present, the form asks which grinder/setting the user
+// actually brewed on, and the save path logs that pair as a grind-conversion
+// confirmation for the community table.
+export interface GrindSourceRecipe {
+  grinderModel: string;
+  grinderSetting: string;
+}
 
 const fieldClasses =
   'w-full rounded-md border border-ink-200 bg-parchment-100 px-4 py-3 text-sm ' +
@@ -38,6 +56,7 @@ export function TastingForm({
   submitLabel = 'Сохранить дегустацию в дневник',
   drinkCategory,
   initialValues,
+  sourceRecipe,
 }: {
   onSave: (values: TastingFormValues) => void;
   onCancel?: () => void;
@@ -49,6 +68,9 @@ export function TastingForm({
   // selection step and renders the original, category-agnostic form.
   drinkCategory?: DrinkCategory;
   initialValues?: TastingFormValues;
+  // When given, the form shows the optional "Ваш помол" section — asking for
+  // the user's grinder only makes sense against a source recipe's grinder.
+  sourceRecipe?: GrindSourceRecipe | null;
 }) {
   // The parent retains the draft while the barista step is open. Remounting
   // after "Назад" restores it, while a new tasting keeps the original defaults.
@@ -68,6 +90,8 @@ export function TastingForm({
   const [coffeeReadability, setCoffeeReadability] = useState(initialValues?.coffeeReadability ?? 3);
   const [creaminess, setCreaminess] = useState(initialValues?.creaminess ?? 3);
   const [aftertaste, setAftertaste] = useState(initialValues?.aftertaste ?? 3);
+  const [grinderModel, setGrinderModel] = useState(initialValues?.grinderModel ?? '');
+  const [grinderSetting, setGrinderSetting] = useState(initialValues?.grinderSetting ?? '');
 
   const showMilkAxes = drinkCategory === 'milk_based';
   const showAftertasteAxis = drinkCategory === 'black_coffee' || drinkCategory === 'filter_alternative';
@@ -171,6 +195,31 @@ export function TastingForm({
         />
       </div>
 
+      {sourceRecipe && (
+        <div>
+          <p className="section-label mb-1">Ваш помол</p>
+          <p className="text-xs text-ink-400 mb-4">
+            Рецепт «{sourceRecipe.grinderModel} · {sourceRecipe.grinderSetting}» — укажите, на чём мололи вы.
+            Пара «источник → ваша кофемолка» помогает другим переводить настройки помола (необязательно).
+          </p>
+          <div className="flex flex-col gap-3">
+            <ComboSelect label="Кофемолка" options={HOME_GRINDER_MODELS} value={grinderModel} onChange={setGrinderModel} />
+            <div>
+              <label htmlFor="grinder-setting" className="block text-xs text-ink-400 mb-1.5">
+                Настройка помола
+              </label>
+              <input
+                id="grinder-setting"
+                value={grinderSetting}
+                onChange={(event) => setGrinderSetting(event.target.value)}
+                placeholder="Клик 24 / деление 20"
+                className={fieldClasses}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex gap-3">
         {onCancel && (
           <button
@@ -201,6 +250,8 @@ export function TastingForm({
               coffeeReadability: showMilkAxes ? coffeeReadability : null,
               creaminess: showMilkAxes ? creaminess : null,
               aftertaste: showAftertasteAxis ? aftertaste : null,
+              grinderModel: sourceRecipe ? grinderModel.trim() || null : null,
+              grinderSetting: sourceRecipe ? grinderSetting.trim() || null : null,
             })
           }
           className={`inline-flex items-center justify-center rounded-md bg-ink-900

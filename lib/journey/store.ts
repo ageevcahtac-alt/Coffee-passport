@@ -5,6 +5,7 @@ import type { CheckinCommunityViewRow, CheckinRow } from '@/lib/types/database';
 import { getBrowserSupabaseClient } from '@/lib/supabase/browserClient';
 import { generateId } from '@/lib/utils/id';
 import { findCanonicalLotByPublicId, getActiveReferenceTasteProfile } from '@/lib/data/canonicalLotStore';
+import { addGrindConfirmation } from '@/lib/data/grindConfirmationsStore';
 
 // localStorage is now a read cache, not the source of truth: syncCheckins-
 // ForUser() below pulls the signed-in user's own rows from Supabase's
@@ -276,17 +277,39 @@ async function resolveActiveTasteProfileId(lotId: string): Promise<string | null
   }
 }
 
+// The source recipe's grinder context for the grind-converter confirmation
+// (backlog #2, phase 2): when a tasting is saved with a known source recipe
+// AND the user entered their own grinder model + setting, that pair is a
+// real (from -> to, method) conversion data point — same shape Enthusiast
+// RecipeForm logs on adapt-save.
+export interface GrindConversionSource {
+  grinderModel: string;
+  grinderSetting: string;
+}
+
+export type TastingRecordInput = Omit<TastingRecord, 'id' | 'userId' | 'createdAt'> & {
+  // Workflow metadata for the confirmation above — never persisted on the
+  // TastingRecord itself (the store strips them before writing, so neither
+  // localStorage rows nor the checkins insert ever see these keys).
+  grinderModel?: string | null;
+  grinderSetting?: string | null;
+};
+
 export function addTastingRecord(
-  input: Omit<TastingRecord, 'id' | 'userId' | 'createdAt'>,
-  userId: string
+  input: TastingRecordInput,
+  userId: string,
+  grindSource?: GrindConversionSource | null
 ): TastingRecord {
+  const { grinderModel, grinderSetting, ...tastingInput } = input;
   const record: TastingRecord = {
-    ...input,
+    ...tastingInput,
     id: generateId(),
     userId,
     createdAt: new Date().toISOString(),
   };
   write([record, ...read()]);
+
+  logGrindConfirmationFromTasting(grindSource ?? null, grinderModel ?? null, grinderSetting ?? null, record.brewingMethod);
 
   // The reference lookup runs before the Supabase insert (not after, and
   // not as a separate update) so the checkin never exists server-side even
@@ -340,6 +363,33 @@ export function addTastingRecord(
     });
 
   return record;
+}
+
+// Logs one crowd-sourced grind-conversion data point when a tasting carries
+// both sides of a conversion: a source recipe's grinder (grindSource) and
+// the user's own grinder + setting entered in the tasting form. Same-grinder
+// brews and ANY incomplete input are skipped — a confirmation must never
+// fire on guesses: an empty source setting would enter the community
+// average that estimateGrindSetting prefers over the reference table.
+function logGrindConfirmationFromTasting(
+  grindSource: GrindConversionSource | null,
+  grinderModel: string | null,
+  grinderSetting: string | null,
+  brewingMethodId: string
+): void {
+  const toModel = grinderModel?.trim() ?? '';
+  const toSetting = grinderSetting?.trim() ?? '';
+  const fromModel = grindSource?.grinderModel.trim() ?? '';
+  const fromSetting = grindSource?.grinderSetting.trim() ?? '';
+  if (fromModel === '' || fromSetting === '' || toModel === '' || toSetting === '') return;
+  if (toModel === fromModel) return;
+  addGrindConfirmation({
+    fromModel,
+    fromSetting,
+    toModel,
+    toSetting,
+    brewingMethodId,
+  });
 }
 
 // Called on a real account switch on this device/browser (see

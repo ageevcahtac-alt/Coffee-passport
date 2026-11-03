@@ -40,6 +40,7 @@
 | 2026-11-02 | Claude | Codex review | 20261102-1100-verify-content-checks: F-2 — verify-session-state по содержимому (меню из cabinet.ts fail-closed, маркеры страниц кабинетов), selftest 16 в workflow validate; + shebang-фикс redact.mjs | ok | 2 (PR #94) |
 | 2026-11-03 | Claude | нет (аналитика, кода нет) | grain-flow-audit: аудит пути зерна (лот→заказ→отгрузка), RLS/интеграции/fail-closed; отчёт docs/reports/2026-11-03-grain-flow-audit.md, находки F-1..F-6, предложения P-1..P-6 | ok | 0 (без PR) |
 | 2026-11-03 | Claude | Codex review | grain-audit-followups: P-5 — серверный гейт активации лота (0037, BEFORE INSERT OR UPDATE, имя + q_grade > 0), правки отчёта по решениям владельца, SQL онбординга в пилотный чек-лист | ok | 2 (PR #96; миграцию 0037 накатить вручную через db-migrate) |
+| 2026-11-03 | Claude | Codex review | grind-converter фазы 1-2 (backlog #2): тесты ядра grindConvert + sanity таблицы (баг parseLeadingNumber на null — исправлен); TastingForm sourceRecipe → addGrindConfirmation через addTastingRecord (localStorage, БД не тронута) | ok | 2 (PR #97; носителя sourceRecipe пока нет — в чек-листе фазы 3) |
 
 ## Замены
 | дата | агент | было → стало | причина |
