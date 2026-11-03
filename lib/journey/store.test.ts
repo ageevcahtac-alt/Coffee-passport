@@ -293,11 +293,17 @@ describe('lib/journey/store — grind conversion confirmation', () => {
     expect('grinder_setting' in row).toBe(false);
   });
 
-  it('skips the confirmation when grinder fields are empty or the grinder matches the source', async () => {
+  it('skips the confirmation when grinder fields are empty, the source is incomplete, or the grinder matches the source', async () => {
     const { addTastingRecord } = await import('./store');
 
     addTastingRecord({ ...baseInput(), grinderModel: '', grinderSetting: '' }, 'user-1', source);
     addTastingRecord({ ...baseInput(), grinderModel: 'Mahlkönig EK43', grinderSetting: '7.2' }, 'user-1', source);
+    // Codex review round 1: an empty source setting would enter the
+    // community average — refuse any incomplete pair.
+    addTastingRecord({ ...baseInput(), grinderModel: 'Comandante C40', grinderSetting: 'клик 24' }, 'user-1', {
+      grinderModel: 'Mahlkönig EK43',
+      grinderSetting: '  ',
+    });
     await flush();
 
     expect(confirmationsFromStorage()).toHaveLength(0);

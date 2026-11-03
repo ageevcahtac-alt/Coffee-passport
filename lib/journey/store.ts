@@ -368,8 +368,9 @@ export function addTastingRecord(
 // Logs one crowd-sourced grind-conversion data point when a tasting carries
 // both sides of a conversion: a source recipe's grinder (grindSource) and
 // the user's own grinder + setting entered in the tasting form. Same-grinder
-// brews and partial input are skipped (mirrors EnthusiastRecipeForm's
-// adapt-save rule) — a confirmation must never fire on guesses.
+// brews and ANY incomplete input are skipped — a confirmation must never
+// fire on guesses: an empty source setting would enter the community
+// average that estimateGrindSetting prefers over the reference table.
 function logGrindConfirmationFromTasting(
   grindSource: GrindConversionSource | null,
   grinderModel: string | null,
@@ -378,11 +379,13 @@ function logGrindConfirmationFromTasting(
 ): void {
   const toModel = grinderModel?.trim() ?? '';
   const toSetting = grinderSetting?.trim() ?? '';
-  if (!grindSource || toModel === '' || toSetting === '') return;
-  if (toModel === grindSource.grinderModel) return;
+  const fromModel = grindSource?.grinderModel.trim() ?? '';
+  const fromSetting = grindSource?.grinderSetting.trim() ?? '';
+  if (fromModel === '' || fromSetting === '' || toModel === '' || toSetting === '') return;
+  if (toModel === fromModel) return;
   addGrindConfirmation({
-    fromModel: grindSource.grinderModel,
-    fromSetting: grindSource.grinderSetting,
+    fromModel,
+    fromSetting,
     toModel,
     toSetting,
     brewingMethodId,
