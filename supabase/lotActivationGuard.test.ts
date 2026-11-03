@@ -17,20 +17,23 @@ const readSql = (file: string) => fs.readFileSync(path.join(MIGRATIONS_DIR, file
   .replace(/\/\*[\s\S]*?\*\//g, '').replace(/--.*$/gm, '');
 
 describe('lot activation guard', () => {
-  it('creates exactly one BEFORE UPDATE trigger on lots', () => {
+  it('creates exactly one BEFORE INSERT OR UPDATE trigger on lots', () => {
     const created = fs.readdirSync(MIGRATIONS_DIR)
       .filter((file) => /^\d{4}_.*\.sql$/.test(file))
       .flatMap((file) => [...readSql(file).matchAll(
-        /create\s+trigger\s+(?:public\.)?trg_lots_activation_guard\s+(\w+)\s+update\s+on\s+(?:public\.)?lots\b/gi
+        /create\s+trigger\s+(?:public\.)?trg_lots_activation_guard\s+before\s+(insert\s+or\s+)?update\s+on\s+(?:public\.)?lots\b/gi
       )]);
     expect(created).toHaveLength(1);
-    expect(created[0][1].toLowerCase()).toBe('before');
+    // The INSERT arm must be there — an UPDATE-only guard is bypassed by
+    // INSERTing a row that is already 'active' (Codex review, round 1).
+    expect(created[0][1]).toBeTruthy();
   });
 
-  it('guard fires only on the transition INTO active and raises', () => {
+  it('guard fires only on becoming active and raises', () => {
     const sql = readSql(MIGRATION);
-    // Transition-into-active only (an already-active Lot stays editable).
+    // Becoming 'active': on INSERT at all, on UPDATE only as a transition.
     expect(sql).toMatch(/new\.status\s*=\s*'active'/i);
+    expect(sql).toMatch(/tg_op\s*=\s*'INSERT'/i);
     expect(sql).toMatch(/old\.status\s+is\s+distinct\s+from\s+'active'/i);
     // Both readiness conditions on the NEW row.
     expect(sql).toMatch(/btrim\(new\.name\)\s*=\s*''/i);
