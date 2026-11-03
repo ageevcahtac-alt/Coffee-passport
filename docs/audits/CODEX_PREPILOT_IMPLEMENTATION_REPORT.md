@@ -128,7 +128,14 @@ Source trace и tests покрывают: decode → passport scoped loading; no
 ## Операционный порядок A3 — обязательный до deployment
 
 1. Создать личные реальные staff-аккаунты действующих XO сотрудников; вручную назначить нужные `profiles.role/cafe_id/roaster_id/barista_id`. Проверить, что каждый сотрудник входит в нужный кабинет под новой учётной записью.
-2. Выключить `app_settings.pilot_demo_enabled=false` в Supabase. Этим этапом никаких SQL не выполнялось.
+2. Выключить `app_settings.pilot_demo_enabled=false` в Supabase (точная команда, без деплоя кода — миграция 0029):
+   ```sql
+   update public.app_settings
+   set value = false, updated_at = now()
+   where key = 'pilot_demo_enabled';
+   ```
+   Проверка: `select key, value from public.app_settings where key = 'pilot_demo_enabled';` → `value = false`.
+   Этим этапом никаких SQL не выполнялось.
 3. После готовности перехода завершить кодовый A3: `render.yaml` flag off, удалить hardcoded demo credential, читать только server env `PILOT_STAFF_PASSWORD`, fail-closed при отсутствии. Обновить production env и пересобрать/deploy с `NEXT_PUBLIC_PILOT_DEMO_ENABLED` false/unset. Если отдельная demo-среда сохраняется, её секрет должен быть server-only и не относиться к реальным пилотным данным.
 4. Сменить пароли или удалить четыре `*@test.com`; понизить их privileged profiles до enthusiast и проверить retirement сессий по процедуре Supabase. Выключение RPC само не отменяет ранее выданные роли.
 
