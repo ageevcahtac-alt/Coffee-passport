@@ -38,6 +38,7 @@
 | 2026-11-01 | main (Kimi) | Codex review | 20261101-1616-community-consent-checkbox: чекбокс согласия на публикацию дегустации (community-слой), isPublic через sharedTastingIsPublic; withErrorParam из stash не применён (есть authErrorPath) | ok | 1 (findings none; PR #86, CI зелёный, мерж отложен владельцем; stash@{0} droppнут) |
 | 2026-11-01 | main (Kimi) | нет (только отчёт и .last_audit) | daily-check-audit: формальный аудит fbc80b4..9bdc3fc (231 коммит), отчёт docs/reports/2026-11-01-daily-check-audit.md, .last_audit обновлён | ok | 0 (PR, CI зелёный) |
 | 2026-11-02 | Claude | Codex review | 20261102-1100-verify-content-checks: F-2 — verify-session-state по содержимому (меню из cabinet.ts fail-closed, маркеры страниц кабинетов), selftest 16 в workflow validate; + shebang-фикс redact.mjs | ok | 2 (PR #94) |
+| 2026-11-03 | Claude | Codex review | grind-converter фазы 1-2 (backlog #2): тесты ядра grindConvert + sanity таблицы (баг parseLeadingNumber на null — исправлен); TastingForm sourceRecipe → addGrindConfirmation через addTastingRecord (localStorage, БД не тронута) | ok | 2 (PR #97; носителя sourceRecipe пока нет — в чек-листе фазы 3) |
 
 ## Замены
 | дата | агент | было → стало | причина |
