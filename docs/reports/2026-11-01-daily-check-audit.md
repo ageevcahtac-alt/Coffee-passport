@@ -81,13 +81,19 @@ seed-INSERT не может исправить живые данные — ну�
 синхронизирует свежие инсталляции. Затронуты seed-данные, не схема/RLS.
 Отдельной задачи не требует.
 
-**F-2 (known, не исправлять в рамках аудита).** Две находки 2-го раунда Codex
+**F-2 (known → closed 2026-11-02, PR #94).** Две находки 2-го раунда Codex
 из задачи `20261028-1700-home-session-state`
 (`.agents/runs/20261028-1700-home-session-state/report-2.md`):
 проверка кабинета в `deploy/timeweb/verify-session-state.py:113` принимает
 пустую страницу баристы (HTTP 200 без содержимого) за PASS; проверка меню в
 `scripts/ops/verify-session-state.cjs:146` допускает лишние личные пункты.
-Severity: medium, открыты сознательно — владелец включил их в список известных.
+Severity: medium. Закрыто 2026-11-02 веткой `fix/verify-scripts-content-checks`
+(задача `20261102-1100-verify-content-checks`): меню сверяется с полным набором
+роли из `lib/auth/cabinet.ts` (fail-closed разбор, обе кавычки, count- и
+форм-проверки), кабинет — по маркерам содержимого страницы (не layout хаба),
+selftest 16 проверок в шаге validate workflow `verify-session-state`.
+Ревью Codex: 2 раунда, раунд 2 — findings: none.
+PR #94 → `fix/pre-pilot-shortlist`.
 
 ## 5. Checkpoint
 
