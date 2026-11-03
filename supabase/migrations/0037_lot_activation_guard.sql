@@ -31,10 +31,12 @@ security definer
 set search_path = public
 as $$
 begin
+  -- name !~ '\S' (no non-whitespace char anywhere) matches the client gate's
+  -- String.trim() semantics — plain btrim() would miss tab/newline-only names.
   if new.status = 'active'
      and (tg_op = 'INSERT' or old.status is distinct from 'active')
-     and (btrim(new.name) = '' or new.q_grade is null or new.q_grade <= 0) then
-    raise exception 'Lot % cannot move to status %: a non-empty name and a real Q-Score (q_grade > 0) are required (grain-flow audit P-5)', coalesce(new.id, '(new row)'), new.status;
+     and (new.name !~ '\S' or new.q_grade is null or new.q_grade <= 0) then
+    raise exception 'Lot % cannot move to status %: a non-empty name and a real Q-Score (q_grade > 0) are required (grain-flow audit P-5)', coalesce(new.id::text, '(new row)'), new.status;
   end if;
   return new;
 end;

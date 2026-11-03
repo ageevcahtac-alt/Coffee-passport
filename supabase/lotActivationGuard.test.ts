@@ -35,12 +35,15 @@ describe('lot activation guard', () => {
     expect(sql).toMatch(/new\.status\s*=\s*'active'/i);
     expect(sql).toMatch(/tg_op\s*=\s*'INSERT'/i);
     expect(sql).toMatch(/old\.status\s+is\s+distinct\s+from\s+'active'/i);
-    // Both readiness conditions on the NEW row.
-    expect(sql).toMatch(/btrim\(new\.name\)\s*=\s*''/i);
+    // Both readiness conditions on the NEW row (name check mirrors the
+    // client String.trim() semantics — tabs/newlines only must not pass).
+    expect(sql).toMatch(/new\.name\s*!\~\s*'\\S'/i);
     expect(sql).toMatch(/new\.q_grade\s+is\s+null/i);
     expect(sql).toMatch(/new\.q_grade\s*<=\s*0/i);
-    // Refuses loudly instead of silently fixing or skipping the write.
+    // Refuses loudly instead of silently fixing or skipping the write; the
+    // id is cast to text so the refusal message can't fail on uuid coercion.
     expect(sql).toMatch(/raise\s+exception/i);
+    expect(sql).toMatch(/coalesce\(new\.id::text/i);
     expect(sql).not.toMatch(/return\s+null\s*;/i);
   });
 
