@@ -18,27 +18,54 @@ const path = require('path');
 // Набор пунктов меню берём из lib/auth/cabinet.ts (navItemsFor — источник правды), а не
 // дублируем его здесь: меню в приложении и его проверка не расходятся молча. Разбор
 // fail-closed — не разобралось → ошибка → шаг проверки падает, а не пропускается.
-function loadNavExpectations() {
-  const src = fs.readFileSync(path.join(__dirname, '..', '..', 'lib', 'auth', 'cabinet.ts'), 'utf8');
+// Одинарные и двойные кавычки принимаем обе; если литеральная ссылка не разобралась
+// (оборванная пара кавычек, иной стиль) — бросаем, а не молча сужаем ожидаемый набор
+// (находка 1 ревью Codex: href: "/recipes" исключал /recipes из SHARED без ошибки).
+function loadNavExpectations(src = fs.readFileSync(path.join(__dirname, '..', '..', 'lib', 'auth', 'cabinet.ts'), 'utf8')) {
   const block = (name) => {
     const match = src.match(new RegExp(`const ${name}[\\s\\S]*?=\\s*([\\s\\S]*?);`));
     if (!match) throw new Error(`lib/auth/cabinet.ts: блок ${name} не найден`);
     return match[1];
   };
-  const hrefs = (body) => [...body.matchAll(/href:\s*'([^']+)'/g)].map((m) => m[1]);
+  const QUOTED_HREF = /href:\s*['"]([^'"]+)['"]/g;
+  // Ссылка-литерал — простой путь: незакрытая кавычка соседней строки иначе даёт
+  // мусор вида «/recipes, label: », который count-проверки не замечают.
+  const HREF_SHAPE = /^\/[^\s'"\\]*$/;
+  // allHref: true — в блоке не бывает шаблонов/вызовов, каждый href обязан разобраться.
+  const hrefs = (body, what, allHref) => {
+    const parsed = [...body.matchAll(QUOTED_HREF)].map((m) => m[1]);
+    const withOpenQuote = (body.match(/href:\s*['"]/g) || []).length;
+    const total = (body.match(/href:/g) || []).length;
+    const malformed = parsed.filter((href) => !HREF_SHAPE.test(href));
+    if (malformed.length || parsed.length !== withOpenQuote || (allHref && parsed.length !== total)) {
+      throw new Error(`lib/auth/cabinet.ts: ${what}: разобрано ${parsed.length} литеральных ссылок`
+        + ` (с кавычкой: ${withOpenQuote}, всего href: ${total})`
+        + (malformed.length ? `, непохожие на путь: ${JSON.stringify(malformed)}` : ''));
+    }
+    return parsed;
+  };
+  const cabinetBody = block('CABINET');
   const cabinet = {};
-  for (const m of block('CABINET').matchAll(/(\w+):\s*'([^']+)'/g)) cabinet[m[1]] = m[2];
-  const shared = hrefs(block('SHARED'));
+  for (const m of cabinetBody.matchAll(/(\w+):\s*['"]([^'"]+)['"]/g)) cabinet[m[1]] = m[2];
+  const cabinetEntries = (cabinetBody.match(/(\w+):/g) || []).length;
+  const badCabinet = Object.values(cabinet).filter((href) => !HREF_SHAPE.test(href));
+  if (badCabinet.length || Object.keys(cabinet).length !== cabinetEntries) {
+    throw new Error(`lib/auth/cabinet.ts: CABINET: разобрано ${Object.keys(cabinet).length} записей из ${cabinetEntries}`
+      + (badCabinet.length ? `, непохожие на путь: ${JSON.stringify(badCabinet)}` : ''));
+  }
+  const shared = hrefs(block('SHARED'), 'SHARED', true);
   const nav = src.match(/export function navItemsFor[\s\S]*?\n}/);
   if (!nav) throw new Error('lib/auth/cabinet.ts: navItemsFor не найдена');
   // Личные ссылки энтузиаста — литеральные href внутри navItemsFor (шаблонные со `${}` не
-  // ловим одинарной кавычкой), «Для партнёров» (/ #partners) личным не является.
-  const enthusiast = hrefs(nav[0]).filter((href) => href.startsWith('/') && href !== '/#partners');
+  // ловим кавычками), «Для партнёров» (/ #partners) личным не является. allHref не
+  // применяем: в navItemsFor есть шаблонные href входа/регистрации и вызов cabinetPathFor.
+  const enthusiast = hrefs(nav[0], 'navItemsFor', false).filter((href) => href.startsWith('/') && href !== '/#partners');
   const roles = ['enthusiast', 'admin', 'roaster_admin', 'cafe_admin', 'barista'];
   const missingCabinet = roles.filter((role) => !cabinet[role]);
   if (missingCabinet.length || shared.length === 0 || enthusiast.length === 0) {
     throw new Error(`lib/auth/cabinet.ts: разбор дал кабинеты=${JSON.stringify(cabinet)} `
-      + `общие=${JSON.stringify(shared)} личные энтузиаста=${JSON.stringify(enthusiast)}`);
+      + `общие=${JSON.stringify(shared)} личные энтузиаста=${JSON.stringify(enthusiast)}`
+      + (missingCabinet.length ? `; нет кабинетов: ${missingCabinet.join(', ')}` : ''));
   }
   return { cabinet, shared, enthusiast };
 }
@@ -87,14 +114,17 @@ function menuProblems(items, session) {
   return problems;
 }
 
-// Характерное содержимое кабинета роли — опорные строки из его разметки. HTTP 200 и «любой
-// заголовок» не считаются: пустой кабинет (страница рендерит null, как у баристы без
-// barista_id) и нейтральная страница с одним h1 не проходят (F-2).
+// Характерное содержимое кабинета роли — опорные строки из разметки его СТРАНИЦЫ, не из
+// общего layout хаба: иначе пустой children в исправном layout проходит проверку
+// (находка 2 ревью Codex: «Кабинет администратора»/«Платформа» и «Кабинет кофейни»/
+// вкладка «Меню зерна» живут в layout). HTTP 200 и «любой заголовок» не считаются:
+// пустой кабинет (страница рендерит null, как у баристы без barista_id) и нейтральная
+// страница с одним h1 не проходят (F-2).
 const CABINET_MARKERS = {
   '/journey': ['Моё кофейное путешествие'],
-  '/dashboard/admin': ['Кабинет администратора', 'Платформа'],
+  '/dashboard/admin': ['Обратная связь и проблемы', 'Роль отправителя'],
   '/dashboard/roaster': ['Каталог лотов', '+ Добавить лот'],
-  '/dashboard/cafe': ['Кабинет кофейни', 'Меню зерна'],
+  '/dashboard/cafe': ['Меню зерна по регионам', '+ Добавить лот в меню'],
   '/dashboard/barista': ['Мой профиль', 'Лояльность гостя'],
 };
 
@@ -130,6 +160,23 @@ function selftest() {
     for (const role of ['enthusiast', 'admin', 'roaster_admin', 'cafe_admin', 'barista']) {
       assert(Boolean(NAV.cabinet[role]), `нет кабинета для роли ${role}`);
     }
+  });
+
+  // Находка 1 ревью Codex: смена кавычек у ссылки не должна молча сужать набор.
+  const cabinetSrc = () => fs.readFileSync(path.join(__dirname, '..', '..', 'lib', 'auth', 'cabinet.ts'), 'utf8');
+  const throws = (fn, hint) => {
+    try { fn(); } catch (error) { assert(error.message.includes(hint), `ошибка без «${hint}»: ${error.message}`); return; }
+    throw new Error(`ожидался отказ «${hint}», разбор прошёл`);
+  };
+  expect('разбор принимает двойные кавычки без сужения набора', () => {
+    const nav = loadNavExpectations(cabinetSrc().replace("href: '/recipes'", 'href: "/recipes"'));
+    assert(nav.shared.includes('/recipes'), `SHARED потерял /recipes: ${JSON.stringify(nav.shared)}`);
+  });
+  expect('разбор отказывает на незакрытой кавычке ссылки', () => {
+    throws(() => loadNavExpectations(cabinetSrc().replace("href: '/recipes'", "href: '/recipes")), 'SHARED');
+  });
+  expect('разбор отказывает на потере кабинета роли', () => {
+    throws(() => loadNavExpectations(cabinetSrc().replace(/\n\s*barista: '\/dashboard\/barista',/, '')), 'barista');
   });
 
   const staffMenu = [
@@ -177,6 +224,31 @@ function selftest() {
   expect('страница с нейтральным заголовком отклонена', () => {
     assert(cabinetContentProblems('/dashboard/barista', '<main><h1>Кабинет</h1></main>').length > 0,
       'страница без маркеров баристы принята за кабинет');
+  });
+
+  // Находка 2 ревью Codex: маркеры — из содержимого страницы, layout-оболочка хаба
+  // (заголовок «Кабинет администратора»/«Кабинет кофейни» и вкладки) не засчитывается.
+  expect('админ: пустой кабинет в исправном layout отклонён', () => {
+    assert(cabinetContentProblems('/dashboard/admin',
+      '<main><p>Кабинет администратора</p><h1>Платформа</h1></main>').length > 0,
+    'layout-оболочка без содержимого страницы принята за кабинет админа');
+  });
+  expect('админ: страница с содержимым принята', () => {
+    const html = '<main><p>Кабинет администратора</p><h1>Платформа</h1>'
+      + '<p>Обратная связь и проблемы</p><label>Роль отправителя</label></main>';
+    assert(cabinetContentProblems('/dashboard/admin', html).length === 0,
+      cabinetContentProblems('/dashboard/admin', html).join('; '));
+  });
+  expect('кофейня: пустой кабинет в исправном layout отклонён', () => {
+    assert(cabinetContentProblems('/dashboard/cafe',
+      '<main><h1>Кабинет кофейни</h1><nav><p>Меню зерна</p></nav></main>').length > 0,
+    'layout-оболочка без содержимого страницы принята за кабинет кофейни');
+  });
+  expect('кофейня: страница с содержимым принята', () => {
+    const html = '<main><h1>Кабинет кофейни</h1><p>Меню зерна по регионам</p>'
+      + '<a>+ Добавить лот в меню</a></main>';
+    assert(cabinetContentProblems('/dashboard/cafe', html).length === 0,
+      cabinetContentProblems('/dashboard/cafe', html).join('; '));
   });
 
   console.log(lines.join('\n'));
