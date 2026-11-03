@@ -17,6 +17,9 @@ export interface GrindEstimate {
 // Free-text settings ("клик 18", "деление 4.5", "750 микрон") — pull the
 // first number out rather than requiring a clean numeric field.
 export function parseLeadingNumber(text: string): number | null {
+  // Defensive: callers pass trimmed user input, but the contract is "null
+  // for anything unparsable" — never a throw on a null-ish runtime value.
+  if (typeof text !== 'string') return null;
   const match = text.match(/-?\d+(\.\d+)?/);
   if (!match) return null;
   const value = Number(match[0]);

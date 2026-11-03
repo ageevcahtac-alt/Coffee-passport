@@ -236,3 +236,91 @@ describe('lib/journey/store — community sharing (is_public)', () => {
     expect(rowToRecord(legacyRow).isPublic).toBe(false);
   });
 });
+
+// Grind Converter, phase 2 (PRODUCT_BACKLOG #2) — a tasting saved with a
+// source-recipe grinder context AND the user's own grinder fields logs one
+// grind-conversion confirmation; the grinder fields themselves are workflow
+// metadata and must never reach the persisted record or the checkins row.
+describe('lib/journey/store — grind conversion confirmation', () => {
+  const GRIND_CONFIRMATIONS_KEY = 'coffee-passport:grind-confirmations';
+
+  function confirmationsFromStorage(): { fromModel: string; fromSetting: string; toModel: string; toSetting: string; brewingMethodId: string }[] {
+    const raw = window.localStorage.getItem(GRIND_CONFIRMATIONS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  }
+
+  beforeEach(() => {
+    vi.resetModules();
+    insertedRows.length = 0;
+    for (const key of Object.keys(canonicalLots)) delete canonicalLots[key];
+    for (const key of Object.keys(activeProfiles)) delete activeProfiles[key];
+    (globalThis as unknown as { window: { localStorage: MemoryStorage } }).window = {
+      localStorage: new MemoryStorage(),
+    };
+  });
+
+  afterEach(() => {
+    delete (globalThis as { window?: unknown }).window;
+  });
+
+  const source = { grinderModel: 'Mahlkönig EK43', grinderSetting: '7.2' };
+
+  it('logs a confirmation and strips the grinder fields from the record and the row', async () => {
+    const { addTastingRecord } = await import('./store');
+
+    const record = addTastingRecord(
+      { ...baseInput(), grinderModel: 'Comandante C40', grinderSetting: 'клик 24' },
+      'user-1',
+      source
+    );
+    await flush();
+
+    const confirmations = confirmationsFromStorage();
+    expect(confirmations).toHaveLength(1);
+    expect(confirmations[0]).toMatchObject({
+      fromModel: 'Mahlkönig EK43',
+      fromSetting: '7.2',
+      toModel: 'Comandante C40',
+      toSetting: 'клик 24',
+      brewingMethodId: 'v60',
+    });
+
+    // Workflow metadata never reaches the persisted record or checkins row.
+    expect('grinderModel' in record).toBe(false);
+    expect('grinderSetting' in record).toBe(false);
+    const row = insertedRows[0].row as Record<string, unknown>;
+    expect('grinder_model' in row).toBe(false);
+    expect('grinder_setting' in row).toBe(false);
+  });
+
+  it('skips the confirmation when grinder fields are empty or the grinder matches the source', async () => {
+    const { addTastingRecord } = await import('./store');
+
+    addTastingRecord({ ...baseInput(), grinderModel: '', grinderSetting: '' }, 'user-1', source);
+    addTastingRecord({ ...baseInput(), grinderModel: 'Mahlkönig EK43', grinderSetting: '7.2' }, 'user-1', source);
+    await flush();
+
+    expect(confirmationsFromStorage()).toHaveLength(0);
+  });
+
+  it('ignores grinder fields entirely when no source recipe is given', async () => {
+    const { addTastingRecord } = await import('./store');
+
+    const record = addTastingRecord({ ...baseInput(), grinderModel: 'Comandante C40', grinderSetting: 'клик 24' }, 'user-1');
+    await flush();
+
+    expect(confirmationsFromStorage()).toHaveLength(0);
+    expect('grinderModel' in record).toBe(false);
+  });
+
+  it('keeps the legacy save path byte-identical (no source, no fields)', async () => {
+    const { addTastingRecord } = await import('./store');
+
+    const record = addTastingRecord(baseInput(), 'user-1');
+    await flush();
+
+    expect(confirmationsFromStorage()).toHaveLength(0);
+    expect(record).toMatchObject(baseInput());
+    expect(Object.keys(record).sort()).toEqual(Object.keys({ ...baseInput(), id: '', userId: '', createdAt: '' }).sort());
+  });
+});

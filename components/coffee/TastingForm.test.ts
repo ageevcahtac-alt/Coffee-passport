@@ -45,3 +45,36 @@ describe('TastingForm restored draft', () => {
     expect(html).toContain('disabled=""');
   });
 });
+
+describe('TastingForm grinder fields (grind converter, phase 2)', () => {
+  beforeAll(() => vi.stubGlobal('React', React));
+  afterAll(() => vi.unstubAllGlobals());
+
+  const source = { grinderModel: 'Mahlkönig EK43', grinderSetting: '7.2' };
+
+  it('renders the optional "Ваш помол" section only with a source recipe', () => {
+    const withoutSource = renderToStaticMarkup(React.createElement(TastingForm, { onSave: () => {} }));
+    expect(withoutSource).not.toContain('Ваш помол');
+
+    const withSource = renderToStaticMarkup(
+      React.createElement(TastingForm, { onSave: () => {}, sourceRecipe: source })
+    );
+    expect(withSource).toContain('Ваш помол');
+    expect(withSource).toContain('Mahlkönig EK43');
+    expect(withSource).toContain('7.2');
+    // The known home-grinder catalog is offered alongside free text.
+    expect(withSource).toContain('Comandante C40');
+    expect(withSource).toContain('grinder-setting');
+  });
+
+  it('restores grinder values from an initial draft', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(TastingForm, {
+        onSave: () => {},
+        sourceRecipe: source,
+        initialValues: { ...saved, grinderModel: 'Comandante C40', grinderSetting: 'клик 24' },
+      })
+    );
+    expect(html).toContain('клик 24');
+  });
+});
