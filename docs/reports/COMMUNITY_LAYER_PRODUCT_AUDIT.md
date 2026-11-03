@@ -80,6 +80,17 @@ No k-anonymity threshold was needed (unlike an aggregate-statistics design, whic
 - `lib/types/coffee.ts` — `TastingRecord.isPublic`.
 - `lib/journey/store.ts` — `normalizeRecord`/`rowToRecord`/`recordToRow` carry `isPublic`/`is_public`; new `CommunityTasting` type + `getCommunityTastingsForLot(lotId)`.
 - `app/(site)/passport/[lotId]/taste/page.tsx` — opt-in checkbox (signed-in guests only), wired into `addTastingRecord`.
+
+> **2026-11-01, task `20261101-1616-community-consent-checkbox` (PR ветки
+> `feat/community-consent-checkbox`).** Этот пункт описывал намерение раньше,
+> чем оно стало фактом: форма в HEAD слала `isPublic: false` с комментарием
+> «this form has no consent control», а чекбокс существовал только в старом
+> stash от 2026-09-20. Расхождение закрыто — описание выше теперь соответствует
+> коду: согласие рендерится на шаге 'barista' только вошедшим гостям, по
+> умолчанию выключено, не ретроактивно; флаг гейтится через
+> `lib/journey/communityConsent.ts` (`sharedTastingIsPublic`), так что
+> анонимная дегустация не может получить `isPublic` в принципе. Текст согласия
+> и состав отдаваемых полей сверены с `checkins_community_view`.
 - `components/coffee/CommunityTastingsCard.tsx` — new, minimal, guest-facing card.
 - `app/(site)/passport/[lotId]/page.tsx` — fetches and renders it, post-reveal only.
 

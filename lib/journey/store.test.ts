@@ -201,3 +201,38 @@ describe('lib/journey/store — Taste Intent historical link', () => {
     expect(claimedRows[0].reference_taste_profile_ref).toBe('taste-v1');
   });
 });
+
+// Community Layer (docs/reports/COMMUNITY_LAYER_PRODUCT_AUDIT.md, task
+// 20261101-1616-community-consent-checkbox) — the consent checkbox on the
+// taste form resolves to TastingRecord.isPublic. These tests pin the
+// record <-> row mapping for that flag so a signed-in guest's opt-in
+// actually reaches checkins.is_public (and checkins_community_view
+// downstream), and a pre-consent/legacy row can never come back public.
+describe('lib/journey/store — community sharing (is_public)', () => {
+  it('recordToRow carries isPublic onto is_public in both states', async () => {
+    const { recordToRow } = await import('./store');
+    const record = {
+      ...baseInput(),
+      id: 'community-1',
+      userId: 'user-1',
+      createdAt: '2026-11-01T00:00:00.000Z',
+    };
+    expect(recordToRow({ ...record, isPublic: true }).is_public).toBe(true);
+    expect(recordToRow({ ...record, isPublic: false }).is_public).toBe(false);
+  });
+
+  it('rowToRecord reads is_public back, defaulting a missing one to false', async () => {
+    const { recordToRow, rowToRecord } = await import('./store');
+    const row = recordToRow({
+      ...baseInput(),
+      id: 'community-2',
+      userId: 'user-1',
+      createdAt: '2026-11-01T00:00:00.000Z',
+    });
+    expect(rowToRecord({ ...row, is_public: true }).isPublic).toBe(true);
+    // Defensive branch: raw rows written before 0026 have no is_public at
+    // all — they must read back as private.
+    const legacyRow = { ...row, is_public: null } as unknown as typeof row;
+    expect(rowToRecord(legacyRow).isPublic).toBe(false);
+  });
+});
