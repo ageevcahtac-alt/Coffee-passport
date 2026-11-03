@@ -58,4 +58,16 @@ Claude (по таблице ролей ORCHESTRATION.md: фикс логики �
 Проверки: node --check — OK; --selftest — 9/9 PASS (пустой кабинет и нейтральный заголовок
 отклонены, меню с лишним личным пунктом отклонено); отсутствие cabinet.ts рядом со скриптом —
 exit 1 (fail-closed).
-Merge: не мержено — ревью не пройдено.
+
+## Итог (финал, 2026-11-02, сессия 2)
+Запланировано: 1–3 — done (см. выше). 4. Codex review → PR → REGISTRY → закрыть F-2 — done.
+Написал: Claude — scripts/ops/verify-session-state.cjs, scripts/ops/redact.mjs (shebang-фикс,
+коммит 5b142de), .github/workflows/verify-session-state.yml.
+Ревью: Codex раунд 1 (report-2.md) — 2 находки medium, обе воспроизведены командами на
+реальном коде и исправлены (коммит 0151d1d): (1) разбор cabinet.ts — обе кавычки, count-проверки
+и валидация формы пути, незакрытая кавычка/потеря записи роняют шаг; (2) маркеры admin/cafe
+перенесены из layout хаба в содержимое страниц. Раунд 2 (report-3.md) — findings: none.
+Раундов: 2/2, ревью закрыто. Selftest вырос до 16 проверок (все регрессионные кейсы PASS).
+Проверки: --selftest 16/16; npm test 535/535; tsc/build/lint зелёные.
+Merge: PR #94 (base fix/pre-pilot-shortlist), CI — ждать зелёный check; мержит владелец.
+F-2 закрыта в аудите: ветка chore/daily-check-audit (PR #87), датированная строка со ссылкой на PR #94.

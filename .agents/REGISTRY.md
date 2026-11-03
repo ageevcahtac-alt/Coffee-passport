@@ -34,6 +34,8 @@
 
 | 2026-10-28 | Claude | Codex review | 20261028-1700-home-session-state: главная и меню «вошёл / не вошёл», middleware сессии | ok | 2 |
 
+| 2026-11-02 | Claude | Codex review | 20261102-1100-verify-content-checks: F-2 — verify-session-state по содержимому (меню из cabinet.ts fail-closed, маркеры страниц кабинетов), selftest 16 в workflow validate; + shebang-фикс redact.mjs | ok | 2 (PR #94) |
+
 ## Замены
 | дата | агент | было → стало | причина |
 |---|---|---|---|
