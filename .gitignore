@@ -23,6 +23,10 @@
 *.pem
 npm-debug.log*
 
+# python (ops scripts)
+__pycache__/
+*.pyc
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
