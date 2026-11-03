@@ -5,18 +5,265 @@
 //      «Выйти» → меню снова общее;
 //   3) гость без входа сканирует и оценивает лот → оценка на устройстве → входит → перенос (POST checkins 201).
 // Запуск (из workflow verify-session-state): node verify-session-state.cjs <путь к playwright>
+//   node verify-session-state.cjs --selftest — прогон чистых проверок меню/кабинета на
+//   синтетических фикстурах без прода и playwright (валидация разбора cabinet.ts, отказ
+//   на пустом кабинете и на меню с лишним личным пунктом).
 // env: PROD_URL, LOT_ID, TEMP_JSON ({<метка>: {email, password, role, cabinet}}, метка guest — для переноса), OUT_DIR.
 // Печатает только шаги, пути и коды — ни email, ни пароль в вывод не попадают.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+
+// ── Меню и кабинет: содержимое, а не URL (F-2, ревью Codex раунд 2) ──────────
+// Набор пунктов меню берём из lib/auth/cabinet.ts (navItemsFor — источник правды), а не
+// дублируем его здесь: меню в приложении и его проверка не расходятся молча. Разбор
+// fail-closed — не разобралось → ошибка → шаг проверки падает, а не пропускается.
+// Одинарные и двойные кавычки принимаем обе; если литеральная ссылка не разобралась
+// (оборванная пара кавычек, иной стиль) — бросаем, а не молча сужаем ожидаемый набор
+// (находка 1 ревью Codex: href: "/recipes" исключал /recipes из SHARED без ошибки).
+function loadNavExpectations(src = fs.readFileSync(path.join(__dirname, '..', '..', 'lib', 'auth', 'cabinet.ts'), 'utf8')) {
+  const block = (name) => {
+    const match = src.match(new RegExp(`const ${name}[\\s\\S]*?=\\s*([\\s\\S]*?);`));
+    if (!match) throw new Error(`lib/auth/cabinet.ts: блок ${name} не найден`);
+    return match[1];
+  };
+  const QUOTED_HREF = /href:\s*['"]([^'"]+)['"]/g;
+  // Ссылка-литерал — простой путь: незакрытая кавычка соседней строки иначе даёт
+  // мусор вида «/recipes, label: », который count-проверки не замечают.
+  const HREF_SHAPE = /^\/[^\s'"\\]*$/;
+  // allHref: true — в блоке не бывает шаблонов/вызовов, каждый href обязан разобраться.
+  const hrefs = (body, what, allHref) => {
+    const parsed = [...body.matchAll(QUOTED_HREF)].map((m) => m[1]);
+    const withOpenQuote = (body.match(/href:\s*['"]/g) || []).length;
+    const total = (body.match(/href:/g) || []).length;
+    const malformed = parsed.filter((href) => !HREF_SHAPE.test(href));
+    if (malformed.length || parsed.length !== withOpenQuote || (allHref && parsed.length !== total)) {
+      throw new Error(`lib/auth/cabinet.ts: ${what}: разобрано ${parsed.length} литеральных ссылок`
+        + ` (с кавычкой: ${withOpenQuote}, всего href: ${total})`
+        + (malformed.length ? `, непохожие на путь: ${JSON.stringify(malformed)}` : ''));
+    }
+    return parsed;
+  };
+  const cabinetBody = block('CABINET');
+  const cabinet = {};
+  for (const m of cabinetBody.matchAll(/(\w+):\s*['"]([^'"]+)['"]/g)) cabinet[m[1]] = m[2];
+  const cabinetEntries = (cabinetBody.match(/(\w+):/g) || []).length;
+  const badCabinet = Object.values(cabinet).filter((href) => !HREF_SHAPE.test(href));
+  if (badCabinet.length || Object.keys(cabinet).length !== cabinetEntries) {
+    throw new Error(`lib/auth/cabinet.ts: CABINET: разобрано ${Object.keys(cabinet).length} записей из ${cabinetEntries}`
+      + (badCabinet.length ? `, непохожие на путь: ${JSON.stringify(badCabinet)}` : ''));
+  }
+  const shared = hrefs(block('SHARED'), 'SHARED', true);
+  const nav = src.match(/export function navItemsFor[\s\S]*?\n}/);
+  if (!nav) throw new Error('lib/auth/cabinet.ts: navItemsFor не найдена');
+  // Личные ссылки энтузиаста — литеральные href внутри navItemsFor (шаблонные со `${}` не
+  // ловим кавычками), «Для партнёров» (/ #partners) личным не является. allHref не
+  // применяем: в navItemsFor есть шаблонные href входа/регистрации и вызов cabinetPathFor.
+  const enthusiast = hrefs(nav[0], 'navItemsFor', false).filter((href) => href.startsWith('/') && href !== '/#partners');
+  const roles = ['enthusiast', 'admin', 'roaster_admin', 'cafe_admin', 'barista'];
+  const missingCabinet = roles.filter((role) => !cabinet[role]);
+  if (missingCabinet.length || shared.length === 0 || enthusiast.length === 0) {
+    throw new Error(`lib/auth/cabinet.ts: разбор дал кабинеты=${JSON.stringify(cabinet)} `
+      + `общие=${JSON.stringify(shared)} личные энтузиаста=${JSON.stringify(enthusiast)}`
+      + (missingCabinet.length ? `; нет кабинетов: ${missingCabinet.join(', ')}` : ''));
+  }
+  return { cabinet, shared, enthusiast };
+}
+
+const NAV = loadNavExpectations();
+const PERSONAL = /^\/(journey|coffee-kitchen|loyalty|dashboard|admin)(\/|$|\?)/;
+
+// Личные ссылки пунктов меню (путь без query) — ровно набор своей роли из cabinet.ts,
+// без «лишних»: сотруднику дневник/Journey/«Мои карты» не положены (ревью Codex, раунд 2).
+function personalHrefs(items) {
+  return [...new Set(items.map((item) => (item.href || '').split('?')[0]).filter((href) => PERSONAL.test(href)))];
+}
+
+// session: null — гость, {role} — вошедший. Возвращает список проблем; пусто — меню в точности
+// соответствует navItemsFor для этого состояния.
+function menuProblems(items, session) {
+  const labels = items.map((item) => item.label);
+  const hrefs = items.map((item) => (item.href || '').split('?')[0]);
+  const problems = [];
+  const missingShared = NAV.shared.filter((href) => !hrefs.includes(href));
+  if (missingShared.length) problems.push(`нет общих: ${missingShared.join(', ')}`);
+  if (session) {
+    const cabinetHref = NAV.cabinet[session.role];
+    if (!cabinetHref) {
+      problems.push(`cabinet.ts: нет кабинета для роли ${session.role}`);
+    } else {
+      const expected = session.role === 'enthusiast' ? NAV.enthusiast : [cabinetHref];
+      const personal = personalHrefs(items);
+      const absent = expected.filter((href) => !personal.includes(href));
+      const extra = personal.filter((href) => !expected.includes(href));
+      if (absent.length) problems.push(`нет личных: ${absent.join(', ')}`);
+      if (extra.length) problems.push(`лишние личные: ${extra.join(', ')}`);
+    }
+    if (!labels.includes('Выйти')) problems.push('нет «Выйти»');
+    for (const label of ['Войти', 'Регистрация']) {
+      if (labels.includes(label)) problems.push(`у вошедшего есть «${label}»`);
+    }
+  } else {
+    const personal = personalHrefs(items);
+    if (personal.length) problems.push(`у гостя есть личные: ${personal.join(', ')}`);
+    for (const label of ['Войти', 'Регистрация', 'Для партнёров']) {
+      if (!labels.includes(label)) problems.push(`нет «${label}»`);
+    }
+    if (labels.includes('Выйти')) problems.push('у гостя есть «Выйти»');
+  }
+  return problems;
+}
+
+// Характерное содержимое кабинета роли — опорные строки из разметки его СТРАНИЦЫ, не из
+// общего layout хаба: иначе пустой children в исправном layout проходит проверку
+// (находка 2 ревью Codex: «Кабинет администратора»/«Платформа» и «Кабинет кофейни»/
+// вкладка «Меню зерна» живут в layout). HTTP 200 и «любой заголовок» не считаются:
+// пустой кабинет (страница рендерит null, как у баристы без barista_id) и нейтральная
+// страница с одним h1 не проходят (F-2).
+const CABINET_MARKERS = {
+  '/journey': ['Моё кофейное путешествие'],
+  '/dashboard/admin': ['Обратная связь и проблемы', 'Роль отправителя'],
+  '/dashboard/roaster': ['Каталог лотов', '+ Добавить лот'],
+  '/dashboard/cafe': ['Меню зерна по регионам', '+ Добавить лот в меню'],
+  '/dashboard/barista': ['Мой профиль', 'Лояльность гостя'],
+};
+
+function cabinetContentProblems(cabinetPath, html) {
+  const markers = CABINET_MARKERS[cabinetPath];
+  if (!markers) return [`для ${cabinetPath} в скрипте не заданы маркеры содержимого`];
+  const missing = markers.filter((marker) => !html.includes(marker));
+  return missing.length ? [`нет содержимого кабинета: ${missing.map((m) => `«${m}»`).join(', ')}`] : [];
+}
+
+// Проверки на синтетических фикстурах — без прода и playwright. Каждый «отклонено»-пункт
+// считается пройденным, только если проверка реально отказала: так selftest показывает,
+// что отказ виден, а не молчаливо пропущен.
+function selftest() {
+  const lines = [];
+  let bad = 0;
+  const expect = (name, fn) => {
+    try {
+      fn();
+      lines.push(`PASS selftest: ${name}`);
+    } catch (error) {
+      bad += 1;
+      lines.push(`FAIL selftest: ${name}: ${error.message.split('\n')[0]}`);
+    }
+  };
+  const assert = (cond, msg) => { if (!cond) throw new Error(msg); };
+  const rejected = (problems, hint) => assert(problems.some((p) => p.includes(hint)),
+    `ожидался отказ «${hint}», проверка дала: ${problems.join('; ') || 'принято'}`);
+
+  expect('разбор lib/auth/cabinet.ts', () => {
+    assert(NAV.shared.length > 0, `общие не разобрались: ${JSON.stringify(NAV.shared)}`);
+    assert(NAV.enthusiast.length > 0, `личные энтузиаста не разобрались: ${JSON.stringify(NAV.enthusiast)}`);
+    for (const role of ['enthusiast', 'admin', 'roaster_admin', 'cafe_admin', 'barista']) {
+      assert(Boolean(NAV.cabinet[role]), `нет кабинета для роли ${role}`);
+    }
+  });
+
+  // Находка 1 ревью Codex: смена кавычек у ссылки не должна молча сужать набор.
+  const cabinetSrc = () => fs.readFileSync(path.join(__dirname, '..', '..', 'lib', 'auth', 'cabinet.ts'), 'utf8');
+  const throws = (fn, hint) => {
+    try { fn(); } catch (error) { assert(error.message.includes(hint), `ошибка без «${hint}»: ${error.message}`); return; }
+    throw new Error(`ожидался отказ «${hint}», разбор прошёл`);
+  };
+  expect('разбор принимает двойные кавычки без сужения набора', () => {
+    const nav = loadNavExpectations(cabinetSrc().replace("href: '/recipes'", 'href: "/recipes"'));
+    assert(nav.shared.includes('/recipes'), `SHARED потерял /recipes: ${JSON.stringify(nav.shared)}`);
+  });
+  expect('разбор отказывает на незакрытой кавычке ссылки', () => {
+    throws(() => loadNavExpectations(cabinetSrc().replace("href: '/recipes'", "href: '/recipes")), 'SHARED');
+  });
+  expect('разбор отказывает на потере кабинета роли', () => {
+    throws(() => loadNavExpectations(cabinetSrc().replace(/\n\s*barista: '\/dashboard\/barista',/, '')), 'barista');
+  });
+
+  const staffMenu = [
+    { label: '🗺️ Карта кофеен', href: '/map' },
+    { label: '🏆 Топовые рецепты', href: '/recipes' },
+    { label: '🧑‍🍳 Кабинет бариста', href: '/dashboard/barista' },
+    { label: 'Выйти' },
+  ];
+  expect('меню баристы без лишнего принято', () => {
+    assert(menuProblems(staffMenu, { role: 'barista' }).length === 0,
+      menuProblems(staffMenu, { role: 'barista' }).join('; '));
+  });
+  const extraItemMenu = [...staffMenu.slice(0, 3), { label: '💳 Мои карты', href: '/loyalty' }, staffMenu[3]];
+  expect('меню с лишним личным пунктом отклонено', () => {
+    rejected(menuProblems(extraItemMenu, { role: 'barista' }), 'лишние');
+  });
+  const noCabinetMenu = staffMenu.filter((item) => !item.href || !item.href.startsWith('/dashboard'));
+  expect('меню без кабинета отклонено', () => {
+    rejected(menuProblems(noCabinetMenu, { role: 'barista' }), 'нет личных');
+  });
+  const guestMenu = [
+    { label: '🗺️ Карта кофеен', href: '/map' },
+    { label: '🏆 Топовые рецепты', href: '/recipes' },
+    { label: 'Войти', href: '/auth/login?next=%2F' },
+    { label: 'Регистрация', href: '/auth/login?mode=signup&next=%2F' },
+    { label: 'Для партнёров', href: '/#partners' },
+  ];
+  expect('гостевое меню принято', () => {
+    assert(menuProblems(guestMenu, null).length === 0, menuProblems(guestMenu, null).join('; '));
+  });
+  expect('гостевое меню с личным пунктом отклонено', () => {
+    rejected(menuProblems([...guestMenu, { label: '🧳 Journey', href: '/journey' }], null), 'личные');
+  });
+
+  const baristaHtml = '<main><p>XO · Всеволожск</p><h1>Проверка входа (временно)</h1>'
+    + '<p>Мой профиль</p><p>Лояльность гостя</p></main>';
+  expect('кабинет баристы с контентом принят', () => {
+    assert(cabinetContentProblems('/dashboard/barista', baristaHtml).length === 0,
+      cabinetContentProblems('/dashboard/barista', baristaHtml).join('; '));
+  });
+  expect('пустой кабинет отклонён', () => {
+    assert(cabinetContentProblems('/dashboard/barista', '<html><head></head><body></body></html>').length > 0,
+      'пустой HTML принят за кабинет');
+  });
+  expect('страница с нейтральным заголовком отклонена', () => {
+    assert(cabinetContentProblems('/dashboard/barista', '<main><h1>Кабинет</h1></main>').length > 0,
+      'страница без маркеров баристы принята за кабинет');
+  });
+
+  // Находка 2 ревью Codex: маркеры — из содержимого страницы, layout-оболочка хаба
+  // (заголовок «Кабинет администратора»/«Кабинет кофейни» и вкладки) не засчитывается.
+  expect('админ: пустой кабинет в исправном layout отклонён', () => {
+    assert(cabinetContentProblems('/dashboard/admin',
+      '<main><p>Кабинет администратора</p><h1>Платформа</h1></main>').length > 0,
+    'layout-оболочка без содержимого страницы принята за кабинет админа');
+  });
+  expect('админ: страница с содержимым принята', () => {
+    const html = '<main><p>Кабинет администратора</p><h1>Платформа</h1>'
+      + '<p>Обратная связь и проблемы</p><label>Роль отправителя</label></main>';
+    assert(cabinetContentProblems('/dashboard/admin', html).length === 0,
+      cabinetContentProblems('/dashboard/admin', html).join('; '));
+  });
+  expect('кофейня: пустой кабинет в исправном layout отклонён', () => {
+    assert(cabinetContentProblems('/dashboard/cafe',
+      '<main><h1>Кабинет кофейни</h1><nav><p>Меню зерна</p></nav></main>').length > 0,
+    'layout-оболочка без содержимого страницы принята за кабинет кофейни');
+  });
+  expect('кофейня: страница с содержимым принята', () => {
+    const html = '<main><h1>Кабинет кофейни</h1><p>Меню зерна по регионам</p>'
+      + '<a>+ Добавить лот в меню</a></main>';
+    assert(cabinetContentProblems('/dashboard/cafe', html).length === 0,
+      cabinetContentProblems('/dashboard/cafe', html).join('; '));
+  });
+
+  console.log(lines.join('\n'));
+  console.log(bad ? `SELFTEST FAIL: ${bad}` : 'SELFTEST PASS');
+  process.exit(bad ? 1 : 0);
+}
+
+if (process.argv.includes('--selftest')) selftest();
+
 const { chromium } = require(process.argv[2]);
 
 const base = process.env.PROD_URL.replace(/\/$/, '');
 const out = process.env.OUT_DIR;
 const temp = JSON.parse(fs.readFileSync(process.env.TEMP_JSON, 'utf8'));
 const VIEWPORT = { width: 390, height: 844 };
-const PERSONAL = /^\/(journey|coffee-kitchen|loyalty|dashboard|admin)(\/|$|\?)/;
 const AUTH_COOKIE = /^(sb-.+-auth-token)(?:\.(\d+))?$/;
 const results = [];
 let failed = 0;
@@ -77,13 +324,11 @@ function checkGuestHome(state) {
 }
 
 function checkGuestMenu(items) {
-  const labels = items.map((item) => item.label);
-  const personal = items.filter((item) => item.href && PERSONAL.test(item.href)).map((item) => item.href);
-  const missing = ['Войти', 'Регистрация', 'Для партнёров'].filter((label) => !labels.includes(label));
-  if (personal.length || missing.length || labels.includes('Выйти')) {
-    throw new Error(`меню: личные=${personal.join(',') || '—'} нет=${missing.join(',') || '—'} пункты: ${labels.join(' | ')}`);
+  const problems = menuProblems(items, null);
+  if (problems.length) {
+    throw new Error(`меню: ${problems.join('; ')} — пункты: ${items.map((item) => item.label).join(' | ')}`);
   }
-  return `пункты: ${labels.join(' | ')}`;
+  return `пункты: ${items.map((item) => item.label).join(' | ')}`;
 }
 
 async function login(page, account, next = '/') {
@@ -148,14 +393,11 @@ async function role(browser, label, account) {
 
     await step(`${label}: меню роли и «Выйти»`, async () => {
       const items = await readMenu(page, `menu-${label}.png`);
-      const labels = items.map((item) => item.label);
-      const personal = items.filter((item) => item.href && PERSONAL.test(item.href)).map((item) => item.href);
-      // Ровно личные ссылки своей роли — ни кабинетов чужих ролей, ни дневника у сотрудника (ревью Codex, раунд 2).
-      const expected = account.cabinet === '/journey' ? ['/journey', '/coffee-kitchen', '/loyalty'] : [account.cabinet];
-      const exact = [...personal].sort().join(',') === [...expected].sort().join(',');
-      const ok = exact && labels.includes('Выйти') && !labels.includes('Войти') && !labels.includes('Регистрация');
-      if (!ok) throw new Error(`нет кабинета/«Выйти» или есть «Войти»: ${labels.join(' | ')}`);
-      return `пункты: ${labels.join(' | ')}`;
+      const problems = menuProblems(items, { role: account.role });
+      if (problems.length) {
+        throw new Error(`меню: ${problems.join('; ')} — пункты: ${items.map((item) => item.label).join(' | ')}`);
+      }
+      return `пункты: ${items.map((item) => item.label).join(' | ')}`;
     });
 
     await step(`${label}: «Перейти в кабинет» → ${account.cabinet}`, async () => {
@@ -167,12 +409,16 @@ async function role(browser, label, account) {
       const direct = await page.goto(base + account.cabinet, { waitUntil: 'networkidle' });
       const landed = new URL(page.url()).pathname;
       const broken = await page.getByText(/Application error|Something went wrong|Что-то пошло не так/).count();
-      // Кабинет не пустой: есть заголовок (у бариста без карточки страница рендерит null — ревью Codex, раунд 2).
-      const heading = await page.locator('h1, h2').filter({ hasText: /\S/ }).count();
-      if (landed !== account.cabinet || !direct || direct.status() >= 400 || broken || !heading) {
-        throw new Error(`открылось ${landed} (HTTP ${direct ? direct.status() : '—'}, экран ошибки=${broken}, заголовков=${heading})`);
+      // Учётка TEMP_JSON и cabinet.ts не должны разойтись: проверка ведёт туда, куда меню/главная.
+      if (NAV.cabinet[account.role] !== account.cabinet) {
+        throw new Error(`ветка/workflow устарели: cabinet.ts ведёт ${NAV.cabinet[account.role]} на ${account.role}, учётка — ${account.cabinet}`);
       }
-      return `${landed} (HTTP ${direct.status()})`;
+      // Кабинет не пустой: есть характерное содержимое роли, а не любой заголовок (F-2, Codex раунд 2).
+      const contentProblems = cabinetContentProblems(account.cabinet, await page.content());
+      if (landed !== account.cabinet || !direct || direct.status() >= 400 || broken || contentProblems.length) {
+        throw new Error(`открылось ${landed} (HTTP ${direct ? direct.status() : '—'}, экран ошибки=${broken}${contentProblems.length ? `, ${contentProblems.join('; ')}` : ''})`);
+      }
+      return `${landed} (HTTP ${direct.status()}), содержимое: ${CABINET_MARKERS[account.cabinet].join(' + ')}`;
     });
 
     await step(`${label}: истёкший access-токен обновлён middleware, вход на месте`, async () => {
