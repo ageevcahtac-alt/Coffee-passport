@@ -35,6 +35,7 @@
 | 2026-10-28 | Claude | Codex review | 20261028-1700-home-session-state: главная и меню «вошёл / не вошёл», middleware сессии | ok | 2 |
 
 | 2026-11-01 | main (Kimi) | нет (тривиально, решение владельца) | repo-cleanup: __pycache__/ и *.pyc в .gitignore, удалён deploy/timeweb/__pycache__/ | ok | 0 (PR #85, CI зелёный, мерж отложен владельцем) |
+| 2026-11-01 | main (Kimi) | Codex review | 20261101-1616-community-consent-checkbox: чекбокс согласия на публикацию дегустации (community-слой), isPublic через sharedTastingIsPublic; withErrorParam из stash не применён (есть authErrorPath) | ok | 1 (findings none; PR #86, CI зелёный, мерж отложен владельцем; stash@{0} droppнут) |
 
 ## Замены
 | дата | агент | было → стало | причина |
