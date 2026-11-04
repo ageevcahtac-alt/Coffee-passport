@@ -102,6 +102,59 @@ describe('estimateGrindSetting', () => {
     });
     expect(estimate).toMatchObject({ rawValue: 20, confidence: 'reference' });
   });
+
+  // Phase 3 (0038): the cross-device community median outranks this device's
+  // local confirmations, which outrank the static reference table.
+  describe('server median tier (phase 3)', () => {
+    const base = {
+      fromModel: 'Comandante C40',
+      fromSettingText: '24 клик',
+      toModel: 'Timemore C2/C3',
+      brewingMethodId: 'v60',
+      confirmations: [confirmation({ id: 'c1', toSetting: 'деление 19' }), confirmation({ id: 'c2', toSetting: '21' })],
+    };
+
+    it('a server median wins over local confirmations for the same triple', () => {
+      const estimate = estimateGrindSetting({ ...base, serverMedian: { value: 18.5, count: 7 } });
+      expect(estimate).toMatchObject({ rawValue: 18.5, unit: 'деление', confidence: 'community' });
+      expect(estimate?.displayText).toContain('7 отметок');
+    });
+
+    it('rounds the median to one decimal, like every other tier', () => {
+      // Even-N medians interpolate (percentile_cont averages the two middle
+      // rows), so fractional values are the norm, not the exception.
+      const estimate = estimateGrindSetting({ ...base, serverMedian: { value: 20.25, count: 2 } });
+      expect(estimate?.rawValue).toBe(20.3);
+    });
+
+    it('pluralizes the sample size honestly on the single-confirmation edge', () => {
+      const one = estimateGrindSetting({ ...base, serverMedian: { value: 21, count: 1 } });
+      expect(one?.displayText).toContain('1 отметка');
+      const few = estimateGrindSetting({ ...base, serverMedian: { value: 21, count: 3 } });
+      expect(few?.displayText).toContain('3 отметки');
+    });
+
+    it('an empty or degenerate server median is skipped, not trusted', () => {
+      // count=0 (view never emits it, but the type allows it), non-finite
+      // value, or a missing median — all fall through to the local tier.
+      for (const serverMedian of [{ value: 20, count: 0 }, { value: Number.NaN, count: 2 }, null, undefined]) {
+        const estimate = estimateGrindSetting({ ...base, serverMedian });
+        expect(estimate?.rawValue).toBe(20); // local average of 19 and 21
+      }
+    });
+
+    it('keeps the unit from the target model even when the method has no server data', () => {
+      const estimate = estimateGrindSetting({
+        fromModel: 'Comandante C40',
+        fromSettingText: '24 клик',
+        toModel: 'Fellow Ode',
+        brewingMethodId: 'v60',
+        confirmations: [],
+        serverMedian: { value: 5.5, count: 4 },
+      });
+      expect(estimate).toMatchObject({ rawValue: 5.5, unit: 'деление', confidence: 'community' });
+    });
+  });
 });
 
 describe('GRIND_REFERENCE_TABLE sanity', () => {

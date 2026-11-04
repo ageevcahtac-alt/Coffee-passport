@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import type { BrewingRecipe } from '@/lib/types/coffee';
 import { computeExtraction } from '@/lib/utils/extraction';
 import { formatTastingDate } from '@/lib/utils/date';
 import { ExtractionChart, type ExtractionPoint } from '@/components/coffee/ExtractionChart';
 import { VoteButtons } from '@/components/coffee/VoteButtons';
+import { markPendingGrindSource } from '@/lib/journey/pendingGrindSourceFlag';
 
 export function RecipeCard({
   recipe,
@@ -68,6 +70,23 @@ export function RecipeCard({
 
   const [showExtraction, setShowExtraction] = useState(false);
   const [myTds, setMyTds] = useState('');
+  const router = useRouter();
+
+  // "Сварил по этому рецепту" (Grind Converter phase 3): carry this recipe's
+  // grinder into the blind-taste flow so the tasting form can ask which
+  // grinder/setting the user actually brewed on — the save path logs that
+  // pair as a grind-conversion confirmation (and, with community consent,
+  // syncs it, see lib/journey/store.ts). Needs the full grinder pair and a
+  // lot to navigate to; without them there is no conversion to confirm.
+  const canStartBrewTasting = Boolean(recipe.grinderModel && recipe.grinderSetting && recipe.lotId);
+  function startBrewTasting() {
+    if (!recipe.grinderModel || !recipe.grinderSetting || !recipe.lotId) return;
+    markPendingGrindSource(recipe.lotId, {
+      grinderModel: recipe.grinderModel,
+      grinderSetting: recipe.grinderSetting,
+    });
+    router.push(`/passport/${encodeURIComponent(recipe.lotId)}/taste`);
+  }
 
   const authorResult = recipe.measuredTdsPercent
     ? computeExtraction({ doseG: recipe.doseG, yieldG: recipe.yieldG, tdsPercent: recipe.measuredTdsPercent })
@@ -185,15 +204,26 @@ export function RecipeCard({
       </div>
 
       <div className="flex items-center justify-between gap-4">
-        {!isOwn && onAdapt && (
-          <button
-            type="button"
-            onClick={() => onAdapt(recipe)}
-            className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900"
-          >
-            Адаптировать под себя
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          {canStartBrewTasting && (
+            <button
+              type="button"
+              onClick={startBrewTasting}
+              className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900"
+            >
+              Сварил по этому рецепту
+            </button>
+          )}
+          {!isOwn && onAdapt && (
+            <button
+              type="button"
+              onClick={() => onAdapt(recipe)}
+              className="text-sm text-ink-700 underline underline-offset-2 hover:text-ink-900"
+            >
+              Адаптировать под себя
+            </button>
+          )}
+        </div>
         {isVotable && <VoteButtons recipeId={recipe.id} currentUserId={currentUserId} />}
       </div>
 

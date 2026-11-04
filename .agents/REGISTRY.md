@@ -41,6 +41,7 @@
 | 2026-11-03 | Claude | нет (аналитика, кода нет) | grain-flow-audit: аудит пути зерна (лот→заказ→отгрузка), RLS/интеграции/fail-closed; отчёт docs/reports/2026-11-03-grain-flow-audit.md, находки F-1..F-6, предложения P-1..P-6 | ok | 0 (без PR) |
 | 2026-11-03 | Claude | Codex review | grain-audit-followups: P-5 — серверный гейт активации лота (0037, BEFORE INSERT OR UPDATE, имя + q_grade > 0), правки отчёта по решениям владельца, SQL онбординга в пилотный чек-лист | ok | 2 (PR #96; миграцию 0037 накатить вручную через db-migrate) |
 | 2026-11-03 | Claude | Codex review | grind-converter фазы 1-2 (backlog #2): тесты ядра grindConvert + sanity таблицы (баг parseLeadingNumber на null — исправлен); TastingForm sourceRecipe → addGrindConfirmation через addTastingRecord (localStorage, БД не тронута) | ok | 2 (PR #97; носителя sourceRecipe пока нет — в чек-листе фазы 3) |
+| 2026-11-03 | main (Kimi) | Codex review | grind-community-sync, фаза 3 (backlog #2): носитель sourceRecipe («Сварил по этому рецепту» → sessionStorage-флаг по лоту → taste-форма), 0038 (grind_confirmations insert-only + каскад-safe триггер, view медиан percentile_cont без identity-колонок, anon read), синк по образцу чекинов consent-gated (isPublic), идемпотентный пуш — клиентский UUID = PK серверной строки; round 1: relink + каскад; round 2: уход от content-matching к точному PK | ok | 2 (PR #101; после мержа — gh workflow run db-migrate --ref fix/pre-pilot-shortlist) |
 
 ## Замены
 | дата | агент | было → стало | причина |

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { BrewingRecipe, Lot } from '@/lib/types/coffee';
 import { HOME_GRINDER_MODELS } from '@/lib/types/coffee';
 import { useGrindConfirmations } from '@/lib/data/useGrindConfirmations';
+import { medianKey, useGrindServerMedians } from '@/lib/data/grindServerMedians';
 import { addGrindConfirmation } from '@/lib/data/grindConfirmationsStore';
 import { estimateGrindSetting } from '@/lib/utils/grindConvert';
 import { useEquipment } from '@/lib/data/useEquipment';
@@ -114,6 +115,10 @@ export function EnthusiastRecipeForm({
 }) {
   const [form, setForm] = useState<FormState>(() => toFormState(sourceRecipe, editingRecipe));
   const grindConfirmations = useGrindConfirmations();
+  // Phase 3: cross-device community medians (0038) outrank this device's
+  // local confirmations when present — see estimateGrindSetting's priority
+  // order (server > local > static table).
+  const grindServerMedians = useGrindServerMedians();
   // Garage might not be loaded locally yet if the user never visited
   // /journey/equipment on this device — pull it from Supabase so auto-fill
   // (the effect below) still has something to work with.
@@ -167,8 +172,12 @@ export function EnthusiastRecipeForm({
       toModel: form.grinderModel,
       brewingMethodId: form.brewingMethodId,
       confirmations: grindConfirmations,
+      serverMedian:
+        grindServerMedians.get(
+          medianKey(sourceRecipe.grinderModel, form.grinderModel, form.brewingMethodId)
+        ) ?? null,
     });
-  }, [sourceRecipe, form.grinderModel, form.brewingMethodId, grindConfirmations]);
+  }, [sourceRecipe, form.grinderModel, form.brewingMethodId, grindConfirmations, grindServerMedians]);
 
   const draftSlotAvailable =
     Boolean(editingRecipe) || !form.brewingMethodId || canCreateDraft(allRecipes, 'enthusiast', currentUserId, form.brewingMethodId);
