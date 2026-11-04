@@ -38,6 +38,18 @@ describe('inferProcessFamily — free-text Lot.process → structured family', (
     expect(inferProcessFamily('  wAsHeD ')).toBe('washed');
   });
 
+  it('matches whole words, not substrings (Codex review round 1)', () => {
+    // "Полумытая" must not be swallowed by the washed keyword "мытая" —
+    // it is its own honey keyword.
+    expect(inferProcessFamily('Полумытая')).toBe('honey');
+    expect(inferProcessFamily('Полумытая обработка')).toBe('honey');
+  });
+
+  it('maps inflected stem forms', () => {
+    expect(inferProcessFamily('Анаэробную обработку')).toBe('anaerobic');
+    expect(inferProcessFamily('Коферментация')).toBe('co-ferment');
+  });
+
   it('returns null on empty or unrecognized text instead of guessing', () => {
     expect(inferProcessFamily('')).toBeNull();
     expect(inferProcessFamily('   ')).toBeNull();

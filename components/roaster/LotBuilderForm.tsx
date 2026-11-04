@@ -111,8 +111,10 @@ function toFormState(lot?: Lot, originDefaults?: LotOriginDefaults): LotFormStat
     altitude: lot.producer.altitude,
     story: lot.producer.story,
     // Legacy lots carry only the free-text process word — pre-select the
-    // structured family from it so editing a "Washed" lot starts one click
-    // away from structured data instead of a blank select.
+    // structured family from it as a display hint (one click away instead of
+    // a blank select). It is NOT persisted until the roaster touches the
+    // section: processTouched gates the write, so an unrelated edit can not
+    // silently create a processDetail (Codex review round 1).
     processFamily: detail?.family ?? inferProcessFamily(lot.process) ?? '',
     fermentationDays: detail?.fermentationDays != null ? String(detail.fermentationDays) : '',
     vessel: detail?.vessel ?? '',
@@ -168,6 +170,12 @@ export function LotBuilderForm({
   const isCreating = !initialLot;
   const [form, setForm] = useState<LotFormState>(() => toFormState(initialLot, initialOrigin));
   const [step, setStep] = useState(0);
+  // The pre-selected family is a display hint for legacy lots, not entered
+  // data (Codex review round 1: saving an unrelated edit silently created a
+  // processDetail and revealed the passport block). Only fields the roaster
+  // actually touched may be written back; an untouched section preserves the
+  // existing values as-is, a touched-but-cleared section strips them.
+  const [processTouched, setProcessTouched] = useState(false);
 
   // New lots get a live-generated id as soon as a country is entered;
   // editing an existing lot always keeps its original id.
@@ -180,7 +188,16 @@ export function LotBuilderForm({
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  function updateProcess<K extends 'processFamily' | 'fermentationDays' | 'vessel' | 'processNote'>(
+    key: K,
+    value: LotFormState[K]
+  ) {
+    setProcessTouched(true);
+    update(key, value);
+  }
+
   function toggleBadge(id: SustainabilityBadgeId) {
+    setProcessTouched(true);
     setForm((prev) => ({
       ...prev,
       sustainabilityBadges: prev.sustainabilityBadges.includes(id)
@@ -203,18 +220,24 @@ export function LotBuilderForm({
 
     // Structured "Процесс" block (PRODUCT_BACKLOG.md #3): written only when
     // the roaster actually entered something — a fully untouched section
-    // stays absent, so the read side's hasProcessPassportContent gate keeps
-    // hiding the card, exactly as for seed lots.
-    const processDetail =
-      form.processFamily || form.fermentationDays.trim() || form.vessel.trim() || form.processNote.trim()
+    // keeps the existing values, a touched-but-cleared one strips them, so
+    // the read side's hasProcessPassportContent gate hides the card exactly
+    // as for seed lots.
+    const processDetail = processTouched
+      ? form.processFamily || form.fermentationDays.trim() || form.vessel.trim() || form.processNote.trim()
         ? {
             family: (form.processFamily || 'other') as ProcessFamily,
             fermentationDays: parseFermentationDays(form.fermentationDays),
             vessel: form.vessel.trim(),
             roasterNote: form.processNote.trim(),
           }
-        : undefined;
-    const sustainabilityBadges = form.sustainabilityBadges.length > 0 ? form.sustainabilityBadges : undefined;
+        : undefined
+      : initialLot?.producer.processDetail;
+    const sustainabilityBadges = processTouched
+      ? form.sustainabilityBadges.length > 0
+        ? form.sustainabilityBadges
+        : undefined
+      : initialLot?.producer.sustainabilityBadges;
 
     const lot: Lot = {
       id: lotId,
@@ -477,7 +500,7 @@ export function LotBuilderForm({
                     <select
                       id="lot-process-family"
                       value={form.processFamily}
-                      onChange={(e) => update('processFamily', e.target.value as ProcessFamily | '')}
+                      onChange={(e) => updateProcess('processFamily', e.target.value as ProcessFamily | '')}
                       disabled={readOnly}
                       className={`${fieldClasses} disabled:opacity-60`}
                     >
@@ -497,7 +520,7 @@ export function LotBuilderForm({
                       id="lot-fermentation-days"
                       inputMode="numeric"
                       value={form.fermentationDays}
-                      onChange={(e) => update('fermentationDays', e.target.value)}
+                      onChange={(e) => updateProcess('fermentationDays', e.target.value)}
                       placeholder="72"
                       disabled={readOnly}
                       className={`${fieldClasses} disabled:opacity-60`}
@@ -511,7 +534,7 @@ export function LotBuilderForm({
                   <input
                     id="lot-vessel"
                     value={form.vessel}
-                    onChange={(e) => update('vessel', e.target.value)}
+                    onChange={(e) => updateProcess('vessel', e.target.value)}
                     placeholder="Открытый танк / Герметичная ёмкость / GrainPro"
                     disabled={readOnly}
                     className={`${fieldClasses} disabled:opacity-60`}
@@ -525,7 +548,7 @@ export function LotBuilderForm({
                     id="lot-process-note"
                     rows={3}
                     value={form.processNote}
-                    onChange={(e) => update('processNote', e.target.value)}
+                    onChange={(e) => updateProcess('processNote', e.target.value)}
                     placeholder="Что этот процесс даёт чашке и почему он важен для истории лота…"
                     disabled={readOnly}
                     className={`${fieldClasses} disabled:opacity-60`}

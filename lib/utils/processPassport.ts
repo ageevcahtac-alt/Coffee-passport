@@ -21,18 +21,59 @@ export const PROCESS_FAMILY_LABELS: Record<ProcessFamily, string> = {
 // Priority order matters: an experimental process named together with a
 // classic one ("Washed Anaerobic", "Honey Co-ferment") resolves to the more
 // specific/interesting family, and a plain "Natural" doesn't swallow the
-// anaerobic phrase. Matched lowercase as simple substrings — this only
-// pre-selects a form field the roaster can still override, so a rare
-// false positive costs one click, not a wrong guest-facing fact.
-const FAMILY_KEYWORDS: { family: ProcessFamily; words: string[] }[] = [
+// anaerobic phrase. Matching is per whole word (prefix only where a stem is
+// explicitly marked) — so "полумытая" is not swallowed by the washed keyword
+// "мытая", and "unwashed" doesn't read as washed. This only pre-selects a
+// form field the roaster can still override, so a rare false positive costs
+// one click, not a wrong guest-facing fact.
+interface KeywordRule {
+  word: string;
+  // Stems match any word they start with (inflected forms: анаэробная,
+  // анаэробную…). Unmarked keywords must equal the whole word.
+  prefix?: boolean;
+}
+
+const FAMILY_KEYWORDS: { family: ProcessFamily; keywords: KeywordRule[] }[] = [
   {
     family: 'co-ferment',
-    words: ['коферментация', 'кофермент', 'совферментация', 'co-ferment', 'coferment'],
+    keywords: [
+      { word: 'коферментация', prefix: true },
+      { word: 'кофермент', prefix: true },
+      { word: 'совферментация', prefix: true },
+      { word: 'coferment', prefix: true },
+      { word: 'co-ferment' },
+    ],
   },
-  { family: 'anaerobic', words: ['анаэробн', 'anaerobic'] },
-  { family: 'washed', words: ['мытая', 'мытый', 'washed'] },
-  { family: 'honey', words: ['хани', 'медовая', 'медовый', 'honey', 'pulped natural', 'полумытая'] },
-  { family: 'natural', words: ['натуральная', 'натуральный', 'сухая', 'сухой', 'natural', 'dry'] },
+  {
+    family: 'anaerobic',
+    keywords: [
+      { word: 'анаэробн', prefix: true },
+      { word: 'anaerobic', prefix: true },
+    ],
+  },
+  { family: 'washed', keywords: [{ word: 'мытая' }, { word: 'мытый' }, { word: 'washed' }] },
+  {
+    family: 'honey',
+    keywords: [
+      { word: 'хани' },
+      { word: 'медовая' },
+      { word: 'медовый' },
+      { word: 'honey' },
+      { word: 'pulped' },
+      { word: 'полумытая' },
+    ],
+  },
+  {
+    family: 'natural',
+    keywords: [
+      { word: 'натуральная' },
+      { word: 'натуральный' },
+      { word: 'сухая' },
+      { word: 'сухой' },
+      { word: 'natural' },
+      { word: 'dry' },
+    ],
+  },
 ];
 
 // Maps a roaster's free-text Lot.process ("Washed", "Анаэробная натуральная"…)
@@ -41,10 +82,15 @@ const FAMILY_KEYWORDS: { family: ProcessFamily; words: string[] }[] = [
 // instead of guessing. The read side never calls this: guests see only what
 // the roaster explicitly entered.
 export function inferProcessFamily(processText: string): ProcessFamily | null {
-  const text = processText.trim().toLowerCase();
+  // Hyphens are dropped so "co-ferment" tokenizes as one word; everything
+  // else is split into letter sequences, so boundaries come for free.
+  const text = processText.trim().toLowerCase().replace(/-/g, '');
   if (!text) return null;
-  for (const { family, words } of FAMILY_KEYWORDS) {
-    if (words.some((word) => text.includes(word))) return family;
+  const words = text.match(/[a-zа-яё]+/g) ?? [];
+  for (const { family, keywords } of FAMILY_KEYWORDS) {
+    for (const { word, prefix } of keywords) {
+      if (words.some((w) => (prefix ? w.startsWith(word) : w === word))) return family;
+    }
   }
   return null;
 }
