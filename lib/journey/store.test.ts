@@ -330,3 +330,80 @@ describe('lib/journey/store — grind conversion confirmation', () => {
     expect(Object.keys(record).sort()).toEqual(Object.keys({ ...baseInput(), id: '', userId: '', createdAt: '' }).sort());
   });
 });
+
+// Grind Converter, phase 3 (0038) — the community sync is consent-gated
+// EXACTLY like the tasting itself (0026/PR #86): a confirmation is pushed
+// to Supabase only when the record that produced it is public, i.e. a
+// signed-in guest who ticked the community checkbox. The push goes through
+// the shared Supabase mock above; a grind_confirmations row in insertedRows
+// means the push fired.
+describe('lib/journey/store — grind confirmation community sync (phase 3)', () => {
+  const GRIND_CONFIRMATIONS_KEY = 'coffee-passport:grind-confirmations';
+  const source = { grinderModel: 'Mahlkönig EK43', grinderSetting: '7.2' };
+
+  beforeEach(() => {
+    vi.resetModules();
+    insertedRows.length = 0;
+    for (const key of Object.keys(canonicalLots)) delete canonicalLots[key];
+    for (const key of Object.keys(activeProfiles)) delete activeProfiles[key];
+    (globalThis as unknown as { window: { localStorage: MemoryStorage } }).window = {
+      localStorage: new MemoryStorage(),
+    };
+  });
+
+  afterEach(() => {
+    delete (globalThis as { window?: unknown }).window;
+  });
+
+  function grindRows(): { table: string; row: unknown }[] {
+    return insertedRows.filter((entry) => entry.table === 'grind_confirmations');
+  }
+
+  it('pushes the confirmation when the tasting that produced it is public', async () => {
+    const { addTastingRecord } = await import('./store');
+
+    addTastingRecord(
+      { ...baseInput(), isPublic: true, grinderModel: 'Comandante C40', grinderSetting: 'клик 24' },
+      'user-1',
+      source
+    );
+    await flush();
+
+    expect(grindRows()).toHaveLength(1);
+    // The push names the record's owner as the row owner — RLS's second wall
+    // (0038's with check) rejects anything else.
+    expect((grindRows()[0].row as { owner_user_id: string }).owner_user_id).toBe('user-1');
+    // The shared mock resolves the insert without a selectable chain, so the
+    // best-effort push parks the row for the next login's retry instead of
+    // crashing the save — exactly the offline behavior 0038 promises.
+    const local = JSON.parse(window.localStorage.getItem(GRIND_CONFIRMATIONS_KEY) ?? '[]') as {
+      syncPendingFor?: string | null;
+    }[];
+    expect(local[0].syncPendingFor).toBe('user-1');
+  });
+
+  it('keeps the confirmation local when the tasting is private', async () => {
+    const { addTastingRecord } = await import('./store');
+
+    addTastingRecord(
+      { ...baseInput(), isPublic: false, grinderModel: 'Comandante C40', grinderSetting: 'клик 24' },
+      'user-1',
+      source
+    );
+    await flush();
+
+    expect(grindRows()).toHaveLength(0);
+    const local = JSON.parse(window.localStorage.getItem(GRIND_CONFIRMATIONS_KEY) ?? '[]') as unknown[];
+    expect(local).toHaveLength(1); // logged locally, just never pushed
+  });
+
+  it('never pushes when the confirmation itself was skipped (phase-2 guards stand)', async () => {
+    const { addTastingRecord } = await import('./store');
+
+    addTastingRecord({ ...baseInput(), isPublic: true, grinderModel: '', grinderSetting: '' }, 'user-1', source);
+    addTastingRecord({ ...baseInput(), isPublic: true, grinderModel: 'Mahlkönig EK43', grinderSetting: '7.2' }, 'user-1', source);
+    await flush();
+
+    expect(grindRows()).toHaveLength(0);
+  });
+});

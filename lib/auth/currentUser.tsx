@@ -9,6 +9,7 @@ import { syncBaristaProfilesFromSupabase } from '@/lib/data/baristaProfileStore'
 import { syncMutedShopsFromSupabase } from '@/lib/data/shopMutePreferencesStore';
 import { syncNotificationPreferencesFromSupabase } from '@/lib/data/notificationPreferencesStore';
 import { syncLotNotificationReadsFromSupabase } from '@/lib/data/lotNotificationReadsStore';
+import { syncGrindConfirmationsForUser } from '@/lib/data/grindConfirmationsSync';
 
 const ANON_ID_KEY = 'coffee-passport:anon-id';
 
@@ -122,6 +123,7 @@ export function CurrentUserProvider({
       syncMutedShopsFromSupabase(resolvedId, isAuthenticated),
       syncNotificationPreferencesFromSupabase(resolvedId, isAuthenticated),
       syncLotNotificationReadsFromSupabase(resolvedId, isAuthenticated),
+      syncGrindConfirmationsForUser(resolvedId, isAuthenticated),
     ]);
   }, [authUserId]);
 

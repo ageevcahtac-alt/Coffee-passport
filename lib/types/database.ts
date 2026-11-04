@@ -166,6 +166,34 @@ export type CheckinRow = {
 };
 export type CheckinInsert = CheckinRow;
 
+// public.grind_confirmations — see supabase/migrations/0038_grind_confirmations.sql.
+// Insert-only (immutability trigger), owner-scoped RLS: a conversion data
+// point is written ONLY for a consented (is_public) tasting of a signed-in
+// guest; the caller never sends an id (server default gen_random_uuid).
+export type GrindConfirmationRow = {
+  id: string;
+  owner_user_id: string;
+  from_model: string;
+  to_model: string;
+  brewing_method: string;
+  from_setting: string;
+  to_setting: string;
+  lot_id: string;
+  created_at: string;
+};
+export type GrindConfirmationInsert = Omit<GrindConfirmationRow, 'id' | 'created_at'>;
+
+// public.grind_conversion_medians — anonymous aggregate view over the
+// confirmations table (median confirmed target setting per conversion
+// triple). Readable by anon; no identity columns.
+export type GrindConversionMedianRow = {
+  from_model: string;
+  to_model: string;
+  brewing_method: string;
+  confirmations_count: number;
+  median_to_setting: number | null;
+};
+
 // public.checkins_community_view — see
 // supabase/migrations/0026_checkins_community_sharing.sql. Anonymous by
 // construction: no owner_user_id, coffee_shop_id, roaster_id, barista_*,
@@ -676,6 +704,12 @@ export type Database = {
         Update: Partial<EquipmentGarageUpsert>;
       } & NoRelationships;
       checkins: { Row: CheckinRow; Insert: CheckinInsert; Update: Partial<CheckinInsert> } & NoRelationships;
+      // Insert-only by trigger (0038) — Update: never, same as roast_batches.
+      grind_confirmations: {
+        Row: GrindConfirmationRow;
+        Insert: GrindConfirmationInsert;
+        Update: never;
+      } & NoRelationships;
       profiles: { Row: ProfileRow; Insert: Partial<ProfileRow>; Update: Partial<ProfileRow> } & NoRelationships;
       platform_feedback: {
         Row: PlatformFeedbackRow;
@@ -731,6 +765,7 @@ export type Database = {
       checkins_cafe_benchmark_view: { Row: CheckinsCafeBenchmarkRow } & NoRelationships;
       checkins_community_view: { Row: CheckinCommunityViewRow } & NoRelationships;
       cafe_menu_entries_roaster_status_view: { Row: CafeMenuEntryRoasterStatusViewRow } & NoRelationships;
+      grind_conversion_medians: { Row: GrindConversionMedianRow } & NoRelationships;
     };
     Functions: {
       // See supabase/migrations/0008_dev_seed_staff_profile.sql — dev-only,

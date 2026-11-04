@@ -6,6 +6,8 @@ import { getBrowserSupabaseClient } from '@/lib/supabase/browserClient';
 import { generateId } from '@/lib/utils/id';
 import { findCanonicalLotByPublicId, getActiveReferenceTasteProfile } from '@/lib/data/canonicalLotStore';
 import { addGrindConfirmation } from '@/lib/data/grindConfirmationsStore';
+import { pushGrindConfirmation } from '@/lib/data/grindConfirmationsSync';
+import type { GrindConfirmation } from '@/lib/data/grindConfirmationsStore';
 
 // localStorage is now a read cache, not the source of truth: syncCheckins-
 // ForUser() below pulls the signed-in user's own rows from Supabase's
@@ -309,7 +311,22 @@ export function addTastingRecord(
   };
   write([record, ...read()]);
 
-  logGrindConfirmationFromTasting(grindSource ?? null, grinderModel ?? null, grinderSetting ?? null, record.brewingMethod);
+  const grindConfirmation = logGrindConfirmationFromTasting(
+    grindSource ?? null,
+    grinderModel ?? null,
+    grinderSetting ?? null,
+    record.brewingMethod,
+    record.lotId
+  );
+  // Community sync (0038) is consent-gated exactly like the tasting itself
+  // (0026): only a signed-in guest who ticked the community checkbox gets
+  // their confirmation pushed — record.isPublic is already the
+  // sharedTastingIsPublic result, so an anonymous save never reaches this.
+  if (grindConfirmation && record.isPublic) {
+    void pushGrindConfirmation(grindConfirmation, userId).catch((err) => {
+      console.warn('[grind] Supabase push rejected, kept local-only:', err);
+    });
+  }
 
   // The reference lookup runs before the Supabase insert (not after, and
   // not as a separate update) so the checkin never exists server-side even
@@ -371,24 +388,27 @@ export function addTastingRecord(
 // brews and ANY incomplete input are skipped — a confirmation must never
 // fire on guesses: an empty source setting would enter the community
 // average that estimateGrindSetting prefers over the reference table.
+// Returns the confirmation so the caller can sync it (consent-gated).
 function logGrindConfirmationFromTasting(
   grindSource: GrindConversionSource | null,
   grinderModel: string | null,
   grinderSetting: string | null,
-  brewingMethodId: string
-): void {
+  brewingMethodId: string,
+  lotId: string
+): GrindConfirmation | null {
   const toModel = grinderModel?.trim() ?? '';
   const toSetting = grinderSetting?.trim() ?? '';
   const fromModel = grindSource?.grinderModel.trim() ?? '';
   const fromSetting = grindSource?.grinderSetting.trim() ?? '';
-  if (fromModel === '' || fromSetting === '' || toModel === '' || toSetting === '') return;
-  if (toModel === fromModel) return;
-  addGrindConfirmation({
+  if (fromModel === '' || fromSetting === '' || toModel === '' || toSetting === '') return null;
+  if (toModel === fromModel) return null;
+  return addGrindConfirmation({
     fromModel,
     fromSetting,
     toModel,
     toSetting,
     brewingMethodId,
+    lotId,
   });
 }
 

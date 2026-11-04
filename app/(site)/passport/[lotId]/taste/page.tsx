@@ -26,6 +26,7 @@ import { markJustRevealed } from '@/lib/journey/revealFlag';
 import { markPinJustActivated } from '@/lib/journey/mapFlag';
 import { consumePendingShop, markPendingShop } from '@/lib/journey/pendingShopFlag';
 import { consumePendingRoaster, markPendingRoaster } from '@/lib/journey/pendingRoasterFlag';
+import { consumePendingGrindSource, type PendingGrindSource } from '@/lib/journey/pendingGrindSourceFlag';
 import { hasSeenLotProfile } from '@/lib/journey/profileSeenFlag';
 import { sharedTastingIsPublic } from '@/lib/journey/communityConsent';
 import { getMergedLotById } from '@/lib/data/lotsStore';
@@ -96,6 +97,9 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
   const [drinkSelection, setDrinkSelection] = useState<DrinkSelectionDraft>(emptyDrinkSelectionDraft());
   const [pendingTasteValues, setPendingTasteValues] = useState<TastingFormValues | null>(null);
   const [showPinningRitual, setShowPinningRitual] = useState(false);
+  // Source-recipe grinder carried over by a recipe card's "Сварил по этому
+  // рецепту" (consumed from sessionStorage in the effect below).
+  const [grindSource, setGrindSource] = useState<PendingGrindSource | null>(null);
 
   // If the guest already picked a shop + roaster on the passport page's
   // location gate (see markPendingShop/markPendingRoaster there), skip
@@ -109,6 +113,10 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
       pendingChecked.current = true;
       const pendingShopId = consumePendingShop(lot.id);
       const pendingRoasterId = consumePendingRoaster(lot.id);
+      // Grind Converter phase 3 — a recipe card's "Сварил по этому рецепту"
+      // parked this recipe's grinder here; the taste form asks which grinder
+      // the user actually brewed on and the save logs a conversion.
+      setGrindSource(consumePendingGrindSource(lot.id));
       if (pendingShopId && coffeeShops.some((shop) => shop.id === pendingShopId)) {
         setCoffeeShopId(pendingShopId);
         setRoasterId(pendingRoasterId ?? lot.roasterId);
@@ -196,7 +204,8 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
         profileSeenBeforeTasting: hasSeenLotProfile(lot.id),
         ...pendingTasteValues,
       },
-      userId
+      userId,
+      grindSource
     );
 
     if (!hadPinBefore) markPinJustActivated(lot.country, coffeeShopId);
@@ -290,6 +299,7 @@ function TasteLotFlow({ lot }: { lot: Lot }) {
               submitLabel="Далее — работа бариста"
               drinkCategory={drinkSelection.drinkCategory}
               initialValues={pendingTasteValues ?? undefined}
+              sourceRecipe={grindSource}
             />
           </>
         )}
