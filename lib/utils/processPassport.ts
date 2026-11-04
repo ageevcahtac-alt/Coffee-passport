@@ -41,7 +41,9 @@ const FAMILY_KEYWORDS: { family: ProcessFamily; keywords: KeywordRule[] }[] = [
       { word: 'кофермент', prefix: true },
       { word: 'совферментация', prefix: true },
       { word: 'coferment', prefix: true },
-      { word: 'co-ferment' },
+      // With hyphens normalized to spaces, "co-ferment" reaches us as the
+      // token "ferment" — in a process text that word means co-ferment.
+      { word: 'ferment' },
     ],
   },
   {
@@ -82,9 +84,11 @@ const FAMILY_KEYWORDS: { family: ProcessFamily; keywords: KeywordRule[] }[] = [
 // instead of guessing. The read side never calls this: guests see only what
 // the roaster explicitly entered.
 export function inferProcessFamily(processText: string): ProcessFamily | null {
-  // Hyphens are dropped so "co-ferment" tokenizes as one word; everything
-  // else is split into letter sequences, so boundaries come for free.
-  const text = processText.trim().toLowerCase().replace(/-/g, '');
+  // Hyphens become word separators ("Honey-processed" → "honey processed",
+  // "co-ferment" → "co ferment") — deleting them instead would glue the
+  // parts into one unrecognizable token. Everything else splits into letter
+  // sequences, so word boundaries come for free.
+  const text = processText.trim().toLowerCase().replace(/-/g, ' ');
   if (!text) return null;
   const words = text.match(/[a-zа-яё]+/g) ?? [];
   for (const { family, keywords } of FAMILY_KEYWORDS) {

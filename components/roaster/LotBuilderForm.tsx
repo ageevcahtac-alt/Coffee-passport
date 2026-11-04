@@ -172,10 +172,13 @@ export function LotBuilderForm({
   const [step, setStep] = useState(0);
   // The pre-selected family is a display hint for legacy lots, not entered
   // data (Codex review round 1: saving an unrelated edit silently created a
-  // processDetail and revealed the passport block). Only fields the roaster
-  // actually touched may be written back; an untouched section preserves the
-  // existing values as-is, a touched-but-cleared section strips them.
-  const [processTouched, setProcessTouched] = useState(false);
+  // processDetail and revealed the passport block). Detail fields and badges
+  // are gated separately (Codex review round 2: toggling a badge alone must
+  // not persist the suggested family) — each sub-section writes only when
+  // itself was touched; an untouched one preserves the existing values, a
+  // touched-but-cleared one strips them.
+  const [detailTouched, setDetailTouched] = useState(false);
+  const [badgesTouched, setBadgesTouched] = useState(false);
 
   // New lots get a live-generated id as soon as a country is entered;
   // editing an existing lot always keeps its original id.
@@ -192,12 +195,12 @@ export function LotBuilderForm({
     key: K,
     value: LotFormState[K]
   ) {
-    setProcessTouched(true);
+    setDetailTouched(true);
     update(key, value);
   }
 
   function toggleBadge(id: SustainabilityBadgeId) {
-    setProcessTouched(true);
+    setBadgesTouched(true);
     setForm((prev) => ({
       ...prev,
       sustainabilityBadges: prev.sustainabilityBadges.includes(id)
@@ -218,12 +221,13 @@ export function LotBuilderForm({
     event.preventDefault();
     if (readOnly || !lotId) return;
 
-    // Structured "Процесс" block (PRODUCT_BACKLOG.md #3): written only when
-    // the roaster actually entered something — a fully untouched section
-    // keeps the existing values, a touched-but-cleared one strips them, so
-    // the read side's hasProcessPassportContent gate hides the card exactly
-    // as for seed lots.
-    const processDetail = processTouched
+    // Structured "Процесс" block (PRODUCT_BACKLOG.md #3): each sub-section
+    // writes only when itself was touched — a fully untouched section keeps
+    // the existing values, a touched-but-cleared one strips them, so the
+    // read side's hasProcessPassportContent gate hides the card exactly as
+    // for seed lots and the form's display pre-select is never persisted
+    // without the roaster's own input.
+    const processDetail = detailTouched
       ? form.processFamily || form.fermentationDays.trim() || form.vessel.trim() || form.processNote.trim()
         ? {
             family: (form.processFamily || 'other') as ProcessFamily,
@@ -233,7 +237,7 @@ export function LotBuilderForm({
           }
         : undefined
       : initialLot?.producer.processDetail;
-    const sustainabilityBadges = processTouched
+    const sustainabilityBadges = badgesTouched
       ? form.sustainabilityBadges.length > 0
         ? form.sustainabilityBadges
         : undefined

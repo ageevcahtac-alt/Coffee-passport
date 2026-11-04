@@ -45,6 +45,15 @@ describe('inferProcessFamily — free-text Lot.process → structured family', (
     expect(inferProcessFamily('Полумытая обработка')).toBe('honey');
   });
 
+  it('treats hyphens as word separators (Codex review round 2)', () => {
+    // Deleting hyphens instead would glue the parts into one token and
+    // lose these mappings.
+    expect(inferProcessFamily('Honey-processed')).toBe('honey');
+    expect(inferProcessFamily('Dry-processed')).toBe('natural');
+    expect(inferProcessFamily('Co-ferment')).toBe('co-ferment');
+    expect(inferProcessFamily('Washed-Anaerobic')).toBe('anaerobic');
+  });
+
   it('maps inflected stem forms', () => {
     expect(inferProcessFamily('Анаэробную обработку')).toBe('anaerobic');
     expect(inferProcessFamily('Коферментация')).toBe('co-ferment');
