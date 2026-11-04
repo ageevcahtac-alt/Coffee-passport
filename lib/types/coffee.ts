@@ -74,11 +74,43 @@ export const FLAVOR_AXES: { key: keyof RoasterFlavorProfile; label: string }[] =
   { key: 'bitterness', label: 'Горечь' },
 ];
 
+// Structured processing transparency (PRODUCT_BACKLOG.md #3) — the optional
+// detail behind Lot.process's single free-text word. Both fields are additive
+// and ride the lotsStore seed+localStorage mechanism, so seed lots and old
+// roaster edits without them keep working unchanged.
+export type ProcessFamily =
+  | 'washed'
+  | 'natural'
+  | 'honey'
+  | 'anaerobic'
+  | 'co-ferment'
+  | 'other';
+
+export interface ProcessDetail {
+  family: ProcessFamily;
+  fermentationDays: number | null; // null = roaster didn't say
+  vessel: string; // e.g. "Открытый танк", "Герметичная ёмкость", "GrainPro"
+  roasterNote: string; // free-text "почему мы выбрали этот процесс"
+}
+
+// Roaster-asserted transparency badges — declared by the roaster, NOT
+// independently verified; the read side must label them as such (same honest
+// trust-model stance as the partner-request/RLS comments elsewhere).
+export type SustainabilityBadgeId = 'direct-trade' | 'regenerative' | 'farm-traceable';
+
+export const SUSTAINABILITY_BADGES: { id: SustainabilityBadgeId; label: string }[] = [
+  { id: 'direct-trade', label: 'Прямая торговля' },
+  { id: 'regenerative', label: 'Регенеративное земледелие' },
+  { id: 'farm-traceable', label: 'Прослеживаемость до фермы' },
+];
+
 export interface ProducerProfile {
   farmerName: string; // farmer or cooperative name
   farmName: string; // farm / washing station name
   altitude: string; // e.g. "1900–2100 м"
   story: string; // roaster's origin story, in the roaster's own words
+  processDetail?: ProcessDetail;
+  sustainabilityBadges?: SustainabilityBadgeId[];
 }
 
 export interface Lot {

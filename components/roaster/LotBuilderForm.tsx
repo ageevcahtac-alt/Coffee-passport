@@ -1,12 +1,15 @@
 'use client';
 
 import { useMemo, useState, type FormEvent } from 'react';
-import type { Lot, RoastType, Roaster } from '@/lib/types/coffee';
-import { ROAST_TYPE_LABELS } from '@/lib/types/coffee';
+import type { Lot, ProcessFamily, RoastType, Roaster, SustainabilityBadgeId } from '@/lib/types/coffee';
+import { ROAST_TYPE_LABELS, SUSTAINABILITY_BADGES } from '@/lib/types/coffee';
 import { generateLotId } from '@/lib/data/lotsStore';
+import { inferProcessFamily, parseFermentationDays, PROCESS_FAMILY_LABELS } from '@/lib/utils/processPassport';
 import { FlavorSlider } from '@/components/coffee/FlavorSlider';
 
 const ROAST_TYPES: RoastType[] = ['filter', 'espresso', 'omni', 'alternative'];
+
+const PROCESS_FAMILY_OPTIONS = Object.entries(PROCESS_FAMILY_LABELS) as [ProcessFamily, string][];
 
 const fieldClasses =
   'w-full rounded-md border border-ink-200 bg-parchment-100 px-4 py-3 text-sm ' +
@@ -30,6 +33,11 @@ interface LotFormState {
   farmName: string;
   altitude: string;
   story: string;
+  processFamily: ProcessFamily | '';
+  fermentationDays: string;
+  vessel: string;
+  processNote: string;
+  sustainabilityBadges: SustainabilityBadgeId[];
   inRoasterCatalog: boolean;
 }
 
@@ -75,9 +83,15 @@ function toFormState(lot?: Lot, originDefaults?: LotOriginDefaults): LotFormStat
       farmName: originDefaults?.farmName ?? '',
       altitude: originDefaults?.altitude ?? '',
       story: '',
+      processFamily: '',
+      fermentationDays: '',
+      vessel: '',
+      processNote: '',
+      sustainabilityBadges: [],
       inRoasterCatalog: true,
     };
   }
+  const detail = lot.producer.processDetail;
   return {
     name: lot.name,
     country: lot.country,
@@ -96,6 +110,14 @@ function toFormState(lot?: Lot, originDefaults?: LotOriginDefaults): LotFormStat
     farmName: lot.producer.farmName,
     altitude: lot.producer.altitude,
     story: lot.producer.story,
+    // Legacy lots carry only the free-text process word — pre-select the
+    // structured family from it so editing a "Washed" lot starts one click
+    // away from structured data instead of a blank select.
+    processFamily: detail?.family ?? inferProcessFamily(lot.process) ?? '',
+    fermentationDays: detail?.fermentationDays != null ? String(detail.fermentationDays) : '',
+    vessel: detail?.vessel ?? '',
+    processNote: detail?.roasterNote ?? '',
+    sustainabilityBadges: lot.producer.sustainabilityBadges ?? [],
     inRoasterCatalog: lot.inRoasterCatalog,
   };
 }
@@ -158,6 +180,15 @@ export function LotBuilderForm({
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
+  function toggleBadge(id: SustainabilityBadgeId) {
+    setForm((prev) => ({
+      ...prev,
+      sustainabilityBadges: prev.sustainabilityBadges.includes(id)
+        ? prev.sustainabilityBadges.filter((existing) => existing !== id)
+        : [...prev.sustainabilityBadges, id],
+    }));
+  }
+
   const canSave = Boolean(lotId && form.name.trim() && form.country.trim());
 
   const canLeaveOriginStep = Boolean(
@@ -169,6 +200,21 @@ export function LotBuilderForm({
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (readOnly || !lotId) return;
+
+    // Structured "Процесс" block (PRODUCT_BACKLOG.md #3): written only when
+    // the roaster actually entered something — a fully untouched section
+    // stays absent, so the read side's hasProcessPassportContent gate keeps
+    // hiding the card, exactly as for seed lots.
+    const processDetail =
+      form.processFamily || form.fermentationDays.trim() || form.vessel.trim() || form.processNote.trim()
+        ? {
+            family: (form.processFamily || 'other') as ProcessFamily,
+            fermentationDays: parseFermentationDays(form.fermentationDays),
+            vessel: form.vessel.trim(),
+            roasterNote: form.processNote.trim(),
+          }
+        : undefined;
+    const sustainabilityBadges = form.sustainabilityBadges.length > 0 ? form.sustainabilityBadges : undefined;
 
     const lot: Lot = {
       id: lotId,
@@ -197,6 +243,8 @@ export function LotBuilderForm({
         farmName: form.farmName.trim(),
         altitude: form.altitude.trim(),
         story: form.story.trim(),
+        ...(processDetail ? { processDetail } : {}),
+        ...(sustainabilityBadges ? { sustainabilityBadges } : {}),
       },
       inRoasterCatalog: form.inRoasterCatalog,
     };
@@ -415,6 +463,106 @@ export function LotBuilderForm({
                     </label>
                   );
                 })}
+              </div>
+            </div>
+
+            <div>
+              <p className="section-label mb-4">Процесс и происхождение</p>
+              <div className="flex flex-col gap-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="lot-process-family" className="block text-xs text-ink-400 mb-1.5">
+                      Семья обработки
+                    </label>
+                    <select
+                      id="lot-process-family"
+                      value={form.processFamily}
+                      onChange={(e) => update('processFamily', e.target.value as ProcessFamily | '')}
+                      disabled={readOnly}
+                      className={`${fieldClasses} disabled:opacity-60`}
+                    >
+                      <option value="">Не указано</option>
+                      {PROCESS_FAMILY_OPTIONS.map(([family, label]) => (
+                        <option key={family} value={family}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="lot-fermentation-days" className="block text-xs text-ink-400 mb-1.5">
+                      Длительность ферментации, дней
+                    </label>
+                    <input
+                      id="lot-fermentation-days"
+                      inputMode="numeric"
+                      value={form.fermentationDays}
+                      onChange={(e) => update('fermentationDays', e.target.value)}
+                      placeholder="72"
+                      disabled={readOnly}
+                      className={`${fieldClasses} disabled:opacity-60`}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor="lot-vessel" className="block text-xs text-ink-400 mb-1.5">
+                    Тип ёмкости
+                  </label>
+                  <input
+                    id="lot-vessel"
+                    value={form.vessel}
+                    onChange={(e) => update('vessel', e.target.value)}
+                    placeholder="Открытый танк / Герметичная ёмкость / GrainPro"
+                    disabled={readOnly}
+                    className={`${fieldClasses} disabled:opacity-60`}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="lot-process-note" className="block text-xs text-ink-400 mb-1.5">
+                    Почему мы выбрали этот процесс
+                  </label>
+                  <textarea
+                    id="lot-process-note"
+                    rows={3}
+                    value={form.processNote}
+                    onChange={(e) => update('processNote', e.target.value)}
+                    placeholder="Что этот процесс даёт чашке и почему он важен для истории лота…"
+                    disabled={readOnly}
+                    className={`${fieldClasses} disabled:opacity-60`}
+                  />
+                </div>
+                <div>
+                  <span className="block text-xs text-ink-400 mb-2">
+                    Значки прозрачности (заявляются обжарщиком, без независимой проверки)
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {SUSTAINABILITY_BADGES.map((badge) => {
+                      const checked = form.sustainabilityBadges.includes(badge.id);
+                      return (
+                        <label
+                          key={badge.id}
+                          className={`rounded-full border px-3 py-1.5 text-xs transition-colors
+                                      ${readOnly ? 'cursor-default' : 'cursor-pointer'}
+                                      ${checked
+                                        ? 'border-moss-300 bg-moss-100 text-moss-700 font-medium'
+                                        : 'border-ink-200 bg-parchment-100 text-ink-700'}
+                                      ${readOnly && !checked ? 'opacity-50' : ''}`}
+                        >
+                          <input
+                            type="checkbox"
+                            name="sustainabilityBadges"
+                            value={badge.id}
+                            checked={checked}
+                            onChange={() => toggleBadge(badge.id)}
+                            disabled={readOnly}
+                            className="sr-only"
+                          />
+                          {badge.label}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             </div>
           </div>

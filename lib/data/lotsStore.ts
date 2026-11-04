@@ -118,7 +118,10 @@ type LotWithRefs = LotRow & {
 // not just the one page that hand-rolled its own fetch. `producer.story`
 // has no Coffee equivalent (the roaster's own narrative text) and is
 // therefore always the local Lot's value, unchanged — same as the
-// Passport's own overlay.
+// Passport's own overlay. The structured processDetail and
+// sustainabilityBadges (PRODUCT_BACKLOG.md #3) have no Coffee columns either
+// (that pass deliberately made no schema change — they ride the localStorage
+// override), so they follow story's rule: always the local Lot's value.
 // Exported for lib/data/lotsStore.test.ts's direct mapping assertions —
 // otherwise module-private, same convention as lib/journey/store.ts's
 // recordToRow.
@@ -153,6 +156,8 @@ export function rowToLot(row: LotWithRefs, fallback: Lot | undefined): Lot {
       farmName: coffee?.farm || fallback?.producer?.farmName || '',
       altitude: coffee?.altitude || fallback?.producer?.altitude || '',
       story: fallback?.producer?.story ?? '',
+      processDetail: fallback?.producer?.processDetail,
+      sustainabilityBadges: fallback?.producer?.sustainabilityBadges,
     },
   };
 }
