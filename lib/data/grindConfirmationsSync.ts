@@ -11,9 +11,18 @@
 // wall (owner_user_id = auth.uid() on insert). Anonymous tastings never
 // reach this module at all.
 //
+// Idempotent push — the local confirmation id IS the server row's primary
+// key (generateId, per lib/utils/id.ts's contract), so a retry after a
+// lost response replays the same INSERT and surfaces a unique-violation
+// instead of a duplicate row; rows created before phase 3 get a UUID
+// persisted once, at their first push. Exact id matching also drives the
+// login-time relink — never fuzzy content matching, which could steal
+// another tasting's server row (Codex review round 2).
+//
 // Sync shape mirrors the checkins pattern (syncCheckinsForUser): save-time
 // best-effort push with a login-time pull-merge + retry of parked rows.
 import { getBrowserSupabaseClient } from '@/lib/supabase/browserClient';
+import { generateId } from '@/lib/utils/id';
 import type { GrindConfirmationInsert, GrindConfirmationRow } from '@/lib/types/database';
 import {
   getSnapshot,
@@ -22,9 +31,13 @@ import {
   type GrindConfirmation,
 } from './grindConfirmationsStore';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function rowToConfirmation(row: GrindConfirmationRow): GrindConfirmation {
   return {
-    id: `grindconf-server-${row.id}`,
+    // Same id the pusher used — a local row with this id (parked or
+    // already linked) is the same conversion, never a merge candidate.
+    id: row.id,
     fromModel: row.from_model,
     fromSetting: row.from_setting,
     toModel: row.to_model,
@@ -43,10 +56,23 @@ function rowToConfirmation(row: GrindConfirmationRow): GrindConfirmation {
  * syncPendingFor so the next login's sync retries it. The server row's
  * lot_id comes from the local record's lotId echo. Returns whether the row
  * reached the server.
+ *
+ * Idempotency: the local id (a UUID) is sent as the row's primary key, so
+ * a replayed push after a lost response collides with the committed row
+ * instead of duplicating it — 23505 is treated as "already there" and
+ * stamps the server echo.
  */
 export async function pushGrindConfirmation(confirmation: GrindConfirmation, userId: string): Promise<boolean> {
+  let id = confirmation.id;
+  // Rows logged before phase 3 carry non-UUID ids — mint the server key
+  // once and persist it so every retry replays the same INSERT.
+  if (!UUID_RE.test(id)) {
+    id = generateId();
+    updateSyncState(confirmation.id, { id });
+  }
   try {
     const row: GrindConfirmationInsert = {
+      id,
       owner_user_id: userId,
       from_model: confirmation.fromModel,
       to_model: confirmation.toModel,
@@ -61,15 +87,21 @@ export async function pushGrindConfirmation(confirmation: GrindConfirmation, use
       .select('id')
       .single();
     if (error) {
+      if (error.code === '23505') {
+        // Lost-response replay: the row with this PK is already committed.
+        console.warn('[grind] confirmation already on server (replayed push), linking:', error.message);
+        updateSyncState(id, { serverId: id, syncPendingFor: null });
+        return true;
+      }
       console.warn('[grind] Supabase push failed, parked for retry:', error.message);
-      updateSyncState(confirmation.id, { syncPendingFor: userId });
+      updateSyncState(id, { syncPendingFor: userId });
       return false;
     }
-    updateSyncState(confirmation.id, { serverId: data.id as string, syncPendingFor: null });
+    updateSyncState(id, { serverId: data.id as string, syncPendingFor: null });
     return true;
   } catch (err) {
     console.warn('[grind] Supabase push threw, parked for retry:', err);
-    updateSyncState(confirmation.id, { syncPendingFor: userId });
+    updateSyncState(id, { syncPendingFor: userId });
     return false;
   }
 }
@@ -78,10 +110,11 @@ export async function pushGrindConfirmation(confirmation: GrindConfirmation, use
  * Login-time sync, wired next to syncCheckinsForUser in
  * lib/auth/currentUser.tsx. Three jobs, in this order:
  *  1. relink parked rows whose save-time push actually committed but whose
- *     response was lost (offline flap): if the pull reveals exactly one
- *     own server row with identical conversion content, stamp its serverId
- *     locally instead of inserting a duplicate on retry — a blind retry
- *     would double-count the confirmation and skew the median;
+ *     response was lost (offline flap): the pull reveals the row under the
+ *     SAME primary key the pusher sent, so the match is exact — no fuzzy
+ *     content matching that could mis-attribute another tasting's row
+ *     (Codex review round 2) — and stamp its serverId instead of
+ *     inserting a duplicate on retry;
  *  2. pull this user's server rows and merge server-only ones into the
  *     local store (dedup by serverId — local stays the offline source);
  *  3. retry rows still parked (syncPendingFor = user).
@@ -109,24 +142,12 @@ export async function syncGrindConfirmationsForUser(userId: string, isAuthentica
     for (const confirmation of getSnapshot().filter(
       (candidate) => !candidate.serverId && candidate.syncPendingFor === userId
     )) {
-      const matches = rows.filter(
-        (row) =>
-          row.from_model === confirmation.fromModel &&
-          row.to_model === confirmation.toModel &&
-          row.brewing_method === confirmation.brewingMethodId &&
-          row.from_setting === confirmation.fromSetting &&
-          row.to_setting === confirmation.toSetting &&
-          row.lot_id === (confirmation.lotId ?? '') &&
-          // An own row already linked locally is a DIFFERENT tasting that
-          // happens to share the conversion — never steal it.
-          !getSnapshot().some((local) => local.serverId === row.id)
-      );
-      if (matches.length === 1) {
-        updateSyncState(confirmation.id, { serverId: matches[0].id, syncPendingFor: null });
+      if (rows.some((row) => row.id === confirmation.id)) {
+        updateSyncState(confirmation.id, { serverId: confirmation.id, syncPendingFor: null });
       }
-      // 0 matches → genuinely unpushed; >1 → ambiguous which server row is
-      // ours; both stay parked and the retry below pushes (a possible
-      // duplicate only in the ambiguous case, never the lost-response one).
+      // No row with this PK → genuinely unpushed; it stays parked and the
+      // retry below pushes it (with the same id, so a concurrent commit
+      // still cannot duplicate).
     }
 
     const knownServerIds = new Set(

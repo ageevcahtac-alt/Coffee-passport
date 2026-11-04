@@ -8,6 +8,7 @@
 // needed. lib/utils/grindConvert.ts prefers an average of these over the
 // static lib/data/grindReferenceTable.ts range once at least one exists.
 // Same no-backend localStorage pattern as recipeVotesStore.ts.
+import { generateId } from '@/lib/utils/id';
 
 export interface GrindConfirmation {
   id: string;
@@ -79,7 +80,11 @@ export function getServerSnapshot(): GrindConfirmation[] {
 export function addGrindConfirmation(input: Omit<GrindConfirmation, 'id' | 'createdAt'>): GrindConfirmation {
   const confirmation: GrindConfirmation = {
     ...input,
-    id: `grindconf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    // A real UUID, per lib/utils/id.ts's contract: the local id doubles as
+    // the grind_confirmations row's primary key once synced, which is what
+    // makes a retry after a lost response idempotent (no duplicate rows,
+    // no fuzzy content matching — see grindConfirmationsSync.ts).
+    id: generateId(),
     createdAt: new Date().toISOString(),
   };
   write([confirmation, ...read()]);
@@ -88,11 +93,13 @@ export function addGrindConfirmation(input: Omit<GrindConfirmation, 'id' | 'crea
 
 // Phase 3 sync bookkeeping (lib/data/grindConfirmationsSync.ts): stamp the
 // server row id on a successful push, or park the row for a login-time
-// retry when the push failed (offline). Only the two sync fields may be
+// retry when the push failed (offline). Only these sync fields may be
 // patched — conversion data is user-entered and never edited after save.
+// `id` is rewritten once for rows created before phase 3 (whose ids were
+// not UUIDs — see pushGrindConfirmation's idempotent-PK design).
 export function updateSyncState(
   id: string,
-  patch: { serverId?: string | null; syncPendingFor?: string | null }
+  patch: { id?: string; serverId?: string | null; syncPendingFor?: string | null }
 ): void {
   const current = read();
   if (!current.some((confirmation) => confirmation.id === id)) return;

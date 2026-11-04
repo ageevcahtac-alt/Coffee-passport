@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GrindConfirmation } from './grindConfirmationsStore';
 
-// Phase 3 sync matrix (0038): online/offline push, login-time pull-merge
-// with dedup, parked-row retry, anonymous no-op. No jsdom in this project —
-// the stores only touch window.localStorage, so a minimal in-memory
-// stand-in suffices (same convention as lib/journey/store.test.ts).
+// Phase 3 sync matrix (0038): online/offline push, idempotent retries,
+// login-time pull-merge with dedup, parked-row retry, anonymous no-op.
+// No jsdom in this project — the stores only touch window.localStorage, so
+// a minimal in-memory stand-in suffices (same convention as
+// lib/journey/store.test.ts).
 //
 // The store module keeps a module-level read cache, so like store.test.ts
 // every test imports fresh modules (vi.resetModules + dynamic import) —
@@ -23,6 +24,9 @@ class MemoryStorage {
 }
 
 const STORAGE_KEY = 'coffee-passport:grind-confirmations';
+const UUID_A = '11111111-1111-4111-8111-111111111111';
+const UUID_B = '22222222-2222-4222-8222-222222222222';
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // The Supabase stand-in is scripted per test: `fetchRows` answers the
 // pull's select('*'), `insertResult` decides the push outcome (error
@@ -31,7 +35,9 @@ const STORAGE_KEY = 'coffee-passport:grind-confirmations';
 const inserted: { table: string; row: Record<string, unknown> }[] = [];
 let fetchRows: Record<string, unknown>[] = [];
 let fetchError: { message: string } | null = null;
-let insertResult: { error: { message: string } | null; data: unknown } = { error: null, data: { id: 'srv-new' } };
+// null = the happy path: PostgREST echoes the inserted row's own columns,
+// so .select('id').single() returns the primary key the client sent.
+let insertResult: { error: { message: string; code?: string } | null; data: unknown } | null = null;
 let insertThrows = false;
 
 vi.mock('@/lib/supabase/browserClient', () => ({
@@ -40,7 +46,7 @@ vi.mock('@/lib/supabase/browserClient', () => ({
       insert: (row: Record<string, unknown>) => {
         inserted.push({ table, row });
         if (insertThrows) throw new Error('network down');
-        const result = insertResult;
+        const result = insertResult ?? { error: null, data: { id: row.id } };
         return {
           select: () => ({
             single: () => Promise.resolve(result),
@@ -59,13 +65,28 @@ vi.mock('@/lib/supabase/browserClient', () => ({
 
 function confirmation(overrides: Partial<GrindConfirmation> = {}): GrindConfirmation {
   return {
-    id: 'local-1',
+    id: UUID_A,
     fromModel: 'Comandante C40',
     fromSetting: '24 клик',
     toModel: 'Timemore C2/C3',
     toSetting: '20',
     brewingMethodId: 'v60',
     createdAt: '2026-11-03T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function serverRow(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: UUID_B,
+    owner_user_id: 'user-1',
+    from_model: 'Comandante C40',
+    to_model: 'Timemore C2/C3',
+    brewing_method: 'v60',
+    from_setting: '24 клик',
+    to_setting: '20',
+    lot_id: 'LOT-PUBLIC-1',
+    created_at: '2026-11-03T10:00:00.000Z',
     ...overrides,
   };
 }
@@ -84,7 +105,7 @@ beforeEach(() => {
   inserted.length = 0;
   fetchRows = [];
   fetchError = null;
-  insertResult = { error: null, data: { id: 'srv-new' } };
+  insertResult = null;
   insertThrows = false;
   (globalThis as unknown as { window: { localStorage: MemoryStorage } }).window = {
     localStorage: new MemoryStorage(),
@@ -96,7 +117,7 @@ afterEach(() => {
 });
 
 describe('lib/data/grindConfirmationsSync — push matrix', () => {
-  it('online push writes the full conversion row and stamps serverId on the local record', async () => {
+  it('online push sends the local UUID as the row primary key and stamps serverId', async () => {
     const { getSnapshot } = await import('./grindConfirmationsStore');
     const { pushGrindConfirmation } = await import('./grindConfirmationsSync');
     seed([confirmation({ lotId: 'LOT-PUBLIC-1' })]);
@@ -107,6 +128,7 @@ describe('lib/data/grindConfirmationsSync — push matrix', () => {
     expect(inserted).toHaveLength(1);
     expect(inserted[0].table).toBe('grind_confirmations');
     expect(inserted[0].row).toEqual({
+      id: UUID_A,
       owner_user_id: 'user-1',
       from_model: 'Comandante C40',
       to_model: 'Timemore C2/C3',
@@ -115,13 +137,41 @@ describe('lib/data/grindConfirmationsSync — push matrix', () => {
       to_setting: '20',
       lot_id: 'LOT-PUBLIC-1',
     });
-    expect(stored()[0]).toMatchObject({ serverId: 'srv-new', syncPendingFor: null });
+    expect(stored()[0]).toMatchObject({ serverId: UUID_A, syncPendingFor: null });
+  });
+
+  it('a retry after a lost response (unique violation) links the committed row instead of parking', async () => {
+    const { getSnapshot } = await import('./grindConfirmationsStore');
+    const { pushGrindConfirmation } = await import('./grindConfirmationsSync');
+    insertResult = { error: { message: 'duplicate key value violates pk', code: '23505' }, data: null };
+    seed([confirmation({ syncPendingFor: 'user-1' })]);
+
+    const ok = await pushGrindConfirmation(getSnapshot()[0], 'user-1');
+
+    expect(ok).toBe(true);
+    // The row we sent IS the primary key — no duplicate, no park mark.
+    expect(stored()[0]).toMatchObject({ serverId: UUID_A, syncPendingFor: null });
+  });
+
+  it('a pre-sync row with a non-UUID id mints one, persists it, and pushes under it', async () => {
+    const { getSnapshot } = await import('./grindConfirmationsStore');
+    const { pushGrindConfirmation } = await import('./grindConfirmationsSync');
+    seed([confirmation({ id: 'grindconf-legacy-1' })]);
+
+    await pushGrindConfirmation(getSnapshot()[0], 'user-1');
+
+    const row = inserted[0].row;
+    expect(String(row.id)).toMatch(UUID_RE);
+    expect(row.id).not.toBe('grindconf-legacy-1');
+    // Persisted under the new key, so every retry replays the same INSERT.
+    expect(stored()[0].id).toBe(row.id);
+    expect(stored()[0]).toMatchObject({ serverId: row.id, syncPendingFor: null });
   });
 
   it('server rejection parks the row for the next login retry', async () => {
     const { getSnapshot } = await import('./grindConfirmationsStore');
     const { pushGrindConfirmation } = await import('./grindConfirmationsSync');
-    insertResult = { error: { message: 'row violates rls' }, data: null };
+    insertResult = { error: { message: 'row violates rls', code: '42501' }, data: null };
     seed([confirmation()]);
 
     const ok = await pushGrindConfirmation(getSnapshot()[0], 'user-1');
@@ -164,35 +214,12 @@ describe('lib/data/grindConfirmationsSync — login sync', () => {
     expect(inserted).toHaveLength(0);
   });
 
-  it('pull merges server-only rows and dedups by serverId and by local id', async () => {
+  it('pull merges server-only rows and dedups by serverId', async () => {
     const { syncGrindConfirmationsForUser } = await import('./grindConfirmationsSync');
-    fetchRows = [
-      {
-        id: 'srv-already',
-        owner_user_id: 'user-1',
-        from_model: 'Comandante C40',
-        to_model: 'Timemore C2/C3',
-        brewing_method: 'v60',
-        from_setting: '24 клик',
-        to_setting: '20',
-        lot_id: 'LOT-PUBLIC-1',
-        created_at: '2026-11-03T10:00:00.000Z',
-      },
-      {
-        id: 'srv-fresh',
-        owner_user_id: 'user-1',
-        from_model: 'Mahlkönig EK43',
-        to_model: 'Fellow Ode',
-        brewing_method: 'v60',
-        from_setting: '7.2',
-        to_setting: '5.5',
-        lot_id: 'LOT-PUBLIC-2',
-        created_at: '2026-11-03T11:00:00.000Z',
-      },
-    ];
-    // Local cache already knows srv-already under a local id of its own —
-    // a second device pushed it; the pull must not duplicate it.
-    seed([confirmation({ id: 'local-dev1', serverId: 'srv-already' })]);
+    fetchRows = [serverRow({ id: 'srv-already' }), serverRow({ id: 'srv-fresh', from_model: 'Mahlkönig EK43' })];
+    // Local cache already knows srv-already — a second device pushed it;
+    // the pull must not duplicate it.
+    seed([confirmation({ id: UUID_A, serverId: 'srv-already' })]);
 
     await syncGrindConfirmationsForUser('user-1', true);
 
@@ -200,49 +227,21 @@ describe('lib/data/grindConfirmationsSync — login sync', () => {
     expect(all).toHaveLength(2);
     const fresh = all.find((c) => c.serverId === 'srv-fresh');
     expect(fresh).toMatchObject({
-      id: 'grindconf-server-srv-fresh',
+      id: 'srv-fresh',
       fromModel: 'Mahlkönig EK43',
-      fromSetting: '7.2',
-      toModel: 'Fellow Ode',
-      toSetting: '5.5',
       brewingMethodId: 'v60',
-      lotId: 'LOT-PUBLIC-2',
+      lotId: 'LOT-PUBLIC-1',
     });
     // Nothing was pushed: both server rows are known, nothing is parked.
     expect(inserted).toHaveLength(0);
   });
 
-  it('a parked row (offline at save time) is retried on the next login', async () => {
-    const { syncGrindConfirmationsForUser } = await import('./grindConfirmationsSync');
-    fetchRows = [];
-    seed([confirmation({ syncPendingFor: 'user-1' })]);
-
-    await syncGrindConfirmationsForUser('user-1', true);
-
-    expect(inserted).toHaveLength(1);
-    expect(inserted[0].table).toBe('grind_confirmations');
-    // Retry succeeded — the park mark is cleared and serverId stamped.
-    expect(stored()[0]).toMatchObject({ serverId: 'srv-new', syncPendingFor: null });
-  });
-
-  it('a parked row whose push actually committed (lost response) is relinked from the pull, not re-pushed', async () => {
+  it('a parked row whose push committed (lost response) is relinked by primary key, not re-pushed', async () => {
     const { syncGrindConfirmationsForUser } = await import('./grindConfirmationsSync');
     // The INSERT committed but the response never reached the device — the
-    // server row carries identical conversion content.
-    fetchRows = [
-      {
-        id: 'srv-committed',
-        owner_user_id: 'user-1',
-        from_model: 'Comandante C40',
-        to_model: 'Timemore C2/C3',
-        brewing_method: 'v60',
-        from_setting: '24 клик',
-        to_setting: '20',
-        lot_id: 'LOT-PUBLIC-1',
-        created_at: '2026-11-03T10:00:00.000Z',
-      },
-    ];
-    seed([confirmation({ lotId: 'LOT-PUBLIC-1', syncPendingFor: 'user-1' })]);
+    // server row carries the SAME primary key the pusher sent.
+    fetchRows = [serverRow({ id: UUID_A })];
+    seed([confirmation({ syncPendingFor: 'user-1' })]);
 
     await syncGrindConfirmationsForUser('user-1', true);
 
@@ -250,10 +249,26 @@ describe('lib/data/grindConfirmationsSync — login sync', () => {
     // the confirmation and skew the community median.
     expect(inserted).toHaveLength(0);
     expect(stored()).toHaveLength(1);
-    expect(stored()[0]).toMatchObject({ serverId: 'srv-committed', syncPendingFor: null });
+    expect(stored()[0]).toMatchObject({ serverId: UUID_A, syncPendingFor: null });
   });
 
-  it('a parked row stays parked and is pushed when no server row matches', async () => {
+  it('a server row with identical content but a DIFFERENT id is not stolen (Codex round 2)', async () => {
+    const { syncGrindConfirmationsForUser } = await import('./grindConfirmationsSync');
+    // Another tasting (here: another device) logged the exact same
+    // conversion for the same lot. Content equality proves nothing about
+    // ownership — the parked row must still be pushed under its own id.
+    fetchRows = [serverRow({ id: UUID_B })];
+    seed([confirmation({ id: UUID_A, syncPendingFor: 'user-1' })]);
+
+    await syncGrindConfirmationsForUser('user-1', true);
+
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0].row.id).toBe(UUID_A);
+    expect(stored().some((c) => c.serverId === UUID_B)).toBe(true); // merged, not stolen
+    expect(stored().some((c) => c.serverId === UUID_A)).toBe(true); // pushed and stamped
+  });
+
+  it('a parked row facing no matching server row stays parked until the retry pushes it', async () => {
     const { syncGrindConfirmationsForUser } = await import('./grindConfirmationsSync');
     fetchRows = [];
     seed([confirmation({ syncPendingFor: 'user-1' })]);
@@ -261,44 +276,8 @@ describe('lib/data/grindConfirmationsSync — login sync', () => {
     await syncGrindConfirmationsForUser('user-1', true);
 
     expect(inserted).toHaveLength(1);
-    expect(stored()[0]).toMatchObject({ serverId: 'srv-new', syncPendingFor: null });
-  });
-
-  it('a parked row facing two identical unlinked server rows stays ambiguous — pushing beats guessing wrong', async () => {
-    const { syncGrindConfirmationsForUser } = await import('./grindConfirmationsSync');
-    fetchRows = [
-      {
-        id: 'srv-dup-1',
-        owner_user_id: 'user-1',
-        from_model: 'Comandante C40',
-        to_model: 'Timemore C2/C3',
-        brewing_method: 'v60',
-        from_setting: '24 клик',
-        to_setting: '20',
-        lot_id: '',
-        created_at: '2026-11-03T10:00:00.000Z',
-      },
-      {
-        id: 'srv-dup-2',
-        owner_user_id: 'user-1',
-        from_model: 'Comandante C40',
-        to_model: 'Timemore C2/C3',
-        brewing_method: 'v60',
-        from_setting: '24 клик',
-        to_setting: '20',
-        lot_id: '',
-        created_at: '2026-11-03T11:00:00.000Z',
-      },
-    ];
-    seed([confirmation({ syncPendingFor: 'user-1' })]);
-
-    await syncGrindConfirmationsForUser('user-1', true);
-
-    // No unique owner for the server row → the parked row is pushed as a
-    // third row rather than stealing one of the two (both stay unmerged as
-    // far as THIS device is concerned — the push then stamps srv-new).
-    expect(inserted).toHaveLength(1);
-    expect(stored().filter((c) => c.serverId === 'srv-new')).toHaveLength(1);
+    expect(inserted[0].row.id).toBe(UUID_A);
+    expect(stored()[0]).toMatchObject({ serverId: UUID_A, syncPendingFor: null });
   });
 
   it('a park mark left by a different user is not retried under this login', async () => {

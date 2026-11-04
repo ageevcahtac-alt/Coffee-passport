@@ -169,7 +169,10 @@ export type CheckinInsert = CheckinRow;
 // public.grind_confirmations — see supabase/migrations/0038_grind_confirmations.sql.
 // Insert-only (immutability trigger), owner-scoped RLS: a conversion data
 // point is written ONLY for a consented (is_public) tasting of a signed-in
-// guest; the caller never sends an id (server default gen_random_uuid).
+// guest. The client SENDS id (a UUID, per lib/utils/id.ts) — the local
+// confirmation id doubles as the row's primary key so a retried push after
+// a lost response replays the same INSERT instead of duplicating the row;
+// only created_at stays server-defaulted.
 export type GrindConfirmationRow = {
   id: string;
   owner_user_id: string;
@@ -181,7 +184,7 @@ export type GrindConfirmationRow = {
   lot_id: string;
   created_at: string;
 };
-export type GrindConfirmationInsert = Omit<GrindConfirmationRow, 'id' | 'created_at'>;
+export type GrindConfirmationInsert = Omit<GrindConfirmationRow, 'created_at'>;
 
 // public.grind_conversion_medians — anonymous aggregate view over the
 // confirmations table (median confirmed target setting per conversion
