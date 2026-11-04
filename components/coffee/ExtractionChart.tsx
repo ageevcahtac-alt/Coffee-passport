@@ -1,10 +1,14 @@
-import { getControlChartBand } from '@/lib/utils/extraction';
+import { clampPointToBand, getControlChartBand } from '@/lib/utils/extraction';
 
 // Inline responsive SVG — same no-chart-library convention as
 // RoastCurveChart.tsx. Plots one or more (Extraction Yield %, Strength %)
 // points against the classic SCA brewing control chart, with the "ideal"
 // band shaded — a reference range, not a strict standard, per the caption
 // shown alongside this chart in RecipeCard.
+//
+// Points are clamped to the band before plotting (clampPointToBand): a
+// value off the scale pins to the chart's edge instead of rendering
+// outside the axes — the cup IS off the scale, and that should be visible.
 const WIDTH = 340;
 const HEIGHT = 260;
 const PAD_LEFT = 40;
@@ -55,17 +59,20 @@ export function ExtractionChart({
         <rect x={idealX} y={idealY} width={idealWidth} height={idealHeight} fill="#5C6B4F" opacity={0.15} />
         <rect x={idealX} y={idealY} width={idealWidth} height={idealHeight} fill="none" stroke="#5C6B4F" strokeWidth={1} strokeDasharray="3 3" />
 
-        {points.map((point) => (
-          <circle
-            key={point.label}
-            cx={x(point.extractionYieldPercent)}
-            cy={y(point.strengthPercent)}
-            r={5}
-            fill={point.color}
-            stroke="#1C1410"
-            strokeWidth={1}
-          />
-        ))}
+        {points.map((point) => {
+          const clamped = clampPointToBand(point, band);
+          return (
+            <circle
+              key={point.label}
+              cx={x(clamped.extractionYieldPercent)}
+              cy={y(clamped.strengthPercent)}
+              r={5}
+              fill={point.color}
+              stroke="#1C1410"
+              strokeWidth={1}
+            />
+          );
+        })}
 
         <text
           x={PAD_LEFT}
@@ -95,6 +102,16 @@ export function ExtractionChart({
         </text>
         <text x={2} y={PAD_TOP + innerHeight} fontSize={9} fill="#6E5C48" style={{ fontFamily: 'var(--font-mono)' }}>
           {band.strengthMin}%
+        </text>
+        <text
+          x={2}
+          y={PAD_TOP + innerHeight / 2}
+          fontSize={9}
+          fill="#6E5C48"
+          textAnchor="middle"
+          transform={`rotate(-90 8 ${PAD_TOP + innerHeight / 2})`}
+        >
+          Крепость (TDS), %
         </text>
       </svg>
 
