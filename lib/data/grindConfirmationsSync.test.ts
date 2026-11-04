@@ -225,6 +225,82 @@ describe('lib/data/grindConfirmationsSync — login sync', () => {
     expect(stored()[0]).toMatchObject({ serverId: 'srv-new', syncPendingFor: null });
   });
 
+  it('a parked row whose push actually committed (lost response) is relinked from the pull, not re-pushed', async () => {
+    const { syncGrindConfirmationsForUser } = await import('./grindConfirmationsSync');
+    // The INSERT committed but the response never reached the device — the
+    // server row carries identical conversion content.
+    fetchRows = [
+      {
+        id: 'srv-committed',
+        owner_user_id: 'user-1',
+        from_model: 'Comandante C40',
+        to_model: 'Timemore C2/C3',
+        brewing_method: 'v60',
+        from_setting: '24 клик',
+        to_setting: '20',
+        lot_id: 'LOT-PUBLIC-1',
+        created_at: '2026-11-03T10:00:00.000Z',
+      },
+    ];
+    seed([confirmation({ lotId: 'LOT-PUBLIC-1', syncPendingFor: 'user-1' })]);
+
+    await syncGrindConfirmationsForUser('user-1', true);
+
+    // Linked locally, never re-inserted — a duplicate would double-count
+    // the confirmation and skew the community median.
+    expect(inserted).toHaveLength(0);
+    expect(stored()).toHaveLength(1);
+    expect(stored()[0]).toMatchObject({ serverId: 'srv-committed', syncPendingFor: null });
+  });
+
+  it('a parked row stays parked and is pushed when no server row matches', async () => {
+    const { syncGrindConfirmationsForUser } = await import('./grindConfirmationsSync');
+    fetchRows = [];
+    seed([confirmation({ syncPendingFor: 'user-1' })]);
+
+    await syncGrindConfirmationsForUser('user-1', true);
+
+    expect(inserted).toHaveLength(1);
+    expect(stored()[0]).toMatchObject({ serverId: 'srv-new', syncPendingFor: null });
+  });
+
+  it('a parked row facing two identical unlinked server rows stays ambiguous — pushing beats guessing wrong', async () => {
+    const { syncGrindConfirmationsForUser } = await import('./grindConfirmationsSync');
+    fetchRows = [
+      {
+        id: 'srv-dup-1',
+        owner_user_id: 'user-1',
+        from_model: 'Comandante C40',
+        to_model: 'Timemore C2/C3',
+        brewing_method: 'v60',
+        from_setting: '24 клик',
+        to_setting: '20',
+        lot_id: '',
+        created_at: '2026-11-03T10:00:00.000Z',
+      },
+      {
+        id: 'srv-dup-2',
+        owner_user_id: 'user-1',
+        from_model: 'Comandante C40',
+        to_model: 'Timemore C2/C3',
+        brewing_method: 'v60',
+        from_setting: '24 клик',
+        to_setting: '20',
+        lot_id: '',
+        created_at: '2026-11-03T11:00:00.000Z',
+      },
+    ];
+    seed([confirmation({ syncPendingFor: 'user-1' })]);
+
+    await syncGrindConfirmationsForUser('user-1', true);
+
+    // No unique owner for the server row → the parked row is pushed as a
+    // third row rather than stealing one of the two (both stay unmerged as
+    // far as THIS device is concerned — the push then stamps srv-new).
+    expect(inserted).toHaveLength(1);
+    expect(stored().filter((c) => c.serverId === 'srv-new')).toHaveLength(1);
+  });
+
   it('a park mark left by a different user is not retried under this login', async () => {
     const { syncGrindConfirmationsForUser } = await import('./grindConfirmationsSync');
     fetchRows = [];

@@ -54,7 +54,12 @@ create policy "owners read own grind confirmations" on public.grind_confirmation
   using (auth.uid() = owner_user_id);
 
 -- Immutable once written (0023's roast_batches pattern) — even the owner
--- cannot edit or delete a confirmation; corrections are new rows.
+-- cannot edit or delete a confirmation; corrections are new rows. One
+-- deliberate divergence from 0023: owner_user_id cascades from auth.users
+-- (0026's checkins convention), so the DELETE arm must let a cascade
+-- through — an account deletion can never be held hostage by its own
+-- data. PostgREST-originated requests always carry request.jwt.claims,
+-- which is what distinguishes them from the cascade.
 create or replace function public.prevent_grind_confirmation_mutation()
 returns trigger
 language plpgsql
@@ -62,6 +67,9 @@ security definer
 set search_path = public
 as $$
 begin
+  if tg_op = 'DELETE' and nullif(current_setting('request.jwt.claims', true), '') is null then
+    return old;
+  end if;
   raise exception 'grind_confirmations rows are immutable once created (attempted % on id=%)', tg_op, coalesce(old.id, new.id);
 end;
 $$;

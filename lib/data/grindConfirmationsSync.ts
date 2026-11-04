@@ -76,11 +76,19 @@ export async function pushGrindConfirmation(confirmation: GrindConfirmation, use
 
 /**
  * Login-time sync, wired next to syncCheckinsForUser in
- * lib/auth/currentUser.tsx. Two jobs:
- *  1. pull this user's server rows and merge server-only ones into the
+ * lib/auth/currentUser.tsx. Three jobs, in this order:
+ *  1. relink parked rows whose save-time push actually committed but whose
+ *     response was lost (offline flap): if the pull reveals exactly one
+ *     own server row with identical conversion content, stamp its serverId
+ *     locally instead of inserting a duplicate on retry — a blind retry
+ *     would double-count the confirmation and skew the median;
+ *  2. pull this user's server rows and merge server-only ones into the
  *     local store (dedup by serverId — local stays the offline source);
- *  2. retry rows parked by a failed save-time push (syncPendingFor = user).
- * Anonymous browsing is a no-op, same as the checkins sync.
+ *  3. retry rows still parked (syncPendingFor = user).
+ * Anonymous browsing is a no-op, same as the checkins sync. A true
+ * parallel double-push from two tabs remains possible (same race the
+ * checkins sync accepts); the lost-response replay above is the dominant
+ * failure and is closed.
  */
 export async function syncGrindConfirmationsForUser(userId: string, isAuthenticated: boolean): Promise<void> {
   if (!isAuthenticated) return;
@@ -95,6 +103,32 @@ export async function syncGrindConfirmationsForUser(userId: string, isAuthentica
       return;
     }
     const rows = (data ?? []) as GrindConfirmationRow[];
+
+    // Job 1 — relink before merging/retries so the merge below never sees
+    // the relinked server row as "server-only" and duplicates it locally.
+    for (const confirmation of getSnapshot().filter(
+      (candidate) => !candidate.serverId && candidate.syncPendingFor === userId
+    )) {
+      const matches = rows.filter(
+        (row) =>
+          row.from_model === confirmation.fromModel &&
+          row.to_model === confirmation.toModel &&
+          row.brewing_method === confirmation.brewingMethodId &&
+          row.from_setting === confirmation.fromSetting &&
+          row.to_setting === confirmation.toSetting &&
+          row.lot_id === (confirmation.lotId ?? '') &&
+          // An own row already linked locally is a DIFFERENT tasting that
+          // happens to share the conversion — never steal it.
+          !getSnapshot().some((local) => local.serverId === row.id)
+      );
+      if (matches.length === 1) {
+        updateSyncState(confirmation.id, { serverId: matches[0].id, syncPendingFor: null });
+      }
+      // 0 matches → genuinely unpushed; >1 → ambiguous which server row is
+      // ours; both stay parked and the retry below pushes (a possible
+      // duplicate only in the ambiguous case, never the lost-response one).
+    }
+
     const knownServerIds = new Set(
       getSnapshot()
         .map((confirmation) => confirmation.serverId)

@@ -63,6 +63,12 @@ describe('grind confirmations migration (0038)', () => {
     expect(sql).toMatch(/before\s+update\s+or\s+delete\s+on\s+public\.grind_confirmations/i);
     expect(sql).toMatch(/raise\s+exception/i);
     expect(sql).not.toMatch(/return\s+null\s*;/i);
+    // Codex review round 1: owner_user_id cascades from auth.users, so the
+    // DELETE arm must let a cascade (no API context) through — otherwise
+    // deleting an account with one confirmation rolls back. API-originated
+    // deletes always carry request.jwt.claims and still raise.
+    expect(sql).toMatch(/tg_op\s*=\s*'DELETE'\s+and\s+nullif\(current_setting\('request\.jwt\.claims'/i);
+    expect(sql).toMatch(/return\s+old\s*;/i);
   });
 
   it('the community view aggregates by triple with a median and no identity columns', () => {
