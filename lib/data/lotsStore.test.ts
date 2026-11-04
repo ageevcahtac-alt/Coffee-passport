@@ -168,6 +168,35 @@ describe('lib/data/lotsStore — Coffee/Green Lot provenance sync', () => {
 
       expect(lot.producer.story).toBe('A hand-written tale.');
     });
+
+    it('keeps processDetail and sustainabilityBadges from the local fallback (no Coffee columns for them)', async () => {
+      const { rowToLot } = await import('./lotsStore');
+      const row = baseRow({ green_lots: { coffees: fullCoffee } });
+      const fallback = baseLot({
+        producer: {
+          farmerName: '',
+          farmName: '',
+          altitude: '',
+          story: '',
+          processDetail: {
+            family: 'anaerobic',
+            fermentationDays: 96,
+            vessel: 'Герметичная ёмкость',
+            roasterNote: 'За яркую кислотность',
+          },
+          sustainabilityBadges: ['direct-trade', 'regenerative'],
+        },
+      });
+      const lot = rowToLot(row as never, fallback);
+
+      expect(lot.producer.processDetail).toEqual({
+        family: 'anaerobic',
+        fermentationDays: 96,
+        vessel: 'Герметичная ёмкость',
+        roasterNote: 'За яркую кислотность',
+      });
+      expect(lot.producer.sustainabilityBadges).toEqual(['direct-trade', 'regenerative']);
+    });
   });
 
   describe('syncLotsFromSupabase — cache interaction', () => {

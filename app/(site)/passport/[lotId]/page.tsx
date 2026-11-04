@@ -23,6 +23,7 @@ import { LocationStep } from '@/components/coffee/LocationStep';
 import { LotPassport } from '@/components/coffee/LotPassport';
 import { LotRemovalCountdown } from '@/components/coffee/LotRemovalCountdown';
 import { ProducerRoasterCard } from '@/components/coffee/ProducerRoasterCard';
+import { ProcessPassportCard } from '@/components/coffee/ProcessPassportCard';
 import { RoastProfileSummaryCard } from '@/components/coffee/RoastProfileSummaryCard';
 import { RoasterCafeRecommendations } from '@/components/coffee/RoasterCafeRecommendations';
 import { BlindTastingLock } from '@/components/coffee/BlindTastingLock';
@@ -370,6 +371,10 @@ function LotPassportView({ params }: { params: { lotId: string } }) {
           <ProducerRoasterCard lot={displayLot} />
         </div>
 
+        <div className="max-w-md mx-auto w-full mt-8">
+          <ProcessPassportCard lot={displayLot} />
+        </div>
+
         {roastIntent && (
           <div className="max-w-md mx-auto w-full mt-8">
             <RoastIntentCard profile={roastIntent} />
@@ -443,6 +448,10 @@ function LotPassportView({ params }: { params: { lotId: string } }) {
 
         <div className="max-w-md mx-auto w-full mt-8">
           <ProducerRoasterCard lot={displayLot} />
+        </div>
+
+        <div className="max-w-md mx-auto w-full mt-8">
+          <ProcessPassportCard lot={displayLot} />
         </div>
 
         {roastIntent && (
@@ -633,6 +642,10 @@ function LotPassportView({ params }: { params: { lotId: string } }) {
 
       <div className="max-w-md mx-auto w-full mt-8">
         <ProducerRoasterCard lot={displayLot} />
+      </div>
+
+      <div className="max-w-md mx-auto w-full mt-8">
+        <ProcessPassportCard lot={displayLot} />
       </div>
 
       {roastIntent && (
