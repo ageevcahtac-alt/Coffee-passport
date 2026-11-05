@@ -1,0 +1,43 @@
+name: E2E
+
+# Сквозные Playwright-сценарии против локального инстанса (сборка и старт —
+# webServer из playwright.config.ts). На каждый PR; workflow_dispatch —
+# ручной прогон для разбора нестабильности. Flaky-политика: retry 1 (в
+# playwright.config.ts при CI). Сценарии входа пропускаются без кредов в
+# .env.e2e — в CI их нет, гостевые сценарии работают на плейсхолдерах,
+# как и в ci.yml.
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: '1'
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22 # same major as the Timeweb server
+          cache: npm
+      - run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run e2e
+        run: npm run test:e2e
+      - name: Artifacts (screenshots, trace, report)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 14

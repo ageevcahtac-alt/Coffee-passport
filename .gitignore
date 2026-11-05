@@ -11,6 +11,7 @@
 # env files
 .env
 .env*.local
+.env.e2e
 
 # secrets
 /supabase/password coffee pasport/
@@ -37,3 +38,8 @@ next-env.d.ts
 
 # owner cabinet credentials (local only)
 /.secrets/
+
+# playwright artifacts
+test-results/
+playwright-report/
+blob-report/
