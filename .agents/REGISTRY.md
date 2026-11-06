@@ -9,6 +9,7 @@
 | codex | AGENTS.md | 2 | `write`: миграции, CI, деплой-скрипты, шаблонные правки; дописывает по плану, если у Claude кончился лимит | `review`: каждый diff Claude перед мержем |
 | code-reviewer | .claude/agents/code-reviewer.md | 2 | ничего | diff Codex: план против diff, сам перезапускает проверки |
 | qa-monitor | .claude/agents/qa-monitor.md | 1 | ничего (поломки → задачи) | работоспособность сайта |
+| e2e-runner | .claude/agents/e2e-runner.md | 1 | e2e-сценарии Playwright, креды .env.e2e | прогоны `npm run test:e2e` |
 | designer | .claude/agents/designer.md | 1 | офферы | тренды, UX-аудит |
 
 ## Журнал задач
