@@ -23,6 +23,22 @@ loadE2eEnv();
 // production-сборку и стартует её на 3100.
 const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:3100';
 const RUN_AGAINST_EXISTING_SERVER = Boolean(process.env.E2E_BASE_URL);
+// Next.js не перезаписывает переменные, уже заданные в process.env, значениями
+// из .env.local — process.env побеждает. Поэтому плейсхолдеры допустимы
+// только там, где .env.local нет (CI): на машине разработчика реальные
+// значения из .env.local должны дойти до сборки, а не быть перекрыты.
+const HAS_LOCAL_ENV = fs.existsSync(path.join(__dirname, '.env.local'));
+
+function supabaseEnv(): Record<string, string> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (url && anonKey) return { NEXT_PUBLIC_SUPABASE_URL: url, NEXT_PUBLIC_SUPABASE_ANON_KEY: anonKey };
+  if (HAS_LOCAL_ENV) return {};
+  return {
+    NEXT_PUBLIC_SUPABASE_URL: 'https://ci-placeholder.supabase.co',
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: 'ci-placeholder-anon-key',
+  };
+}
 
 export default defineConfig({
   testDir: './e2e',
@@ -50,12 +66,7 @@ export default defineConfig({
         reuseExistingServer: !process.env.CI,
         timeout: 300_000,
         env: {
-          // Локально реальные значения лежат в .env.e2e/.env.local и подхватываются
-          // next-ом самим; для CI (где их нет) — те же плейсхолдеры, что в ci.yml.
-          NEXT_PUBLIC_SUPABASE_URL:
-            process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://ci-placeholder.supabase.co',
-          NEXT_PUBLIC_SUPABASE_ANON_KEY:
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'ci-placeholder-anon-key',
+          ...supabaseEnv(),
           // Включает пилотные кабинеты (сценарий кабинета ростерии) — только
           // если явно задано в .env.e2e; в CI не задаём.
           ...(process.env.NEXT_PUBLIC_PILOT_DEMO_ENABLED

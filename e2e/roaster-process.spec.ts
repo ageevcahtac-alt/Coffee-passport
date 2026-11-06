@@ -11,7 +11,7 @@ import { DEMO_LOT_ID } from './helpers';
 // на ветках без неё сценарий честно пропускается с причиной, а начинает
 // работать как только фича попадает в base.
 
-test('кабинет ростерии → «Процесс и происхождение» → блок «Процесс» с дисклеймером виден гостю', async ({ page }) => {
+test('кабинет ростерии → «Процесс и происхождение» → блок «Процесс» с дисклеймером виден гостю', async ({ browser, page }) => {
   await page.goto('/');
 
   // Вход через пилотный переключатель ролей (DevRoleSwitcher): форма с
@@ -49,16 +49,29 @@ test('кабинет ростерии → «Процесс и происхожд
   await page.getByRole('button', { name: 'Сохранить изменения' }).click();
   await expect(page).toHaveURL(/\/dashboard\/roaster$/);
 
-  // Тот же браузер открывает паспорт лота гостевым путём: блок «Процесс»
-  // обязан быть виден вместе с дисклеймером о заявленных значках.
-  await page.goto(`/passport/${DEMO_LOT_ID}?entry=shop`);
-  await expect(page.getByText('Процесс', { exact: true })).toBeVisible();
-  await expect(page.getByText('Мытая')).toBeVisible();
-  await expect(page.getByText('72 дня')).toBeVisible();
-  await expect(page.getByText('Открытый танк')).toBeVisible();
-  await expect(page.getByText('Долгая ферментация даёт чистую чашку — e2e.')).toBeVisible();
-  await expect(page.getByText('Прямая торговля')).toBeVisible();
+  // Гость — это НЕ вошедший обжарщик. Смотрим паспорт глазами гостя: сохранённый
+  // лот переносим в свежий контекст (localStorage между контекстами не шарится),
+  // авторизация туда не попадает — иначе блок с ограниченным доступом остался
+  // бы незамеченным.
+  const savedLots = await page.evaluate(() => window.localStorage.getItem('coffee-passport:lots'));
+  const guestContext = await browser.newContext();
+  const guestPage = await guestContext.newPage();
+  await guestPage.addInitScript(
+    ({ key, value }) => {
+      if (value) window.localStorage.setItem(key, value);
+    },
+    { key: 'coffee-passport:lots', value: savedLots }
+  );
+
+  await guestPage.goto(`/passport/${DEMO_LOT_ID}?entry=shop`);
+  await expect(guestPage.getByText('Процесс', { exact: true })).toBeVisible();
+  await expect(guestPage.getByText('Мытая')).toBeVisible();
+  await expect(guestPage.getByText('72 дня')).toBeVisible();
+  await expect(guestPage.getByText('Открытый танк')).toBeVisible();
+  await expect(guestPage.getByText('Долгая ферментация даёт чистую чашку — e2e.')).toBeVisible();
+  await expect(guestPage.getByText('Прямая торговля')).toBeVisible();
   await expect(
-    page.getByText('Значки заявлены обжарщиком и не проходят независимую проверку.')
+    guestPage.getByText('Значки заявлены обжарщиком и не проходят независимую проверку.')
   ).toBeVisible();
+  await guestContext.close();
 });

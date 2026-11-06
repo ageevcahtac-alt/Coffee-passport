@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import {
   DEMO_LOT_ID,
   fillBaristaStep,
@@ -28,9 +28,12 @@ test('чекбокс публикации есть, по умолчанию вы
   await page.getByRole('button', { name: 'Сохранить дегустацию в дневник' }).click();
   await expect(page.getByRole('heading', { name: 'Печать Фермера' })).toBeVisible();
 
-  const journey = await readLocalStorageJson<Record<string, unknown>>(page, 'coffee-passport:journey');
-  expect(journey).toHaveLength(1);
-  expect(journey[0].isPublic).toBe(false);
+  // Общий тестовый аккаунт накапливает историю: синк после входа подтягивает
+  // прошлые checkins из Supabase, поэтому длина всего дневника не изолирована.
+  // Проверяем самую свежую запись именно этого лота.
+  const record = await newestRecordForLot(page);
+  expect(record).toBeDefined();
+  expect(record?.isPublic).toBe(false);
 });
 
 test('opt-in публикует дегустацию (isPublic: true)', async ({ page }) => {
@@ -42,7 +45,14 @@ test('opt-in публикует дегустацию (isPublic: true)', async ({
   await page.getByRole('button', { name: 'Сохранить дегустацию в дневник' }).click();
   await expect(page.getByRole('heading', { name: 'Печать Фермера' })).toBeVisible();
 
-  const journey = await readLocalStorageJson<Record<string, unknown>>(page, 'coffee-passport:journey');
-  expect(journey).toHaveLength(1);
-  expect(journey[0].isPublic).toBe(true);
+  const record = await newestRecordForLot(page);
+  expect(record).toBeDefined();
+  expect(record?.isPublic).toBe(true);
 });
+
+// Свежая запись этого лота: save пишет в начало дневника, значит find()
+// по lotId возвращает именно последний сохранённый прогоном тест.
+async function newestRecordForLot(page: Page) {
+  const journey = await readLocalStorageJson<Record<string, unknown>>(page, 'coffee-passport:journey');
+  return journey.find((entry) => entry.lotId === DEMO_LOT_ID);
+}

@@ -110,7 +110,9 @@ export async function loginAsEnthusiast(page: Page, nextPath: string): Promise<v
   await page.locator('#enthusiast-email').fill(email);
   await page.locator('#enthusiast-password').fill(password);
   await page.getByRole('button', { name: 'Войти в дневник вкуса' }).click();
-  await expect(page).toHaveURL(new RegExp(`^${nextPath.replace(/\//g, '\\/')}`));
+  // РегExp без якоря: toHaveURL сопоставляет с абсолютным URL целиком
+  // (http://host + path), якорь "^/" ломал бы любой успешный переход.
+  await expect(page).toHaveURL(new RegExp(nextPath.replace(/\//g, '\\/')));
 }
 
 // Общие шаги слепой дегустации: кофейня → напиток → «Расскажите о чашке».
