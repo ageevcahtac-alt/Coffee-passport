@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 // Minimal config, added for docs/reports/TASTE_INTENT_HISTORICAL_LINK_IMPLEMENTATION.md's
 // tests: lib/journey/store.ts (and its dependencies) import via the '@/*'
@@ -11,5 +11,10 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, '.'),
     },
+  },
+  test: {
+    // Playwright-спеки в e2e/ не belong vitest'у — они гоняются через
+    // `npm run test:e2e` (Chromium, webServer из playwright.config.ts).
+    exclude: [...configDefaults.exclude, 'e2e/**'],
   },
 });

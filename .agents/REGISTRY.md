@@ -9,6 +9,7 @@
 | codex | AGENTS.md | 2 | `write`: миграции, CI, деплой-скрипты, шаблонные правки; дописывает по плану, если у Claude кончился лимит | `review`: каждый diff Claude перед мержем |
 | code-reviewer | .claude/agents/code-reviewer.md | 2 | ничего | diff Codex: план против diff, сам перезапускает проверки |
 | qa-monitor | .claude/agents/qa-monitor.md | 1 | ничего (поломки → задачи) | работоспособность сайта |
+| e2e-runner | .claude/agents/e2e-runner.md | 1 | e2e-сценарии Playwright, креды .env.e2e | прогоны `npm run test:e2e` |
 | designer | .claude/agents/designer.md | 1 | офферы | тренды, UX-аудит |
 
 ## Журнал задач
@@ -43,6 +44,7 @@
 | 2026-11-03 | Claude | Codex review | grind-converter фазы 1-2 (backlog #2): тесты ядра grindConvert + sanity таблицы (баг parseLeadingNumber на null — исправлен); TastingForm sourceRecipe → addGrindConfirmation через addTastingRecord (localStorage, БД не тронута) | ok | 2 (PR #97; носителя sourceRecipe пока нет — в чек-листе фазы 3) |
 | 2026-11-03 | main (Kimi) | Codex review | grind-community-sync, фаза 3 (backlog #2): носитель sourceRecipe («Сварил по этому рецепту» → sessionStorage-флаг по лоту → taste-форма), 0038 (grind_confirmations insert-only + каскад-safe триггер, view медиан percentile_cont без identity-колонок, anon read), синк по образцу чекинов consent-gated (isPublic), идемпотентный пуш — клиентский UUID = PK серверной строки; round 1: relink + каскад; round 2: уход от content-matching к точному PK | ok | 2 (PR #101 — смержен; 0038 накатана через db-migrate, run 41843263157, verify grind_confirmations.id OK, бэкап db-before-0038.dump) |
 | 2026-11-04 | main (Kimi) | Codex review | extraction-chart, доводка (backlog #1): фича была в 98bfb8e — тесты ядра (17: формула/округление/null-края/band-матрица/clamp), фикс computeExtraction на NaN/Infinity, clampPointToBand (точка не рисуется вне осей), подпись оси Y, plain-language копия про оси как ориентир, не гарантию; схема БД не тронута | ok | 2 (PR #104; round 1 — low в копии, исправлен; round 2 — clean) |
+| 2026-11-06 | main (Kimi) | Codex review | 20261105-1221-e2e-foundation: e2e-фундамент — агент e2e-runner, Playwright (Chromium, webServer = next build && next start :3100, креды .env.e2e), сценарии a–e (гость/вход+согласие/рецепт/экстракция/кабинет ростерии), CI e2e.yml; код фич не тронут | ok | 2 (PR #108; round 1 — 1 high + 3 medium, исправлены; round 2 — 1 medium, supabaseEnv независимый fallback, исправлен; мерж за владельцем) |
 
 ## Замены
 | дата | агент | было → стало | причина |
