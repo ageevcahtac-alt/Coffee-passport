@@ -30,14 +30,15 @@ const RUN_AGAINST_EXISTING_SERVER = Boolean(process.env.E2E_BASE_URL);
 const HAS_LOCAL_ENV = fs.existsSync(path.join(__dirname, '.env.local'));
 
 function supabaseEnv(): Record<string, string> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (url && anonKey) return { NEXT_PUBLIC_SUPABASE_URL: url, NEXT_PUBLIC_SUPABASE_ANON_KEY: anonKey };
-  if (HAS_LOCAL_ENV) return {};
-  return {
-    NEXT_PUBLIC_SUPABASE_URL: 'https://ci-placeholder.supabase.co',
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: 'ci-placeholder-anon-key',
-  };
+  // Fallback по каждому ключу независимо: частично заданная пара (например,
+  // только URL) не должна перезаписываться плейсхолдером. Плейсхолдеры —
+  // только для незаданных ключей и только без .env.local.
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? (HAS_LOCAL_ENV ? undefined : 'https://ci-placeholder.supabase.co');
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? (HAS_LOCAL_ENV ? undefined : 'ci-placeholder-anon-key');
+  const env: Record<string, string> = {};
+  if (url) env.NEXT_PUBLIC_SUPABASE_URL = url;
+  if (anonKey) env.NEXT_PUBLIC_SUPABASE_ANON_KEY = anonKey;
+  return env;
 }
 
 export default defineConfig({

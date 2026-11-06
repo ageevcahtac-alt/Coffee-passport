@@ -1,34 +1,26 @@
-# RESUME: E2E-фундамент (состояние на обрыв сессии 2026-11-05)
+# RESUME: E2E-фундамент (обновлено 2026-11-06, после ревью раунда 2)
 
 ## Задача
 E2E-фундамент Coffee Passport. Ветка `feat/e2e-foundation` от `fix/pre-pilot-shortlist`. PR #108.
 Карточка: `.agents/tasks/20261105-1221-e2e-foundation.md`.
 
-## Что сделано
-1. Фундамент — коммит f2350dc (в origin): агент `.claude/agents/e2e-runner.md`,
-   `.claude/ORCHESTRATION.md` (раздел про e2e), `playwright.config.ts` (Chromium,
-   webServer = build+start на :3100, креды из .env.e2e), сценарии a–e в `e2e/`,
-   `.github/workflows/e2e.yml`, `.env.e2e.example`. CI на PR #108 зелёный.
-2. Codex-ревью раунд 1 — отчёт `.agents/runs/20261105-1221-e2e-foundation/report-1.md`:
-   4 находки (1 high, 3 medium).
-3. Фиксы всех 4 находок — в рабочем дереве, НЕ закоммичены на момент обрыва:
-   - high `e2e/helpers.ts:113` — убран якорь `^` в toHaveURL (регExp матчится с
-     абсолютным URL);
-   - medium `playwright.config.ts` — `supabaseEnv()`: плейсхолдеры только когда
-     нет .env.local и нет явных NEXT_PUBLIC_* (process.env побеждает .env.local);
-   - medium `e2e/tasting-consent.spec.ts` — вместо toHaveLength(1) на общем
-     аккаунте проверка newestRecordForLot (save пишет в начало дневника);
-   - medium `e2e/roaster-process.spec.ts` — «гость» теперь свежий browser context
-     (localStorage переносится через addInitScript, cookies не копируются).
+## Итог
+- Фундамент: f2350dc. Фиксы раунда 1: c41ab28. Docs: a6f9c61.
+- Фикс раунда 2 (supabaseEnv — независимый fallback по ключам): в рабочем
+  дереве, коммит после зелёных проверок.
+- Ревью: раунд 1 — 4 находки (1 high, 3 medium), все исправлены; раунд 2 —
+  1 finding medium, исправлен. Лимит 2 раундов исчерпан.
+- Отчёты: `.agents/runs/20261105-1221-e2e-foundation/report-{1,2}.md`.
 
-## Промт раунда 2
-Подготовлен: `.agents/runs/20261105-1221-e2e-foundation/prompt.next.md`
-(переименовать в prompt-2.md при запуске).
+## Находки и статус
+1. (high) toHaveURL с якорем `^/` — fixed c41ab28, подтверждён раундом 2.
+2. (medium) плейсхолдеры webServer перекрывали .env.local — fixed c41ab28,
+   подтверждён раундом 2.
+3. (medium) toHaveLength(1) на общем аккаунте — fixed c41ab28, подтверждён.
+4. (medium) «гость» в сессии обжарщика — fixed c41ab28, подтверждён.
+5. (medium, раунд 2) supabaseEnv перезаписывал частично заданную пару
+   плейсхолдерами — fixed в рабочем дереве (независимый fallback по ключам).
 
-## Следующие шаги
-1. Прогнать tsc/lint/vitest/e2e над фиксами (были запущены на момент обрыва).
-2. Закоммитить фикс, запушить в feat/e2e-foundation.
-3. Обновить `.agents/REGISTRY.md` (строка журнала + e2e-runner в таблицу агентов).
-4. ПАУЗА НА VPN → codex-run.ps1 read-only (раунд 2, макс 2 раунда суммарно на фиксы).
-5. Разобрать находки раунда 2, при необходимости дожать, финальный отчёт.
-   Merge/deploy — только владелец.
+## Осталось
+- Строка журнала в .agents/REGISTRY.md (после пуша фикса раунда 2).
+- Финальный отчёт владельцу. Merge/deploy — только владелец.
