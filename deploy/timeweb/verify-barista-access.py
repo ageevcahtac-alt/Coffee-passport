@@ -14,10 +14,12 @@ Email и пароли приходят только JSON-ом на stdin и ни
   prepare  — состояние учётки бариста (reset_barista: удалить прежнюю учётку бариста этой кофейни),
              временный гость (энтузиаст) с картой-депозитом 1000 ₽ в кофейне, снимок чужих строк.
              stdin: cafe_id, barista{email}, guest{email,password,display_name}, reset_barista
-  check    — expect=present: учётка бариста, карта гостя списана на amount (чек с оплатой картой),
-             одно потребление от этого бариста, +300 приветственных и кэшбэк зёрен; та же строка
-             глазами кабинета кофейни (вход паролем и чтение loyalty_consumptions по shop_id,
-             как lib/data/loyalty.ts).
+  check    — expect=present: учётка бариста, три чека гостя от этого бариста
+             (317 ₽ с карты + welcome 300 и кэшбэк 2%; 400 ₽ со списанием 250 зёрен,
+             clamp до 50% чека = 200; 800 ₽ — частичная оплата картой 683 + доплата 117),
+             welcome ровно один раз, сумма движений зёрен 130, ранг по тратам
+             «Любитель»; те же строки глазами кабинета кофейни (вход паролем и чтение
+             loyalty_consumptions по shop_id, как lib/data/loyalty.ts).
              expect=absent: гостя и его строк нет нигде. В обоих — чужие строки как в снимке.
              stdin: cafe_id, barista{email}, guest{email}, cafe{email,password}, amount, guest_id,
              card_id. Снимок чужих строк — файл <скрипт>.others.json от prepare.
@@ -335,33 +337,49 @@ def check(payload):
                + (f', оценка {rated[0]["barista_rating"]}' if rated else ''))
         cards = rows['deposit_cards']
         balance = float(cards[0]['balance']) if cards else None
-        expect('guest card balance changed', len(cards) == 1 and balance == NOMINAL - amount,
-               f'карта {NOMINAL} -> {balance} (ожидалось {NOMINAL - amount:g})')
+        expect('guest card fully spent', len(cards) == 1 and balance == 0,
+               f'карта {NOMINAL} -> {balance} (ожидалось 0: 317 с карты, потом 683 с доплатой 117)')
         consumptions = rows['loyalty_consumptions']
-        # Первый чек гостя: оплата картой целиком (317 ₽), welcome +300,
-        # кэшбэк 2% ранга R1 «Первый глоток» (round(317 * 0.02) = 6).
-        expected_earn = round(amount * 0.02)
-        ok = (len(consumptions) == 1 and float(consumptions[0]['gross_amount']) == amount
-              and float(consumptions[0]['card_amount']) == amount
-              and float(consumptions[0]['cash_amount']) == 0
-              and consumptions[0]['beans_redeemed'] == 0
-              and consumptions[0]['welcome_granted'] == 300
-              and consumptions[0]['beans_earned'] == expected_earn
-              and user is not None and consumptions[0]['barista_id'] == user['id'])
-        expect('consume by barista', ok,
-               f'{len(consumptions)} чеков; ' + ', '.join(
-                   f'gross={float(c["gross_amount"]):g} карта={float(c["card_amount"]):g} welcome={c["welcome_granted"]} earn={c["beans_earned"]}'
-                   for c in consumptions))
+        # Три чека гостя (этап 1): (1) оплата картой целиком 317 ₽ — welcome +300
+        # и кэшбэк 2% R1 (6); (2) чек 400 ₽ — запрошено 250 зёрен, clamp до 200
+        # (ровно 50% чека), наличными 200, кэшбэк 8; (3) чек 800 ₽ — запрошено
+        # 700 с карты, clamp к балансу 683, доплата 117, кэшбэк 16.
+        expected_by_gross = {
+            amount: {'card_amount': amount, 'cash_amount': 0, 'beans_redeemed': 0, 'beans_earned': 6, 'welcome_granted': 300},
+            400: {'card_amount': 0, 'cash_amount': 200, 'beans_redeemed': 200, 'beans_earned': 8, 'welcome_granted': 0},
+            800: {'card_amount': 683, 'cash_amount': 117, 'beans_redeemed': 0, 'beans_earned': 16, 'welcome_granted': 0},
+        }
+        actual_by_gross = {float(c['gross_amount']): c for c in consumptions}
+        problems = []
+        if len(consumptions) != 3 or set(actual_by_gross) != set(expected_by_gross):
+            problems.append(f'чеков {len(consumptions)}: {sorted(actual_by_gross)}')
+        for gross, expected in expected_by_gross.items():
+            c = actual_by_gross.get(gross)
+            if not c:
+                continue
+            for field, want in expected.items():
+                if float(c[field]) != want:
+                    problems.append(f'чек {gross:g}: {field}={c[field]} (ожидалось {want:g})')
+            if user is None or c['barista_id'] != user['id']:
+                problems.append(f'чек {gross:g}: barista_id={c["barista_id"]}')
+        expect('three consumes by barista with rule bounds', not problems,
+               '; '.join(problems) if problems else
+               '317 с карты (+300 welcome, +6) · 400 с 200 зёрен clamp 50% (+8) · 800: карта 683 + доплата 117 (+16)')
+        welcome_rows = [c for c in consumptions if c['welcome_granted'] == 300]
+        expect('welcome granted exactly once', len(welcome_rows) == 1 and sum(c['welcome_granted'] for c in consumptions) == 300,
+               f'строк с welcome=300: {len(welcome_rows)}, сумма {sum(c["welcome_granted"] for c in consumptions)}')
         beans = rows['beans_ledger']
-        beans_ok = (sorted([(b['reason'], b['delta']) for b in beans])
-                    == sorted([('welcome', 300), ('earn', expected_earn)]))
-        expect('welcome and earn beans', beans_ok,
-               f'{len(beans)} движений: ' + ', '.join(f'{b["reason"]} {b["delta"]:+d}' for b in beans))
-        expect('status row exists', len(rows['guest_shop_statuses']) == 1
-               and rows['guest_shop_statuses'][0]['last_purchase_at'] is not None,
-               f'{len(rows["guest_shop_statuses"])} строк статуса')
-        expect('cafe cabinet sees the operation', len(cafe_rows) == 1
-               and float(cafe_rows[0]['gross_amount']) == amount,
+        beans_total = sum(b['delta'] for b in beans)
+        expect('beans ledger total', len(beans) == 5 and beans_total == 130,
+               f'{len(beans)} движений, сумма {beans_total} (ожидалось 5/130: +300 +6 −200 +8 +16): '
+               + ', '.join(f'{b["reason"]} {b["delta"]:+d}' for b in beans))
+        _, rank_rows = call('GET', f'/rest/v1/shop_ranks?select=id,rank_name&shop_id=eq.{shop}&rank_name=eq.Любитель')
+        rank_id = rank_rows[0]['id'] if rank_rows else None
+        status = rows['guest_shop_statuses']
+        expect('status row with rank from spend', len(status) == 1
+               and status[0]['last_purchase_at'] is not None and status[0]['current_rank_id'] == rank_id,
+               f'{len(status)} строк, current_rank_id={status[0]["current_rank_id"] if status else None}, ранг «Любитель»={rank_id} (траты 317+400+800=1517 ≥ 1000)')
+        expect('cafe cabinet sees the operation', len(cafe_rows) == 3,
                f'{len(cafe_rows)} строк в loyalty_consumptions глазами кофейни')
         print('ids: ' + ','.join(c['id'] for c in consumptions))
     else:
