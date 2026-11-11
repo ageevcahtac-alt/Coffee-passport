@@ -373,7 +373,7 @@ def check(payload):
         expect('beans ledger total', len(beans) == 5 and beans_total == 130,
                f'{len(beans)} движений, сумма {beans_total} (ожидалось 5/130: +300 +6 −200 +8 +16): '
                + ', '.join(f'{b["reason"]} {b["delta"]:+d}' for b in beans))
-        _, rank_rows = call('GET', f'/rest/v1/shop_ranks?select=id,rank_name&shop_id=eq.{shop}&rank_name=eq.Любитель')
+        _, rank_rows = call('GET', f'/rest/v1/shop_ranks?select=id,rank_name&shop_id=eq.{shop}&rank_name=eq.{quote("Любитель")}')
         rank_id = rank_rows[0]['id'] if rank_rows else None
         status = rows['guest_shop_statuses']
         expect('status row with rank from spend', len(status) == 1
