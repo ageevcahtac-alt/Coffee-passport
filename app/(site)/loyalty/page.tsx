@@ -103,9 +103,12 @@ export default function LoyaltyPage() {
             </div>
           ) : (
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm text-ink-900">
-                Имя для бариста: <span className="font-medium">{displayName || 'не указано'}</span>
-              </p>
+              <div>
+                <p className="text-sm text-ink-900">
+                  Как к вам обращаться? <span className="font-medium">{displayName || 'не указано'}</span>
+                </p>
+                <p className="text-[11px] text-ink-400 mt-0.5">Это имя увидит бариста при заказе</p>
+              </div>
               <button
                 type="button"
                 onClick={() => setEditingName(true)}
