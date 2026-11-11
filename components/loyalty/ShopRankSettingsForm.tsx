@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { deleteShopRank, saveShopRank } from '@/lib/data/loyalty';
-import type { ShopRank } from '@/lib/types/loyalty';
+import { HALL_CIRCUIT, type ShopRank } from '@/lib/types/loyalty';
 
 const fieldClasses =
   'w-full rounded-md border border-ink-200 bg-parchment-100 px-3 py-2 text-sm ' +
@@ -12,12 +12,12 @@ function emptyDraft(shopId: string, nextOrder: number): ShopRank {
   return {
     id: '',
     shopId,
+    circuit: HALL_CIRCUIT,
     rankName: '',
     rankOrder: nextOrder,
-    discountPercent: 0,
-    requiredVisits: 0,
-    requiredSpend: 0,
-    retentionDays: 0,
+    colorHex: '#6F4E37',
+    beansPercent: 0,
+    requiredSpend30d: 0,
   };
 }
 
@@ -55,8 +55,15 @@ function RankRow({
 
   return (
     <div className="rounded-md border border-ink-200 bg-parchment-100 p-4">
-      <div className="grid grid-cols-2 gap-3 mb-3">
-        <div>
+      <div className="flex items-center gap-3 mb-3">
+        <input
+          type="color"
+          aria-label="Цвет ранга"
+          value={draft.colorHex}
+          onChange={(e) => setDraft({ ...draft, colorHex: e.target.value })}
+          className="w-9 h-9 rounded border border-ink-200 bg-parchment-100 p-0.5 cursor-pointer"
+        />
+        <div className="flex-1">
           <label className="block text-xs text-ink-400 mb-1">Название ранга</label>
           <input
             value={draft.rankName}
@@ -64,8 +71,8 @@ function RankRow({
             className={fieldClasses}
           />
         </div>
-        <div>
-          <label className="block text-xs text-ink-400 mb-1">Порядок в лестнице</label>
+        <div className="w-24">
+          <label className="block text-xs text-ink-400 mb-1">Порядок</label>
           <input
             type="number"
             value={draft.rankOrder}
@@ -74,47 +81,25 @@ function RankRow({
           />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3 mb-3">
-        <div>
-          <label className="block text-xs text-ink-400 mb-1">Скидка, % (0–15)</label>
-          <input
-            type="number"
-            min={0}
-            max={15}
-            value={draft.discountPercent}
-            onChange={(e) => setDraft({ ...draft, discountPercent: Math.max(0, Math.min(15, Number(e.target.value) || 0)) })}
-            className={fieldClasses}
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-ink-400 mb-1">Дней до сгорания (0 = никогда)</label>
-          <input
-            type="number"
-            min={0}
-            value={draft.retentionDays}
-            onChange={(e) => setDraft({ ...draft, retentionDays: Number(e.target.value) || 0 })}
-            className={fieldClasses}
-          />
-        </div>
-      </div>
       <div className="grid grid-cols-2 gap-3 mb-4">
         <div>
-          <label className="block text-xs text-ink-400 mb-1">Порог визитов</label>
+          <label className="block text-xs text-ink-400 mb-1">Кэшбэк, % (0–100)</label>
           <input
             type="number"
             min={0}
-            value={draft.requiredVisits}
-            onChange={(e) => setDraft({ ...draft, requiredVisits: Number(e.target.value) || 0 })}
+            max={100}
+            value={draft.beansPercent}
+            onChange={(e) => setDraft({ ...draft, beansPercent: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })}
             className={fieldClasses}
           />
         </div>
         <div>
-          <label className="block text-xs text-ink-400 mb-1">Порог трат, ₽</label>
+          <label className="block text-xs text-ink-400 mb-1">Порог трат за 30 дней, ₽</label>
           <input
             type="number"
             min={0}
-            value={draft.requiredSpend}
-            onChange={(e) => setDraft({ ...draft, requiredSpend: Number(e.target.value) || 0 })}
+            value={draft.requiredSpend30d}
+            onChange={(e) => setDraft({ ...draft, requiredSpend30d: Number(e.target.value) || 0 })}
             className={fieldClasses}
           />
         </div>
@@ -154,10 +139,10 @@ function RankRow({
   );
 }
 
-// Cafe dashboard's rank-ladder editor — every field here maps 1:1 onto
-// shop_ranks (see supabase/migrations/0012_loyalty_module.sql); a new draft
-// row only becomes a real rank once "Сохранить" succeeds (rank.id is empty
-// until then), consistent with saveShopRank's insert-vs-update branch.
+// Cafe dashboard's rank-ladder editor — каждое поле мапится 1:1 на shop_ranks
+// (0039): ранг = сумма трат за скользящие 30 дней, процент = кэшбэк зёрнами,
+// цвет — шкала обжарки. Контур «Зал» фиксирован — схема допускает второй
+// контур, UI этапа 1 его не показывает.
 export function ShopRankSettingsForm({ shopId, initialRanks }: { shopId: string; initialRanks: ShopRank[] }) {
   const [ranks, setRanks] = useState(initialRanks);
   const [draft, setDraft] = useState<ShopRank | null>(null);
@@ -176,7 +161,7 @@ export function ShopRankSettingsForm({ shopId, initialRanks }: { shopId: string;
 
   return (
     <div>
-      <p className="section-label mb-4">Настройка рангов</p>
+      <p className="section-label mb-4">Настройка рангов — контур «Зал»</p>
       <div className="flex flex-col gap-3 mb-4">
         {ranks.map((rank) => (
           <RankRow key={rank.id} rank={rank} onSaved={handleSaved} onDeleted={handleDeleted} />

@@ -1,26 +1,31 @@
 #!/usr/bin/env python3
-"""Доступ бариста и списание баллов — на живой базе.
+"""Доступ бариста и проведение чека — на живой базе.
 
 Запускается на сервере из workflow verify-barista-access (не руками, не локально).
 Адрес Supabase, anon key и service_role — из /opt/coffee-passport/app/.env.local.
 Email и пароли приходят только JSON-ом на stdin и никогда не печатаются:
 в вывод идут метки, id строк, суммы, счётчики и HTTP-коды.
 
+Модель лояльности — этап 1 (миграция 0039): карта-депозит (не сгорает) и
+потребление (чек): gross = зёрна (до 50%) + карта (частично, с доплатой) +
+наличные; кэшбэк зёрнами по % ранга; приветственные 300 при первом чеке.
+
 Режимы (argv[1]):
   prepare  — состояние учётки бариста (reset_barista: удалить прежнюю учётку бариста этой кофейни),
-             временный гость (энтузиаст) с абонементом 1000 ₽ в кофейне, снимок чужих строк.
+             временный гость (энтузиаст) с картой-депозитом 1000 ₽ в кофейне, снимок чужих строк.
              stdin: cafe_id, barista{email}, guest{email,password,display_name}, reset_barista
-  check    — expect=present: учётка бариста, абонемент гостя списан на amount, одна операция
-             deduct_points от этого бариста; та же операция глазами кабинета кофейни (вход паролем
-             и чтение loyalty_transactions по shop_id, как lib/data/loyalty.ts).
+  check    — expect=present: учётка бариста, карта гостя списана на amount (чек с оплатой картой),
+             одно потребление от этого бариста, +300 приветственных и кэшбэк зёрен; та же строка
+             глазами кабинета кофейни (вход паролем и чтение loyalty_consumptions по shop_id,
+             как lib/data/loyalty.ts).
              expect=absent: гостя и его строк нет нигде. В обоих — чужие строки как в снимке.
              stdin: cafe_id, barista{email}, guest{email}, cafe{email,password}, amount, guest_id,
-             subscription_id. Снимок чужих строк — файл <скрипт>.others.json от prepare.
+             card_id. Снимок чужих строк — файл <скрипт>.others.json от prepare.
   gate     — временный бариста этого прогона (создан кофейней через интерфейс): у учётки нет прав бариста;
-             GoTrue по временному паролю выдаёт токен, но списание, продажа абонемента и чтение лояльности
-             гостя этим токеном отклоняются, баланс гостя не меняется. Затем срок временного пароля
-             переводится в прошлое («просроченный пароль не пускает» проверяет интерфейс).
-             stdin: cafe_id, guest_id, subscription_id, temp_barista{email,temp_password}
+             GoTrue по временному паролю выдаёт токен, но проведение чека, покупка карты и чтение
+             лояльности гостя этим токеном отклоняются, баланс гостя не меняется. Затем срок временного
+             пароля переводится в прошлое («просроченный пароль не пускает» проверяет интерфейс).
+             stdin: cafe_id, guest_id, card_id, temp_barista{email,temp_password}
   purge    — удалить временного гостя (строки лояльности, оценки) и временного бариста этого прогона
              (stdin: guest{email}, temp_barista{email})
 
@@ -39,7 +44,9 @@ SNAPSHOT_FILE = Path(sys.argv[0] + '.others.json')
 GUEST_EMAIL_RE = re.compile(r'barista-verify-guest-\d+@example\.com')
 TEMP_BARISTA_EMAIL_RE = re.compile(r'barista-verify-temp-\d+@example\.com')
 NOMINAL = 1000
-LOYALTY_TABLES = ('loyalty_transactions', 'subscriptions', 'guest_shop_statuses')
+# Таблицы лояльности этапа 1 (0039). deposit_card_ledger снимается и чистится
+# отдельно — у неё нет ни shop_id, ни guest_id (владелец — через карту).
+LOYALTY_TABLES = ('loyalty_consumptions', 'beans_ledger', 'deposit_cards', 'guest_shop_statuses')
 
 
 def load_env():
@@ -134,9 +141,10 @@ def guest_email(payload):
 
 
 SNAPSHOT_COLUMNS = {
-    'loyalty_transactions': 'id,guest_id,type,net_amount,subscription_id',
-    'subscriptions': 'id,guest_id,current_balance,status,updated_at',
-    'guest_shop_statuses': 'id,guest_id,visits_count,total_spent,updated_at',
+    'loyalty_consumptions': 'id,guest_id,gross_amount,beans_redeemed,card_amount,cash_amount,beans_earned,welcome_granted',
+    'beans_ledger': 'id,guest_id,delta,reason',
+    'deposit_cards': 'id,guest_id,balance,updated_at',
+    'guest_shop_statuses': 'id,guest_id,current_rank_id,orden_rank_id,orden_pinned,updated_at',
     'checkins': 'id,owner_user_id,barista_id,barista_rating',
 }
 # У оценок свои имена колонок кофейни и владельца строки.
@@ -166,11 +174,13 @@ def others_snapshot(cafe_id, guest_id):
 
 def compare_others(before, now):
     # Строки, которые были до прогона, не изменились и не пропали. Новые строки — это настоящие
-    # продажи и списания, прошедшие во время прогона: их не трогаем и не считаем сбоем.
-    # Гость с новой реальной операцией за время прогона законно меняет свой абонемент и статус — его строки
-    # не считаются сбоем. Пропавшая строка — сбой всегда.
-    new_tx = set(now['loyalty_transactions']) - set(before['loyalty_transactions'])
-    active = {json.loads(now['loyalty_transactions'][tx_id])['guest_id'] for tx_id in new_tx}
+    # чеки и начисления, прошедшие во время прогона: их не трогаем и не считаем сбоем.
+    # Гость с новой реальной операцией за время прогона законно меняет свои карту, зёрна и
+    # статус — его строки не считаются сбоем. Пропавшая строка — сбой всегда.
+    active = set()
+    for table, rows in before.items():
+        for row_id in set(now[table]) - set(rows):
+            active.add(json.loads(now[table][row_id])['guest_id'])
     changed = {table: sum(1 for row_id, mark in rows.items()
                           if row_id not in now[table]
                           or (now[table][row_id] != mark and json.loads(mark)['guest_id'] not in active))
@@ -216,12 +226,11 @@ def prepare(payload):
     call('POST', '/rest/v1/profiles?on_conflict=id',
          {'id': guest_id, 'role': 'enthusiast', 'display_name': payload['guest']['display_name']},
          prefer='resolution=merge-duplicates,return=minimal')
-    _, subs = call('POST', '/rest/v1/subscriptions',
-                   {'guest_id': guest_id, 'shop_id': cafe_id, 'initial_nominal': NOMINAL,
-                    'current_balance': NOMINAL, 'status': 'active'},
-                   prefer='return=representation')
-    print(f'temp guest: subscription id={subs[0]["id"]} balance={subs[0]["current_balance"]}')
-    print(f'SUBSCRIPTION_ID={subs[0]["id"]}')
+    _, cards = call('POST', '/rest/v1/deposit_cards',
+                    {'guest_id': guest_id, 'shop_id': cafe_id, 'balance': NOMINAL},
+                    prefer='return=representation')
+    print(f'temp guest: deposit card id={cards[0]["id"]} balance={cards[0]["balance"]}')
+    print(f'CARD_ID={cards[0]["id"]}')
     # Построчный снимок чужих строк (id гостей, балансы) остаётся на сервере рядом со скриптом —
     # в лог Actions идут только счётчики. Workflow удаляет файл вместе со скриптом.
     others = others_snapshot(cafe_id, guest_id)
@@ -258,23 +267,23 @@ def gate(payload):
            f'expires_at={meta.get("temporary_password_expires_at")}')
     token = sign_in({'email': user['email'], 'password': payload['temp_barista']['temp_password']})
     print('temp barista: GoTrue выдал токен по временному паролю — проверяем, что действия бариста закрыты')
-    redeem = attempt('POST', '/rest/v1/rpc/loyalty_redeem',
+    redeem = attempt('POST', '/rest/v1/rpc/loyalty_consume',
                      {'p_guest_id': guest_id, 'p_shop_id': cafe_id, 'p_gross_amount': 1,
-                      'p_subscription_id': payload['subscription_id']}, token)
-    expect('API refuses redeem before password change', redeem[0] >= 400,
-           f'rpc loyalty_redeem -> HTTP {redeem[0]} {redeem[1]}')
-    sell = attempt('POST', '/rest/v1/rpc/loyalty_sell_subscription',
-                   {'p_guest_id': guest_id, 'p_shop_id': cafe_id, 'p_nominal': 500}, token)
-    expect('API refuses subscription sale before password change', sell[0] >= 400,
-           f'rpc loyalty_sell_subscription -> HTTP {sell[0]} {sell[1]}')
-    read = attempt('GET', f'/rest/v1/subscriptions?select=id&guest_id=eq.{guest_id}', None, token)
+                      'p_beans_redeem': 0, 'p_card_pay': 0}, token)
+    expect('API refuses consume before password change', redeem[0] >= 400,
+           f'rpc loyalty_consume -> HTTP {redeem[0]} {redeem[1]}')
+    sell = attempt('POST', '/rest/v1/rpc/loyalty_purchase_card',
+                   {'p_guest_id': guest_id, 'p_shop_id': cafe_id, 'p_amount': 500}, token)
+    expect('API refuses card sale before password change', sell[0] >= 400,
+           f'rpc loyalty_purchase_card -> HTTP {sell[0]} {sell[1]}')
+    read = attempt('GET', f'/rest/v1/deposit_cards?select=id&guest_id=eq.{guest_id}', None, token)
     expect('API hides guest loyalty before password change', read[0] == 200 and read[1] == [],
-           f'GET subscriptions гостя -> HTTP {read[0]}, строк {len(read[1]) if isinstance(read[1], list) else read[1]}')
-    _, subs = call('GET', f'/rest/v1/subscriptions?select=current_balance&guest_id=eq.{guest_id}')
-    _, txs = call('GET', f'/rest/v1/loyalty_transactions?select=id&guest_id=eq.{guest_id}')
+           f'GET deposit_cards гостя -> HTTP {read[0]}, строк {len(read[1]) if isinstance(read[1], list) else read[1]}')
+    _, cards = call('GET', f'/rest/v1/deposit_cards?select=balance&guest_id=eq.{guest_id}')
+    _, consumptions = call('GET', f'/rest/v1/loyalty_consumptions?select=id&guest_id=eq.{guest_id}')
     expect('guest untouched by refused calls',
-           len(subs) == 1 and float(subs[0]['current_balance']) == NOMINAL and not txs,
-           f'абонементов {len(subs)}, баланс {subs[0]["current_balance"] if subs else None}, операций {len(txs)}')
+           len(cards) == 1 and float(cards[0]['balance']) == NOMINAL and not consumptions,
+           f'карт {len(cards)}, баланс {cards[0]["balance"] if cards else None}, чеков {len(consumptions)}')
     # Срок временного пароля — в прошлое: дальше интерфейс должен отказать во входе.
     call('PUT', f'/auth/v1/admin/users/{user["id"]}',
          {'app_metadata': {'temporary_password_expires_at': '2000-01-01T00:00:00Z'}})
@@ -305,7 +314,7 @@ def check(payload):
     guest_user = find_user(guest_email(payload))
 
     cafe_token = sign_in(payload['cafe'])
-    _, cafe_rows = call('GET', f'/rest/v1/loyalty_transactions?select=id,type,gross_amount,net_amount,barista_id'
+    _, cafe_rows = call('GET', f'/rest/v1/loyalty_consumptions?select=id,gross_amount,card_amount,barista_id'
                                f'&shop_id=eq.{shop}&guest_id=eq.{guest_id}', token=cafe_token, apikey=ANON)
 
     temp_user, temp_profile = temp_barista_state(payload)
@@ -324,19 +333,37 @@ def check(payload):
         expect('guest rating bound to the new barista', len(rated) == 1 and rated[0]['barista_rating'] == 5,
                f'оценок гостя {len(guest_checkins)}, из них этому бариста {len(rated)}'
                + (f', оценка {rated[0]["barista_rating"]}' if rated else ''))
-        subs = rows['subscriptions']
-        balance = float(subs[0]['current_balance']) if subs else None
-        expect('guest balance changed', len(subs) == 1 and balance == NOMINAL - amount,
-               f'subscription {NOMINAL} -> {balance} (ожидалось {NOMINAL - amount:g})')
-        txs = rows['loyalty_transactions']
-        ok = (len(txs) == 1 and txs[0]['type'] == 'deduct_points' and float(txs[0]['net_amount']) == amount
-              and user is not None and txs[0]['barista_id'] == user['id']
-              and txs[0]['subscription_id'] == payload['subscription_id'])
-        expect('redeem by barista', ok,
-               f'{len(txs)} операций; ' + ', '.join(f'{t["type"]} {float(t["net_amount"]):g} barista={"this" if user and t["barista_id"] == user["id"] else t["barista_id"]}' for t in txs))
-        expect('cafe cabinet sees the operation', len(cafe_rows) == 1 and cafe_rows[0]['type'] == 'deduct_points',
-               f'{len(cafe_rows)} строк в loyalty_transactions глазами кофейни')
-        print('ids: ' + ','.join(t['id'] for t in txs))
+        cards = rows['deposit_cards']
+        balance = float(cards[0]['balance']) if cards else None
+        expect('guest card balance changed', len(cards) == 1 and balance == NOMINAL - amount,
+               f'карта {NOMINAL} -> {balance} (ожидалось {NOMINAL - amount:g})')
+        consumptions = rows['loyalty_consumptions']
+        # Первый чек гостя: оплата картой целиком (317 ₽), welcome +300,
+        # кэшбэк 2% ранга R1 «Первый глоток» (round(317 * 0.02) = 6).
+        expected_earn = round(amount * 0.02)
+        ok = (len(consumptions) == 1 and float(consumptions[0]['gross_amount']) == amount
+              and float(consumptions[0]['card_amount']) == amount
+              and float(consumptions[0]['cash_amount']) == 0
+              and consumptions[0]['beans_redeemed'] == 0
+              and consumptions[0]['welcome_granted'] == 300
+              and consumptions[0]['beans_earned'] == expected_earn
+              and user is not None and consumptions[0]['barista_id'] == user['id'])
+        expect('consume by barista', ok,
+               f'{len(consumptions)} чеков; ' + ', '.join(
+                   f'gross={float(c["gross_amount"]):g} карта={float(c["card_amount"]):g} welcome={c["welcome_granted"]} earn={c["beans_earned"]}'
+                   for c in consumptions))
+        beans = rows['beans_ledger']
+        beans_ok = (sorted([(b['reason'], b['delta']) for b in beans])
+                    == sorted([('welcome', 300), ('earn', expected_earn)]))
+        expect('welcome and earn beans', beans_ok,
+               f'{len(beans)} движений: ' + ', '.join(f'{b["reason"]} {b["delta"]:+d}' for b in beans))
+        expect('status row exists', len(rows['guest_shop_statuses']) == 1
+               and rows['guest_shop_statuses'][0]['last_purchase_at'] is not None,
+               f'{len(rows["guest_shop_statuses"])} строк статуса')
+        expect('cafe cabinet sees the operation', len(cafe_rows) == 1
+               and float(cafe_rows[0]['gross_amount']) == amount,
+               f'{len(cafe_rows)} строк в loyalty_consumptions глазами кофейни')
+        print('ids: ' + ','.join(c['id'] for c in consumptions))
     else:
         counts = {table: len(found) for table, found in rows.items()}
         expect('guest rows removed', not any(counts.values()) and not guest_profile,
@@ -377,6 +404,12 @@ def purge(payload):
     guest_id = user['id']
     _, deleted = call('DELETE', f'/rest/v1/checkins?owner_user_id=eq.{guest_id}', prefer='return=representation')
     print(f'temp guest: deleted {len(deleted)} checkins')
+    # Журнал карты ссылается на карту, а не на гостя: чистим через card_id.
+    _, cards = call('GET', f'/rest/v1/deposit_cards?select=id&guest_id=eq.{guest_id}')
+    for card in cards:
+        _, deleted = call('DELETE', f'/rest/v1/deposit_card_ledger?card_id=eq.{card["id"]}',
+                          prefer='return=representation')
+        print(f'temp guest: deleted {len(deleted)} deposit_card_ledger (карта {card["id"][:8]})')
     for table in LOYALTY_TABLES:
         _, deleted = call('DELETE', f'/rest/v1/{table}?guest_id=eq.{guest_id}', prefer='return=representation')
         print(f'temp guest: deleted {len(deleted)} {table}')

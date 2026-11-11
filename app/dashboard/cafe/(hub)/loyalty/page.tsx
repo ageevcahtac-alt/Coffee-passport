@@ -4,21 +4,22 @@ import { useEffect, useState } from 'react';
 import { useStaffSession } from '@/lib/auth/staffSession';
 import {
   fetchGuestDisplayNames,
+  fetchShopCards,
+  fetchShopConsumptions,
   fetchShopRanks,
-  fetchShopSubscriptions,
-  fetchShopTransactions,
 } from '@/lib/data/loyalty';
 import { ShopRankSettingsForm } from '@/components/loyalty/ShopRankSettingsForm';
-import { ShopSubscriptionsRegistry } from '@/components/loyalty/ShopSubscriptionsRegistry';
+import { ShopOrdenForm } from '@/components/loyalty/ShopOrdenForm';
+import { ShopCardsRegistry } from '@/components/loyalty/ShopCardsRegistry';
 import { ShopLoyaltyAnalytics } from '@/components/loyalty/ShopLoyaltyAnalytics';
-import type { LoyaltyTransaction, ShopRank, Subscription } from '@/lib/types/loyalty';
+import type { Consumption, DepositCard, ShopRank } from '@/lib/types/loyalty';
 
 export default function CafeLoyaltyPage() {
   const { cafeId } = useStaffSession();
   const shopId = cafeId ?? '';
   const [ranks, setRanks] = useState<ShopRank[] | null>(null);
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
-  const [transactions, setTransactions] = useState<LoyaltyTransaction[]>([]);
+  const [cards, setCards] = useState<DepositCard[]>([]);
+  const [consumptions, setConsumptions] = useState<Consumption[]>([]);
   const [guestNames, setGuestNames] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
@@ -28,17 +29,17 @@ export default function CafeLoyaltyPage() {
     fetchShopRanks(shopId).then((result) => {
       if (!cancelled) setRanks(result);
     });
-    fetchShopSubscriptions(shopId).then((subs) => {
+    fetchShopCards(shopId).then((found) => {
       if (cancelled) return;
-      setSubscriptions(subs);
-      void fetchGuestDisplayNames(subs.map((s) => s.guestId)).then((names) => {
+      setCards(found);
+      void fetchGuestDisplayNames(found.map((c) => c.guestId)).then((names) => {
         if (!cancelled) setGuestNames((prev) => new Map([...prev, ...names]));
       });
     });
-    fetchShopTransactions(shopId).then((txs) => {
+    fetchShopConsumptions(shopId).then((found) => {
       if (cancelled) return;
-      setTransactions(txs);
-      void fetchGuestDisplayNames(txs.map((t) => t.guestId)).then((names) => {
+      setConsumptions(found);
+      void fetchGuestDisplayNames(found.map((c) => c.guestId)).then((names) => {
         if (!cancelled) setGuestNames((prev) => new Map([...prev, ...names]));
       });
     });
@@ -58,14 +59,16 @@ export default function CafeLoyaltyPage() {
         <ShopRankSettingsForm shopId={shopId} initialRanks={ranks} />
       )}
 
+      {ranks !== null && <ShopOrdenForm shopId={shopId} ranks={ranks} />}
+
       <div>
-        <p className="section-label mb-4">Активные абонементы</p>
-        <ShopSubscriptionsRegistry subscriptions={subscriptions} guestNames={guestNames} />
+        <p className="section-label mb-4">Карты гостей</p>
+        <ShopCardsRegistry cards={cards} guestNames={guestNames} />
       </div>
 
       <div>
-        <p className="section-label mb-4">Аналитика — сверка с кассой Yuma</p>
-        <ShopLoyaltyAnalytics transactions={transactions} />
+        <p className="section-label mb-4">Журнал чеков — сверка с кассой Yuma</p>
+        <ShopLoyaltyAnalytics consumptions={consumptions} />
       </div>
     </div>
   );

@@ -10,7 +10,8 @@
 //      виден отзыв гостя;
 //   1) бариста владельца: при reset — кофейня добавляет, первый вход со сменой пароля;
 //   2) экран скана (камера — фейковое устройство Chromium) открывается; гость находится по коду
-//      (тот же путь, что после скана QR: extractGuestId → loadGuest) → «Списать баллы» с абонемента;
+//      (тот же путь, что после скана QR: extractGuestId → loadGuest) → «Провести чек» с оплатой
+//      картой (частичное списание + доплата наличными — здесь чек целиком с карты);
 //   3) кабинет кофейни → «Лояльность»: гость и операция на сумму чека видны.
 // Запуск (из workflow verify-barista-access): node verify-barista-access.cjs <путь к playwright> create|main
 // env: PROD_URL, FLOW_JSON (путь к JSON), SHOTS_DIR (скриншоты при сбое).
@@ -269,16 +270,17 @@ async function reissueSteps(browser) {
       await page.getByText(flow.guest.display_name).waitFor({ timeout: 20000 });
       pass('guest found', 'код гостя (формат QR) -> карточка временного гостя');
 
-      await page.getByRole('button', { name: 'Списать баллы' }).click();
-      await page.fill('#redeem-amount', String(flow.amount));
-      await page.selectOption('#redeem-subscription', flow.subscription_id);
+      await page.getByRole('button', { name: 'Провести чек' }).click();
+      await page.fill('#consume-amount', String(flow.amount));
+      await page.getByLabel(/Оплатить с карты/).check();
+      await page.fill('#pay-card-amount', String(flow.amount));
       const [rpc] = await Promise.all([
-        page.waitForResponse((r) => r.url().includes('/rpc/loyalty_redeem'), { timeout: 30000 }),
-        page.getByRole('button', { name: 'Провести чек' }).click(),
+        page.waitForResponse((r) => r.url().includes('/rpc/loyalty_consume'), { timeout: 30000 }),
+        page.getByRole('button', { name: 'Провести чек' }).last().click(),
       ]);
-      if (rpc.status() !== 200) throw new Error(`rpc loyalty_redeem -> HTTP ${rpc.status()}`);
-      await page.getByText('Чек проведён, ранг пересчитан.').waitFor({ timeout: 15000 });
-      pass('redeem', `«Списать баллы» ${amountText} с абонемента -> rpc loyalty_redeem HTTP 200, «Чек проведён»`);
+      if (rpc.status() !== 200) throw new Error(`rpc loyalty_consume -> HTTP ${rpc.status()}`);
+      await page.getByText(/Чек проведён/).waitFor({ timeout: 15000 });
+      pass('consume', `«Провести чек» ${amountText} с карты -> rpc loyalty_consume HTTP 200, чек проведён`);
     });
 
     await step(browser, 'cafe sees the operation', async (page) => {
@@ -288,7 +290,7 @@ async function reissueSteps(browser) {
       await page.getByText(flow.guest.display_name).first().waitFor({ timeout: 20000 });
       const rows = page.locator('table tr').filter({ hasText: amountText });
       await rows.first().waitFor({ timeout: 20000 });
-      pass('cafe sees the operation', `«Лояльность»: временный гость в абонементах, строк с ${amountText} в сверке: ${await rows.count()}`);
+      pass('cafe sees the operation', `«Лояльность»: временный гость в картах гостей, строк с ${amountText} в журнале чеков: ${await rows.count()}`);
     });
   } catch (error) {
     failed++;

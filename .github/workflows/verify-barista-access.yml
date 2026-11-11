@@ -1,9 +1,10 @@
 name: verify-barista-access
-# Доступ бариста и списание баллов — на проде, через настоящий интерфейс.
+# Доступ бариста и проведение чека — на проде, через настоящий интерфейс.
 # Только вручную. Кофейня shop-xo-vsevolozhsk добавляет бариста (email + временный пароль) →
 # бариста входит, меняет пароль, попадает в кабинет; экран скана открывается → временный гость
-# с абонементом 1000 ₽ → бариста находит его по коду и списывает сумму чека → баланс изменился →
-# кабинет кофейни видит операцию. Затем уборка гостя и та же проверка: его строк нет, чужие не изменились.
+# с картой-депозитом 1000 ₽ → бариста находит его по коду и проводит чек с оплатой картой →
+# баланс карты изменился, welcome +300 и кэшбэк зёрен начислены → кабинет кофейни видит чек.
+# Затем уборка гостя и та же проверка: его строк нет, чужие не изменились.
 # Временный бариста прогона (barista-verify-temp-<run>@example.com): кофейня создаёт его одной кнопкой
 # «+ Добавить сотрудника» → он сразу виден в форме оценки гостя, гость его оценивает → API (RPC лояльности)
 # отклоняет его действия до смены пароля → срок временного пароля в прошлое, вход отклонён → кофейня
@@ -101,10 +102,10 @@ jobs:
           import json, os
           tmp = os.environ['RUNNER_TEMP']
           out = dict(line.split('=', 1) for line in open(f'{tmp}/prepare.out').read().splitlines()
-                     if line.split('=', 1)[0] in ('BARISTA_STATE', 'GUEST_ID', 'SUBSCRIPTION_ID', 'LOT_ID'))
+                     if line.split('=', 1)[0] in ('BARISTA_STATE', 'GUEST_ID', 'CARD_ID', 'LOT_ID'))
           base = json.load(open(f'{tmp}/base.json'))
           base.update(barista_state=out['BARISTA_STATE'], guest_id=out['GUEST_ID'],
-                      subscription_id=out['SUBSCRIPTION_ID'], lot_id=out['LOT_ID'])
+                      card_id=out['CARD_ID'], lot_id=out['LOT_ID'])
           base['guest']['id'] = out['GUEST_ID']
           json.dump(base, open(f'{tmp}/flow.json', 'w'))
           PY

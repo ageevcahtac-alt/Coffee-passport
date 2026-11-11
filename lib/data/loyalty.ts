@@ -1,39 +1,47 @@
 'use client';
 
 import type {
+  BeansLedgerRow,
+  DepositCardLedgerRow,
+  DepositCardRow,
   GuestShopStatusRow,
-  LoyaltyTransactionRow,
+  LoyaltyConsumptionRow,
   ShopRankRow,
-  SubscriptionRow,
 } from '@/lib/types/database';
 import type {
+  BeansEntry,
+  Consumption,
+  DepositCard,
+  DepositCardLedgerEntry,
+  GuestHallCard,
   GuestShopStatus,
-  LoyaltyCard,
-  LoyaltyTransaction,
+  LoyaltyHistoryItem,
   ShopRank,
-  Subscription,
 } from '@/lib/types/loyalty';
+import { HALL_CIRCUIT, nextRankAbove } from '@/lib/types/loyalty';
 import { getBrowserSupabaseClient } from '@/lib/supabase/browserClient';
 import { generateId } from '@/lib/utils/id';
 
-// Loyalty, Ranks & Subscriptions — see supabase/migrations/0012_loyalty_module.sql.
+// Loyalty stage 1 (контур «Зал») — see supabase/migrations/0039_loyalty_stage1_hall.sql.
 // Fully Supabase-backed (see lib/types/loyalty.ts's own header for why),
 // so every function here is a thin, defensively-failing wrapper: a failed
 // read returns an empty result rather than throwing (same "offline/RLS
 // reject degrades to empty" idiom as fetchAnonymizedCheckins et al.), and
 // every write returns { ok, error? } so the caller can show what went
-// wrong instead of guessing from a thrown exception.
+// wrong instead of guessing from a thrown exception. Rank percent, beans
+// clamps and welcome-bonus rules live ONLY in the RPC bodies — the client
+// never recomputes them, it just renders what the server returns.
 
 function rowToRank(row: ShopRankRow): ShopRank {
   return {
     id: row.id,
     shopId: row.shop_id,
+    circuit: row.circuit,
     rankName: row.rank_name,
     rankOrder: row.rank_order,
-    discountPercent: row.discount_percent,
-    requiredVisits: row.required_visits,
-    requiredSpend: row.required_spend,
-    retentionDays: row.retention_days,
+    colorHex: row.color_hex,
+    beansPercent: row.beans_percent,
+    requiredSpend30d: row.required_spend_30d,
   };
 }
 
@@ -43,120 +51,65 @@ function rowToStatus(row: GuestShopStatusRow): GuestShopStatus {
     guestId: row.guest_id,
     shopId: row.shop_id,
     currentRankId: row.current_rank_id,
-    visitsCount: row.visits_count,
-    totalSpent: row.total_spent,
-    lastVisitAt: row.last_visit_at,
-    rankExpiresAt: row.rank_expires_at,
+    ordenRankId: row.orden_rank_id,
+    ordenPinned: row.orden_pinned,
+    lastPurchaseAt: row.last_purchase_at,
   };
 }
 
-function rowToSubscription(row: SubscriptionRow): Subscription {
+function rowToCard(row: DepositCardRow): DepositCard {
   return {
     id: row.id,
     guestId: row.guest_id,
     shopId: row.shop_id,
-    initialNominal: row.initial_nominal,
-    currentBalance: row.current_balance,
-    status: row.status,
+    balance: row.balance,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function rowToBeansEntry(row: BeansLedgerRow): BeansEntry {
+  return {
+    id: row.id,
+    guestId: row.guest_id,
+    shopId: row.shop_id,
+    delta: row.delta,
+    reason: row.reason,
+    consumptionId: row.consumption_id,
     createdAt: row.created_at,
   };
 }
 
-function rowToTransaction(row: LoyaltyTransactionRow): LoyaltyTransaction {
+function rowToConsumption(row: LoyaltyConsumptionRow): Consumption {
   return {
     id: row.id,
     guestId: row.guest_id,
     shopId: row.shop_id,
     baristaId: row.barista_id,
-    subscriptionId: row.subscription_id,
-    type: row.type,
+    rankId: row.rank_id,
     grossAmount: row.gross_amount,
-    discountApplied: row.discount_applied,
-    netAmount: row.net_amount,
+    beansRedeemed: row.beans_redeemed,
+    cardAmount: row.card_amount,
+    cashAmount: row.cash_amount,
+    beansEarned: row.beans_earned,
+    welcomeGranted: row.welcome_granted,
     createdAt: row.created_at,
   };
 }
 
-// The lowest-order rank the guest hasn't reached yet — the one the
-// progress bar counts up toward. Null once they've already hit the top of
-// the ladder (or the shop hasn't configured one).
-function nextRankAbove(ranks: ShopRank[], status: GuestShopStatus | null): ShopRank | null {
-  const visits = status?.visitsCount ?? 0;
-  const spend = status?.totalSpent ?? 0;
-  const above = ranks
-    .filter((rank) => rank.requiredVisits > visits || rank.requiredSpend > spend)
-    .sort((a, b) => a.rankOrder - b.rankOrder);
-  return above[0] ?? null;
+function rowToCardLedger(row: DepositCardLedgerRow): DepositCardLedgerEntry {
+  return {
+    id: row.id,
+    cardId: row.card_id,
+    delta: row.delta,
+    reason: row.reason,
+    consumptionId: row.consumption_id,
+    createdAt: row.created_at,
+  };
 }
 
-// Every shop the guest has a status row and/or a subscription at — "Мои
-// карты" renders one LoyaltyCard per entry. A shop with a subscription but
-// no status yet (shouldn't normally happen, loyalty_sell_subscription
-// doesn't create one) is still included so a sold subscription is never
-// silently invisible to its owner.
-export async function fetchGuestLoyaltyCards(guestId: string): Promise<LoyaltyCard[]> {
-  try {
-    const supabase = getBrowserSupabaseClient();
-    const [statusesRes, subsRes] = await Promise.all([
-      supabase.from('guest_shop_statuses').select('*').eq('guest_id', guestId),
-      supabase.from('subscriptions').select('*').eq('guest_id', guestId).order('created_at', { ascending: false }),
-    ]);
-
-    const statuses = ((statusesRes.data ?? []) as GuestShopStatusRow[]).map(rowToStatus);
-    const subscriptions = ((subsRes.data ?? []) as SubscriptionRow[]).map(rowToSubscription);
-
-    const shopIds = new Set<string>([...statuses.map((s) => s.shopId), ...subscriptions.map((s) => s.shopId)]);
-    if (shopIds.size === 0) return [];
-
-    const { data: rankRows } = await supabase.from('shop_ranks').select('*').in('shop_id', Array.from(shopIds));
-    const ranksByShop = new Map<string, ShopRank[]>();
-    for (const row of (rankRows ?? []) as ShopRankRow[]) {
-      const rank = rowToRank(row);
-      const list = ranksByShop.get(rank.shopId) ?? [];
-      list.push(rank);
-      ranksByShop.set(rank.shopId, list);
-    }
-    for (const list of ranksByShop.values()) list.sort((a, b) => a.rankOrder - b.rankOrder);
-
-    return Array.from(shopIds)
-      .map((shopId) => {
-        const status = statuses.find((s) => s.shopId === shopId) ?? null;
-        const ranks = ranksByShop.get(shopId) ?? [];
-        const currentRank = status?.currentRankId ? ranks.find((r) => r.id === status.currentRankId) ?? null : null;
-        return {
-          shopId,
-          status,
-          currentRank,
-          nextRank: nextRankAbove(ranks, status),
-          ranks,
-          subscriptions: subscriptions.filter((s) => s.shopId === shopId),
-        };
-      })
-      .sort((a, b) => a.shopId.localeCompare(b.shopId));
-  } catch {
-    return [];
-  }
-}
-
-export async function updateOwnDisplayName(displayName: string): Promise<{ ok: boolean; error?: string }> {
-  try {
-    const supabase = getBrowserSupabaseClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) return { ok: false, error: 'Не удалось определить аккаунт.' };
-    const { error } = await supabase.from('profiles').update({ display_name: displayName }).eq('id', user.id);
-    if (error) return { ok: false, error: error.message };
-    return { ok: true };
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Неизвестная ошибка' };
-  }
-}
-
-// Staff-side guest lookup after a QR scan — relies on the "staff read
-// enthusiast display names" policy (0012_loyalty_module.sql), which is
-// deliberately not scoped to any one shop: the guest may be a first-time
-// visitor here with no guest_shop_statuses row yet.
+// Профиль гостя для приветствия после скана QR — политика «staff read
+// enthusiast display names» из 0012 (deliberately not scoped to a shop).
 export async function fetchGuestProfile(
   guestId: string
 ): Promise<{ id: string; displayName: string | null; email: string | null } | null> {
@@ -175,9 +128,8 @@ export async function fetchGuestProfile(
   }
 }
 
-// Batch guest-name lookup for the dashboard's subscriptions/transactions
-// tables — same "staff read enthusiast display names" RLS policy as
-// fetchGuestProfile, just for many ids in one round trip.
+// Batch guest-name lookup for the dashboard's registries — same "staff read
+// enthusiast display names" RLS policy as fetchGuestProfile, for many ids.
 export async function fetchGuestDisplayNames(guestIds: string[]): Promise<Map<string, string>> {
   const uniqueIds = Array.from(new Set(guestIds));
   if (uniqueIds.length === 0) return new Map();
@@ -194,13 +146,29 @@ export async function fetchGuestDisplayNames(guestIds: string[]): Promise<Map<st
   }
 }
 
-export async function fetchShopRanks(shopId: string): Promise<ShopRank[]> {
+export async function updateOwnDisplayName(displayName: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const supabase = getBrowserSupabaseClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: 'Не удалось определить аккаунт.' };
+    const { error } = await supabase.from('profiles').update({ display_name: displayName }).eq('id', user.id);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Неизвестная ошибка' };
+  }
+}
+
+export async function fetchShopRanks(shopId: string, circuit: string = HALL_CIRCUIT): Promise<ShopRank[]> {
   try {
     const supabase = getBrowserSupabaseClient();
     const { data, error } = await supabase
       .from('shop_ranks')
       .select('*')
       .eq('shop_id', shopId)
+      .eq('circuit', circuit)
       .order('rank_order', { ascending: true });
     if (error || !data) return [];
     return (data as ShopRankRow[]).map(rowToRank);
@@ -217,12 +185,12 @@ export async function saveShopRank(
     const now = new Date().toISOString();
     const fields = {
       shop_id: rank.shopId,
+      circuit: rank.circuit,
       rank_name: rank.rankName,
       rank_order: rank.rankOrder,
-      discount_percent: rank.discountPercent,
-      required_visits: rank.requiredVisits,
-      required_spend: rank.requiredSpend,
-      retention_days: rank.retentionDays,
+      color_hex: rank.colorHex,
+      beans_percent: rank.beansPercent,
+      required_spend_30d: rank.requiredSpend30d,
     };
     // .select().single() on both branches so a freshly-inserted rank comes
     // back with its stored id — without it, the client would hold a rank
@@ -254,104 +222,322 @@ export async function deleteShopRank(id: string): Promise<{ ok: boolean; error?:
   }
 }
 
-// Barista's guest-lookup read: this shop's own status + ranks + active
-// subscriptions for the scanned guest, in one call.
+// Read-time метрики одного гостя в одной кофейне — все три величины
+// считает Postgres (loyalty_spend_30d / loyalty_beans_alive /
+// loyalty_beans_expire_at / loyalty_effective_rank_id), клиент их не
+// пересчитывает: это и есть read-time понижение ранга и сгорание зёрен.
+async function fetchGuestMetrics(
+  guestId: string,
+  shopId: string
+): Promise<{ spend30d: number; beansBalance: number; beansExpireAt: string | null; effectiveRankId: string | null }> {
+  const empty = { spend30d: 0, beansBalance: 0, beansExpireAt: null, effectiveRankId: null as string | null };
+  try {
+    const supabase = getBrowserSupabaseClient();
+    const [spendRes, beansRes, expireRes, rankRes] = await Promise.all([
+      supabase.rpc('loyalty_spend_30d', { p_guest_id: guestId, p_shop_id: shopId }),
+      supabase.rpc('loyalty_beans_alive', { p_guest_id: guestId, p_shop_id: shopId }),
+      supabase.rpc('loyalty_beans_expire_at', { p_guest_id: guestId, p_shop_id: shopId }),
+      supabase.rpc('loyalty_effective_rank_id', { p_guest_id: guestId, p_shop_id: shopId, p_circuit: HALL_CIRCUIT }),
+    ]);
+    return {
+      spend30d: Number(spendRes.data ?? 0),
+      beansBalance: Number(beansRes.data ?? 0),
+      beansExpireAt: (expireRes.data as string | null) ?? null,
+      effectiveRankId: (rankRes.data as string | null) ?? null,
+    };
+  } catch {
+    return empty;
+  }
+}
+
+// Barista's guest-lookup read after a QR scan: this shop's status + hall
+// ladder + card + read-time метрики (effective-ранг, траты 30д, живые зёрна).
 export async function fetchGuestShopContext(
   guestId: string,
   shopId: string
-): Promise<{ status: GuestShopStatus | null; ranks: ShopRank[]; subscriptions: Subscription[] }> {
+): Promise<{
+  status: GuestShopStatus | null;
+  ranks: ShopRank[];
+  card: DepositCard | null;
+  effectiveRank: ShopRank | null;
+  spend30d: number;
+  beansBalance: number;
+  beansExpireAt: string | null;
+}> {
+  const empty = {
+    status: null as GuestShopStatus | null,
+    ranks: [] as ShopRank[],
+    card: null as DepositCard | null,
+    effectiveRank: null as ShopRank | null,
+    spend30d: 0,
+    beansBalance: 0,
+    beansExpireAt: null as string | null,
+  };
   try {
     const supabase = getBrowserSupabaseClient();
-    const [statusRes, ranksRes, subsRes] = await Promise.all([
+    const [statusRes, cardRes, metrics, ranks] = await Promise.all([
       supabase.from('guest_shop_statuses').select('*').eq('guest_id', guestId).eq('shop_id', shopId).maybeSingle(),
-      supabase.from('shop_ranks').select('*').eq('shop_id', shopId).order('rank_order', { ascending: true }),
-      supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('guest_id', guestId)
-        .eq('shop_id', shopId)
-        .order('created_at', { ascending: false }),
+      supabase.from('deposit_cards').select('*').eq('guest_id', guestId).eq('shop_id', shopId).maybeSingle(),
+      fetchGuestMetrics(guestId, shopId),
+      fetchShopRanks(shopId),
     ]);
     return {
       status: statusRes.data ? rowToStatus(statusRes.data as GuestShopStatusRow) : null,
-      ranks: ((ranksRes.data ?? []) as ShopRankRow[]).map(rowToRank),
-      subscriptions: ((subsRes.data ?? []) as SubscriptionRow[]).map(rowToSubscription),
+      ranks,
+      card: cardRes.data ? rowToCard(cardRes.data as DepositCardRow) : null,
+      effectiveRank: ranks.find((rank) => rank.id === metrics.effectiveRankId) ?? null,
+      spend30d: metrics.spend30d,
+      beansBalance: metrics.beansBalance,
+      beansExpireAt: metrics.beansExpireAt,
     };
   } catch {
-    return { status: null, ranks: [], subscriptions: [] };
+    return empty;
   }
 }
 
-export async function sellSubscription(
+// Покупка/пополнение карты-депозита. Никакого влияния на ранг и зёрна
+// (правило живёт в теле RPC, см. миграцию 0039).
+export async function purchaseCard(
   guestId: string,
   shopId: string,
-  nominal: number
-): Promise<{ ok: boolean; error?: string; subscription?: Subscription }> {
+  amount: number
+): Promise<{ ok: boolean; error?: string; card?: DepositCard }> {
   try {
     const supabase = getBrowserSupabaseClient();
-    const { data, error } = await supabase.rpc('loyalty_sell_subscription', {
+    const { data, error } = await supabase.rpc('loyalty_purchase_card', {
       p_guest_id: guestId,
       p_shop_id: shopId,
-      p_nominal: nominal,
+      p_amount: amount,
     });
-    if (error || !data) return { ok: false, error: error?.message ?? 'Не удалось продать абонемент.' };
-    return { ok: true, subscription: rowToSubscription(data as SubscriptionRow) };
+    if (error || !data) return { ok: false, error: error?.message ?? 'Не удалось продать карту.' };
+    const card = (data as { card?: DepositCardRow }).card;
+    return { ok: true, card: card ? rowToCard(card) : undefined };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Неизвестная ошибка' };
   }
 }
 
-export async function redeemPoints(
+export interface ConsumeResult {
+  consumption: Consumption;
+  beansBalanceAfter: number;
+  beansExpireAt: string | null;
+  card: DepositCard | null;
+}
+
+// Проведение чека (потребление). Состав оплаты: зёрна (≤ 50% чека и ≤ живого
+// баланса — сервер сам clamp'ит к доступному), карта (≤ баланса карты),
+// остаток — наличные. Кэшбэк и прогресс ранга — внутри той же транзакции.
+export async function consume(
   guestId: string,
   shopId: string,
   grossAmount: number,
-  subscriptionId: string | null
-): Promise<{ ok: boolean; error?: string; status?: GuestShopStatus }> {
+  beansRedeem: number,
+  cardPay: number
+): Promise<{ ok: boolean; error?: string; result?: ConsumeResult }> {
   try {
     const supabase = getBrowserSupabaseClient();
-    const { data, error } = await supabase.rpc('loyalty_redeem', {
+    const { data, error } = await supabase.rpc('loyalty_consume', {
       p_guest_id: guestId,
       p_shop_id: shopId,
       p_gross_amount: grossAmount,
-      p_subscription_id: subscriptionId,
+      p_beans_redeem: beansRedeem,
+      p_card_pay: cardPay,
     });
-    if (error || !data) return { ok: false, error: error?.message ?? 'Не удалось списать баллы.' };
-    return { ok: true, status: rowToStatus(data as GuestShopStatusRow) };
+    if (error || !data) return { ok: false, error: error?.message ?? 'Не удалось провести чек.' };
+    const payload = data as {
+      consumption?: LoyaltyConsumptionRow;
+      beans_balance_after?: number;
+      beans_expire_at?: string | null;
+      card?: DepositCardRow | null;
+    };
+    if (!payload.consumption) return { ok: false, error: 'Пустой ответ сервера.' };
+    return {
+      ok: true,
+      result: {
+        consumption: rowToConsumption(payload.consumption),
+        beansBalanceAfter: Number(payload.beans_balance_after ?? 0),
+        beansExpireAt: payload.beans_expire_at ?? null,
+        card: payload.card ? rowToCard(payload.card) : null,
+      },
+    };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Неизвестная ошибка' };
   }
 }
 
-// Dashboard's "Активные абонементы" registry — every subscription ever
-// sold at this shop, any status.
-export async function fetchShopSubscriptions(shopId: string): Promise<Subscription[]> {
+// Орден: ручное назначение/снятие ранга гостю (только cafe_admin — проверка
+// внутри RPC). rankId null — снять орден.
+export async function assignOrden(
+  guestId: string,
+  shopId: string,
+  rankId: string | null,
+  pinned: boolean
+): Promise<{ ok: boolean; error?: string; status?: GuestShopStatus }> {
   try {
     const supabase = getBrowserSupabaseClient();
-    const { data, error } = await supabase
-      .from('subscriptions')
+    const { data, error } = await supabase.rpc('loyalty_assign_orden', {
+      p_guest_id: guestId,
+      p_shop_id: shopId,
+      p_rank_id: rankId,
+      p_pinned: pinned,
+    });
+    if (error || !data) return { ok: false, error: error?.message ?? 'Не удалось назначить орден.' };
+    const status = (data as { status?: GuestShopStatusRow }).status;
+    return { ok: true, status: status ? rowToStatus(status) : undefined };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Неизвестная ошибка' };
+  }
+}
+
+// ЛК гостя: по карточке на каждую кофейню контура «Зал», где есть статус
+// и/или карта. Effective-ранг/зёрна/сгорание — read-time из RPC.
+export async function fetchGuestHallCards(guestId: string): Promise<GuestHallCard[]> {
+  try {
+    const supabase = getBrowserSupabaseClient();
+    const [statusesRes, cardsRes] = await Promise.all([
+      supabase.from('guest_shop_statuses').select('*').eq('guest_id', guestId),
+      supabase.from('deposit_cards').select('*').eq('guest_id', guestId),
+    ]);
+
+    const statuses = ((statusesRes.data ?? []) as GuestShopStatusRow[]).map(rowToStatus);
+    const cards = ((cardsRes.data ?? []) as DepositCardRow[]).map(rowToCard);
+
+    const shopIds = Array.from(new Set([...statuses.map((s) => s.shopId), ...cards.map((c) => c.shopId)]));
+    if (shopIds.length === 0) return [];
+
+    const { data: rankRows } = await supabase
+      .from('shop_ranks')
       .select('*')
-      .eq('shop_id', shopId)
-      .order('created_at', { ascending: false });
-    if (error || !data) return [];
-    return (data as SubscriptionRow[]).map(rowToSubscription);
+      .eq('circuit', HALL_CIRCUIT)
+      .in('shop_id', shopIds);
+    const ranksByShop = new Map<string, ShopRank[]>();
+    for (const row of (rankRows ?? []) as ShopRankRow[]) {
+      const rank = rowToRank(row);
+      const list = ranksByShop.get(rank.shopId) ?? [];
+      list.push(rank);
+      ranksByShop.set(rank.shopId, list);
+    }
+    for (const list of ranksByShop.values()) list.sort((a, b) => a.rankOrder - b.rankOrder);
+
+    return Promise.all(
+      shopIds.map(async (shopId) => {
+        const status = statuses.find((s) => s.shopId === shopId) ?? null;
+        const card = cards.find((c) => c.shopId === shopId) ?? null;
+        const ranks = ranksByShop.get(shopId) ?? [];
+        const metrics = await fetchGuestMetrics(guestId, shopId);
+        const effectiveRank = ranks.find((rank) => rank.id === metrics.effectiveRankId) ?? null;
+        const isOrden = Boolean(status?.ordenRankId && status.ordenPinned);
+        return {
+          shopId,
+          status,
+          effectiveRank,
+          ordenRank: isOrden ? ranks.find((rank) => rank.id === status?.ordenRankId) ?? null : null,
+          isOrden,
+          ranks,
+          nextRank: nextRankAbove(ranks, metrics.spend30d),
+          spend30d: metrics.spend30d,
+          beansBalance: metrics.beansBalance,
+          beansExpireAt: metrics.beansExpireAt,
+          card,
+        };
+      })
+    ).then((cardsOut) => cardsOut.sort((a, b) => a.shopId.localeCompare(b.shopId)));
   } catch {
     return [];
   }
 }
 
-// Dashboard's reconciliation log — cross-checked by hand against the
-// shop's own Yuma till reports (this module has no payment integration).
-export async function fetchShopTransactions(shopId: string, limit = 200): Promise<LoyaltyTransaction[]> {
+// История операций гостя для ЛК: чеки + движения зёрен + движения карты,
+// склеенные в один список по времени (новые первыми).
+export async function fetchGuestHistory(guestId: string, limit = 30): Promise<LoyaltyHistoryItem[]> {
+  try {
+    const supabase = getBrowserSupabaseClient();
+    const [consumptionsRes, beansRes, cardsRes, ledgerRes] = await Promise.all([
+      supabase.from('loyalty_consumptions').select('*').eq('guest_id', guestId).order('created_at', { ascending: false }).limit(limit),
+      supabase.from('beans_ledger').select('*').eq('guest_id', guestId).order('created_at', { ascending: false }).limit(limit),
+      supabase.from('deposit_cards').select('*').eq('guest_id', guestId),
+      supabase.from('deposit_card_ledger').select('*').order('created_at', { ascending: false }).limit(limit),
+    ]);
+    const cardShopById = new Map(((cardsRes.data ?? []) as DepositCardRow[]).map((row) => [row.id, row.shop_id]));
+    const items: LoyaltyHistoryItem[] = [];
+    for (const row of (consumptionsRes.data ?? []) as LoyaltyConsumptionRow[]) {
+      const c = rowToConsumption(row);
+      items.push({
+        id: `consumption-${c.id}`,
+        at: c.createdAt,
+        kind: 'consumption',
+        label: `Чек ${c.grossAmount.toLocaleString('ru-RU')} ₽`,
+        detail: [
+          c.beansEarned > 0 ? `+${c.beansEarned} зёрен` : null,
+          c.beansRedeemed > 0 ? `−${c.beansRedeemed} зёрен` : null,
+          c.welcomeGranted > 0 ? `приветственные +${c.welcomeGranted}` : null,
+          c.cardAmount > 0 ? `карта ${c.cardAmount.toLocaleString('ru-RU')} ₽` : null,
+          c.cashAmount > 0 ? `наличные ${c.cashAmount.toLocaleString('ru-RU')} ₽` : null,
+        ].filter(Boolean).join(' · '),
+        shopId: c.shopId,
+      });
+    }
+    for (const row of (beansRes.data ?? []) as BeansLedgerRow[]) {
+      const entry = rowToBeansEntry(row);
+      const label = entry.reason === 'welcome' ? 'Приветственные зёрна' : entry.reason === 'earn' ? 'Кэшбэк зёрнами' : 'Списание зёрен';
+      items.push({
+        id: `beans-${entry.id}`,
+        at: entry.createdAt,
+        kind: 'beans',
+        label,
+        detail: `${entry.delta > 0 ? '+' : ''}${entry.delta} зёрен`,
+        shopId: entry.shopId,
+      });
+    }
+    for (const row of (ledgerRes.data ?? []) as DepositCardLedgerRow[]) {
+      const entry = rowToCardLedger(row);
+      const shopId = cardShopById.get(entry.cardId);
+      if (!shopId) continue;
+      items.push({
+        id: `card-${entry.id}`,
+        at: entry.createdAt,
+        kind: 'card',
+        label: entry.reason === 'topup' ? 'Пополнение карты' : 'Оплата картой',
+        detail: `${entry.delta > 0 ? '+' : ''}${entry.delta.toLocaleString('ru-RU')} ₽`,
+        shopId,
+      });
+    }
+    return items.sort((a, b) => b.at.localeCompare(a.at)).slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
+// Dashboard's "Карты гостей" registry — every deposit card ever sold at this
+// shop (карта одна на гостя — это и есть полный реестр).
+export async function fetchShopCards(shopId: string): Promise<DepositCard[]> {
   try {
     const supabase = getBrowserSupabaseClient();
     const { data, error } = await supabase
-      .from('loyalty_transactions')
+      .from('deposit_cards')
+      .select('*')
+      .eq('shop_id', shopId)
+      .order('updated_at', { ascending: false });
+    if (error || !data) return [];
+    return (data as DepositCardRow[]).map(rowToCard);
+  } catch {
+    return [];
+  }
+}
+
+// Dashboard's журнал чеков — сверка с кассой Yuma (интеграции оплаты нет,
+// этот журнал существует, чтобы менеджер сверялся с отчётами кассы вручную).
+export async function fetchShopConsumptions(shopId: string, limit = 200): Promise<Consumption[]> {
+  try {
+    const supabase = getBrowserSupabaseClient();
+    const { data, error } = await supabase
+      .from('loyalty_consumptions')
       .select('*')
       .eq('shop_id', shopId)
       .order('created_at', { ascending: false })
       .limit(limit);
     if (error || !data) return [];
-    return (data as LoyaltyTransactionRow[]).map(rowToTransaction);
+    return (data as LoyaltyConsumptionRow[]).map(rowToConsumption);
   } catch {
     return [];
   }

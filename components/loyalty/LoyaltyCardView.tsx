@@ -1,38 +1,23 @@
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
-import { isRankActive, type LoyaltyCard } from '@/lib/types/loyalty';
+import {
+  beansCountdown,
+  pluralizeDays,
+  spendToNextRank,
+  type GuestHallCard,
+} from '@/lib/types/loyalty';
 
-const RETENTION_WARNING_DAYS = 5;
+// За сколько дней до сгорания зёрен показывать таймер предупреждением,
+// а не нейтральной подписью.
+const BEANS_COUNTDOWN_WARN_DAYS = 14;
 
-function ProgressBar({ label, current, required }: { label: string; current: number; required: number }) {
-  if (required <= 0) return null;
-  const percent = Math.max(0, Math.min(100, (current / required) * 100));
-  return (
-    <div>
-      <div className="flex items-baseline justify-between mb-1.5 text-xs">
-        <span className="text-ink-500">{label}</span>
-        <span className="data-value text-ink-900">
-          {Math.min(current, required)} / {required}
-        </span>
-      </div>
-      <div className="h-1.5 rounded-full bg-parchment-300">
-        <div className="h-1.5 rounded-full bg-gold-500" style={{ width: `${percent}%` }} />
-      </div>
-    </div>
-  );
-}
-
-export function LoyaltyCardView({ card }: { card: LoyaltyCard }) {
+export function LoyaltyCardView({ card }: { card: GuestHallCard }) {
   const shop = getCoffeeShopById(card.shopId);
-  const active = isRankActive(card.status);
-  const lapsed = Boolean(card.status?.currentRankId) && !active;
-
-  const daysUntilExpiry = card.status?.rankExpiresAt
-    ? Math.ceil((new Date(card.status.rankExpiresAt).getTime() - Date.now()) / 86_400_000)
-    : null;
-  const showRetentionWarning =
-    active && daysUntilExpiry !== null && daysUntilExpiry >= 0 && daysUntilExpiry <= RETENTION_WARNING_DAYS;
-
-  const activeSubscriptions = card.subscriptions.filter((s) => s.status === 'active');
+  const rank = card.effectiveRank;
+  const rankColor = rank?.colorHex ?? '#8a7a63';
+  const next = card.nextRank;
+  const remain = spendToNextRank(next, card.spend30d);
+  const countdown = beansCountdown(card.beansExpireAt);
+  const countdownWarn = Boolean(countdown && !countdown.expired && countdown.days <= BEANS_COUNTDOWN_WARN_DAYS);
 
   return (
     <div className="rounded-md border border-ink-200 bg-parchment-100 p-5">
@@ -53,64 +38,72 @@ export function LoyaltyCardView({ card }: { card: LoyaltyCard }) {
       <div className="flex items-center justify-between gap-3 mb-4">
         <div>
           <p className="text-xs text-ink-400 mb-1">Ваш статус</p>
-          {active && card.currentRank ? (
-            <p className="font-display text-lg text-gold-500">{card.currentRank.rankName}</p>
-          ) : lapsed ? (
-            <p className="text-sm text-ink-500">Статус истёк</p>
+          {rank ? (
+            <p className="font-display text-lg leading-tight" style={{ color: rankColor }}>
+              {rank.rankName}
+              {card.isOrden && (
+                <span className="ml-2 text-xs align-middle rounded-full border border-gold-400 text-gold-500 px-2 py-0.5">
+                  🎖 орден
+                </span>
+              )}
+            </p>
           ) : (
             <p className="text-sm text-ink-500">Пока без ранга</p>
           )}
         </div>
-        {active && card.currentRank && card.currentRank.discountPercent > 0 && (
-          <span className="rounded-full border border-gold-400 text-gold-500 text-xs px-3 py-1.5 shrink-0">
-            −{card.currentRank.discountPercent}%
+        {rank && rank.beansPercent > 0 && (
+          <span
+            className="rounded-full border text-xs px-3 py-1.5 shrink-0"
+            style={{ borderColor: rankColor, color: rankColor }}
+          >
+            кэшбэк {rank.beansPercent}%
           </span>
         )}
       </div>
 
-      {showRetentionWarning && card.currentRank && (
-        <p className="text-xs rounded-md border border-gold-400 bg-gold-400/10 text-ink-900 px-3 py-2.5 mb-4">
-          ⏳ Загляните в течение {daysUntilExpiry} {pluralizeDays(daysUntilExpiry!)}, чтобы не потерять статус «
-          {card.currentRank.rankName}».
-        </p>
-      )}
-
-      {card.nextRank && (
-        <div className="flex flex-col gap-3 mb-4">
-          <p className="text-xs text-ink-400">До статуса «{card.nextRank.rankName}»:</p>
-          <ProgressBar
-            label="Визиты"
-            current={card.status?.visitsCount ?? 0}
-            required={card.nextRank.requiredVisits}
-          />
-          <ProgressBar
-            label="Сумма покупок, ₽"
-            current={card.status?.totalSpent ?? 0}
-            required={card.nextRank.requiredSpend}
-          />
+      {next ? (
+        <div className="mb-4">
+          <div className="flex items-baseline justify-between mb-1.5 text-xs">
+            <span className="text-ink-500">До статуса «{next.rankName}» осталось</span>
+            <span className="data-value text-ink-900">{remain.toLocaleString('ru-RU')} ₽</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-parchment-300">
+            <div
+              className="h-1.5 rounded-full"
+              style={{
+                width: `${Math.min(100, (card.spend30d / next.requiredSpend30d) * 100)}%`,
+                backgroundColor: rankColor,
+              }}
+            />
+          </div>
+          <p className="text-[11px] text-ink-400 mt-1.5">
+            Траты за 30 дней: {card.spend30d.toLocaleString('ru-RU')} ₽ из {next.requiredSpend30d.toLocaleString('ru-RU')} ₽
+          </p>
         </div>
-      )}
+      ) : rank ? (
+        <p className="text-xs text-ink-400 mb-4">Высший статус кофейни 🏆</p>
+      ) : null}
 
-      {activeSubscriptions.length > 0 && (
-        <div className="pt-3 border-t border-ink-200 flex flex-col gap-2">
-          {activeSubscriptions.map((sub) => (
-            <div key={sub.id} className="flex items-center justify-between text-sm">
-              <span className="text-ink-500">Абонемент</span>
-              <span className="data-value text-ink-900">
-                {sub.currentBalance.toLocaleString('ru-RU')} ₽ из {sub.initialNominal.toLocaleString('ru-RU')} ₽
+      <div className="pt-3 border-t border-ink-200 flex flex-col gap-2 text-sm">
+        <div className="flex items-center justify-between">
+          <span className="text-ink-500">Зёрна</span>
+          <span className="data-value text-ink-900">
+            {card.beansBalance.toLocaleString('ru-RU')}
+            {countdown && !countdown.expired && (
+              <span className={`block text-[11px] text-right ${countdownWarn ? 'text-gold-600' : 'text-ink-400'}`}>
+                {countdownWarn && '⏳ '}сгорят через {countdown.days} {pluralizeDays(countdown.days)}
               </span>
-            </div>
-          ))}
+            )}
+            {countdown?.expired && <span className="block text-[11px] text-ink-400">зёрна сгорели</span>}
+          </span>
         </div>
-      )}
+        {card.card && (
+          <div className="flex items-center justify-between">
+            <span className="text-ink-500">Карта</span>
+            <span className="data-value text-ink-900">{card.card.balance.toLocaleString('ru-RU')} ₽</span>
+          </div>
+        )}
+      </div>
     </div>
   );
-}
-
-function pluralizeDays(count: number): string {
-  const mod10 = count % 10;
-  const mod100 = count % 100;
-  if (mod10 === 1 && mod100 !== 11) return 'день';
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return 'дня';
-  return 'дней';
 }

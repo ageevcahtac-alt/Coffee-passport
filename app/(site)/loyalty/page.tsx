@@ -3,20 +3,25 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useCurrentUser } from '@/lib/auth/currentUser';
-import { fetchGuestLoyaltyCards, fetchGuestProfile, updateOwnDisplayName } from '@/lib/data/loyalty';
+import {
+  fetchGuestHallCards,
+  fetchGuestHistory,
+  fetchGuestProfile,
+  updateOwnDisplayName,
+} from '@/lib/data/loyalty';
 import { LoyaltyCardView } from '@/components/loyalty/LoyaltyCardView';
 import { GuestQrModal } from '@/components/loyalty/GuestQrModal';
-import type { LoyaltyCard } from '@/lib/types/loyalty';
+import { getCoffeeShopById } from '@/lib/data/coffeeShops';
+import type { GuestHallCard, LoyaltyHistoryItem } from '@/lib/types/loyalty';
 
-// "Мои карты" — no separate sign-in for this module: the guest is already
-// authenticated at the Coffee Passport app level (see currentUser.tsx), so
-// landing here goes straight to their cards. Unlike the rest of the guest
-// app, this has no anonymous-device tier — a loyalty balance needs a real
-// account, so an anonymous visitor sees a sign-in prompt instead of an
-// empty state.
+// "Мои карты" — контур «Зал»: ранг с цветом обжарки и прогрессом по тратам
+// за 30 дней, зёрна с таймером сгорания, карта-депозит и история операций.
+// Пока один контур — вкладки «Зал»/«Дом» не рисуем. Без входа — приглашение
+// войти (баланс лояльности живёт только у зарегистрированного аккаунта).
 export default function LoyaltyPage() {
   const { userId, isAuthenticated, ready } = useCurrentUser();
-  const [cards, setCards] = useState<LoyaltyCard[] | null>(null);
+  const [cards, setCards] = useState<GuestHallCard[] | null>(null);
+  const [history, setHistory] = useState<LoyaltyHistoryItem[]>([]);
   const [displayName, setDisplayName] = useState('');
   const [editingName, setEditingName] = useState(false);
   const [savingName, setSavingName] = useState(false);
@@ -25,8 +30,11 @@ export default function LoyaltyPage() {
   useEffect(() => {
     if (!ready || !isAuthenticated || !userId) return;
     let cancelled = false;
-    fetchGuestLoyaltyCards(userId).then((result) => {
+    fetchGuestHallCards(userId).then((result) => {
       if (!cancelled) setCards(result);
+    });
+    fetchGuestHistory(userId).then((items) => {
+      if (!cancelled) setHistory(items);
     });
     fetchGuestProfile(userId).then((profile) => {
       if (!cancelled && profile) setDisplayName(profile.displayName ?? '');
@@ -70,7 +78,7 @@ export default function LoyaltyPage() {
         <p className="text-xs uppercase tracking-widest2 text-ink-400 font-body mb-2">Вы</p>
         <h1 className="font-display text-2xl text-ink-900 mb-2">💳 Мои карты</h1>
         <p className="text-sm text-ink-500 mb-6">
-          Ранги, скидки и абонементы в кофейнях-партнёрах — единая учётная запись Coffee Passport.
+          Ранги, зёрна и карта-депозит в кофейнях-партнёрах — единая учётная запись Coffee Passport.
         </p>
 
         <div className="rounded-md border border-ink-200 bg-parchment-100 p-4 mb-6">
@@ -131,6 +139,31 @@ export default function LoyaltyPage() {
             {cards.map((card) => (
               <LoyaltyCardView key={card.shopId} card={card} />
             ))}
+          </div>
+        )}
+
+        {history.length > 0 && (
+          <div className="mt-10">
+            <p className="section-label mb-4">История операций</p>
+            <div className="flex flex-col gap-2">
+              {history.map((item) => {
+                const shop = getCoffeeShopById(item.shopId);
+                return (
+                  <div key={item.id} className="rounded-md border border-ink-200 bg-parchment-100 px-4 py-3">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="text-sm text-ink-900">{item.label}</p>
+                      <p className="text-[11px] text-ink-400 shrink-0">
+                        {new Date(item.at).toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' })}
+                      </p>
+                    </div>
+                    <p className="text-xs text-ink-500 mt-0.5">
+                      {item.detail}
+                      {shop && <span className="text-ink-400"> · {shop.name}</span>}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>

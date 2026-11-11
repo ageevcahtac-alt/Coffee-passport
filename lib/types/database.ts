@@ -348,7 +348,8 @@ export type EventRow = {
 export type EventInsert = EventRow;
 
 // =========================================================
-// Loyalty, Ranks & Subscriptions — see supabase/migrations/0012_loyalty_module.sql.
+// Loyalty — stage 1, контур «Зал» (ранги v2 + зёрна + карта-депозит + орден).
+// See supabase/migrations/0039_loyalty_stage1_hall.sql (rebuild of 0012).
 // shop_id is plain text everywhere here, same as cafe_id/coffee_shop_id
 // elsewhere in this file — there is no public.shops table.
 // =========================================================
@@ -356,12 +357,14 @@ export type EventInsert = EventRow;
 export type ShopRankRow = {
   id: string;
   shop_id: string;
+  circuit: string;
   rank_name: string;
   rank_order: number;
-  discount_percent: number;
-  required_visits: number;
-  required_spend: number;
-  retention_days: number;
+  color_hex: string;
+  // Кэшбэк зёрнами на чек, % (не скидка у кассы — скидки в модели нет).
+  beans_percent: number;
+  // Порог — сумма трат за скользящие 30 дней (критерий визитов убран).
+  required_spend_30d: number;
   created_at: string;
   updated_at: string;
 };
@@ -371,45 +374,68 @@ export type GuestShopStatusRow = {
   id: string;
   guest_id: string;
   shop_id: string;
+  // Кэш ранга на момент последнего потребления (мгновенное повышение);
+  // effective-ранг read-time может быть ниже — см. loyalty_effective_rank_id.
   current_rank_id: string | null;
-  visits_count: number;
-  total_spent: number;
-  last_visit_at: string | null;
-  rank_expires_at: string | null;
+  // Орден: ручное назначение ранга; pinned «навсегда» не скользит read-time.
+  orden_rank_id: string | null;
+  orden_pinned: boolean;
+  last_purchase_at: string | null;
   created_at: string;
   updated_at: string;
 };
-// Never written directly by a client (see loyalty_redeem/
-// loyalty_sell_subscription) — Insert/Update mirror Row purely to satisfy
+// Never written directly by a client (see loyalty_consume/
+// loyalty_assign_orden) — Insert/Update mirror Row purely to satisfy
 // postgrest-js's GenericTable shape (see this file's own header note);
 // nothing in lib/data/loyalty.ts ever calls .insert()/.update() on this table.
 export type GuestShopStatusInsert = GuestShopStatusRow;
 
-export type SubscriptionRow = {
+export type DepositCardRow = {
   id: string;
   guest_id: string;
   shop_id: string;
-  initial_nominal: number;
-  current_balance: number;
-  status: 'active' | 'exhausted' | 'expired';
+  balance: number;
   created_at: string;
   updated_at: string;
 };
-export type SubscriptionInsert = SubscriptionRow;
+export type DepositCardInsert = DepositCardRow;
 
-export type LoyaltyTransactionRow = {
+export type DepositCardLedgerRow = {
+  id: string;
+  card_id: string;
+  delta: number;
+  reason: 'topup' | 'spend';
+  consumption_id: string | null;
+  created_at: string;
+};
+export type DepositCardLedgerInsert = DepositCardLedgerRow;
+
+export type BeansLedgerRow = {
+  id: string;
+  guest_id: string;
+  shop_id: string;
+  delta: number;
+  reason: 'welcome' | 'earn' | 'redeem';
+  consumption_id: string | null;
+  created_at: string;
+};
+export type BeansLedgerInsert = BeansLedgerRow;
+
+export type LoyaltyConsumptionRow = {
   id: string;
   guest_id: string;
   shop_id: string;
   barista_id: string | null;
-  subscription_id: string | null;
-  type: 'sell_subscription' | 'deduct_points';
+  rank_id: string | null;
   gross_amount: number;
-  discount_applied: number;
-  net_amount: number;
+  beans_redeemed: number;
+  card_amount: number;
+  cash_amount: number;
+  beans_earned: number;
+  welcome_granted: number;
   created_at: string;
 };
-export type LoyaltyTransactionInsert = LoyaltyTransactionRow;
+export type LoyaltyConsumptionInsert = LoyaltyConsumptionRow;
 
 // =========================================================
 // Barista profiles — see supabase/migrations/0015_barista_profiles.sql.
@@ -731,15 +757,17 @@ export type Database = {
         Insert: GuestShopStatusInsert;
         Update: Partial<GuestShopStatusInsert>;
       } & NoRelationships;
-      subscriptions: {
-        Row: SubscriptionRow;
-        Insert: SubscriptionInsert;
-        Update: Partial<SubscriptionInsert>;
+      deposit_cards: { Row: DepositCardRow; Insert: DepositCardInsert; Update: Partial<DepositCardInsert> } & NoRelationships;
+      deposit_card_ledger: {
+        Row: DepositCardLedgerRow;
+        Insert: DepositCardLedgerInsert;
+        Update: Partial<DepositCardLedgerInsert>;
       } & NoRelationships;
-      loyalty_transactions: {
-        Row: LoyaltyTransactionRow;
-        Insert: LoyaltyTransactionInsert;
-        Update: Partial<LoyaltyTransactionInsert>;
+      beans_ledger: { Row: BeansLedgerRow; Insert: BeansLedgerInsert; Update: Partial<BeansLedgerInsert> } & NoRelationships;
+      loyalty_consumptions: {
+        Row: LoyaltyConsumptionRow;
+        Insert: LoyaltyConsumptionInsert;
+        Update: Partial<LoyaltyConsumptionInsert>;
       } & NoRelationships;
       events: { Row: EventRow; Insert: EventInsert; Update: Partial<EventInsert> } & NoRelationships;
       roasters: { Row: RoasterOrgRow; Insert: RoasterOrgInsert; Update: Partial<RoasterOrgInsert> } & NoRelationships;
@@ -775,23 +803,44 @@ export type Database = {
       // self-targeting (auth.uid()), and only actually promotes one of the
       // three hardcoded pilot demo emails; no arguments.
       dev_seed_staff_profile: { Args: Record<string, never>; Returns: ProfileRow };
-      // See supabase/migrations/0012_loyalty_module.sql.
-      loyalty_rank_for: {
-        Args: { p_shop_id: string; p_visits: number; p_spend: number };
+      // See supabase/migrations/0039_loyalty_stage1_hall.sql (пересборка 0012).
+      loyalty_spend_30d: {
+        Args: { p_guest_id: string; p_shop_id: string };
+        Returns: number;
+      };
+      loyalty_rank_for_spend: {
+        Args: { p_shop_id: string; p_circuit: string; p_spend: number };
         Returns: string | null;
       };
-      loyalty_sell_subscription: {
-        Args: { p_guest_id: string; p_shop_id: string; p_nominal: number };
-        Returns: SubscriptionRow;
+      loyalty_beans_alive: {
+        Args: { p_guest_id: string; p_shop_id: string };
+        Returns: number;
       };
-      loyalty_redeem: {
+      loyalty_beans_expire_at: {
+        Args: { p_guest_id: string; p_shop_id: string };
+        Returns: string | null;
+      };
+      loyalty_effective_rank_id: {
+        Args: { p_guest_id: string; p_shop_id: string; p_circuit?: string };
+        Returns: string | null;
+      };
+      loyalty_purchase_card: {
+        Args: { p_guest_id: string; p_shop_id: string; p_amount: number };
+        Returns: Record<string, unknown>;
+      };
+      loyalty_consume: {
         Args: {
           p_guest_id: string;
           p_shop_id: string;
           p_gross_amount: number;
-          p_subscription_id?: string | null;
+          p_beans_redeem?: number;
+          p_card_pay?: number;
         };
-        Returns: GuestShopStatusRow;
+        Returns: Record<string, unknown>;
+      };
+      loyalty_assign_orden: {
+        Args: { p_guest_id: string; p_shop_id: string; p_rank_id?: string | null; p_pinned?: boolean };
+        Returns: Record<string, unknown>;
       };
       // See supabase/migrations/0018_cafe_menu_scheduled_removal.sql.
       cafe_menu_expire_discontinuing: { Args: Record<string, never>; Returns: number };
