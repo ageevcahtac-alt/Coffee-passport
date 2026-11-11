@@ -14,6 +14,10 @@ on:
         description: "Optional column to verify (requires verify_table)"
         required: false
         type: string
+      verify_query:
+        description: "Optional read-only SELECT to print after apply (e.g. seed check)"
+        required: false
+        type: string
 permissions:
   contents: read
 concurrency:
@@ -28,6 +32,7 @@ jobs:
       MIGRATION: ${{ inputs.migration }}
       VERIFY_TABLE: ${{ inputs.verify_table }}
       VERIFY_COLUMN: ${{ inputs.verify_column }}
+      VERIFY_QUERY: ${{ inputs.verify_query }}
     steps:
       - uses: actions/checkout@v4
       - name: validate input
@@ -74,6 +79,16 @@ jobs:
           count=$(docker exec supabase-db psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -tA -c "select count(*) from information_schema.columns where table_schema='public' and table_name='$1' and column_name='$2'" 2>> "$diagnostics") || { echo 'Column verification failed; inspect private server diagnostics'; exit 1; }
           [[ "$count" == '1' ]] || { echo 'Expected column not found'; exit 1; }
           REMOTE
+      - name: verify query
+        if: env.VERIFY_QUERY != ''
+        shell: bash
+        run: |
+          # Только чтение: свободный SELECT для показа результата миграции
+          # (сид и т.п.). Данные попадают в публичный лог Actions — вводить
+          # только несекретные конфигурационные выборки.
+          [[ "$VERIFY_QUERY" =~ ^[Ss][Ee][Ll][Ee][Cc][Tt][[:space:]] ]] || { echo '::error::verify_query must be a SELECT'; exit 1; }
+          ssh prod "docker exec supabase-db psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -P pager=off -c \"$VERIFY_QUERY\"" \
+            || { echo '::error::verify_query failed; inspect private server diagnostics'; exit 1; }
       - name: journal
         if: always() && steps.validate.outcome == 'success' && steps.ssh.outcome == 'success'
         env:

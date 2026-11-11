@@ -20,10 +20,11 @@ describe('grind confirmations migration (0038)', () => {
   it('lands immediately after 0037 with no numbering gap or collision', () => {
     const files = fs.readdirSync(MIGRATIONS_DIR).filter((file) => /^\d{4}_.*\.sql$/.test(file));
     const numbers = files.map((file) => Number(file.slice(0, 4))).sort((a, b) => a - b);
-    // 0039 — loyalty stage 1 (пересборка 0012); страж нумерации следит за
-    // последовательностью без разрывов и коллизий, не за конкретным хвостом.
-    expect(numbers).toContain(38);
-    expect(numbers[numbers.length - 1]).toBe(39);
+    // 0039 — loyalty stage 1 (неидемпотентный черновик, нигде не применён);
+    // 0040 — его самодостаточная идемпотентная замена. Страж нумерации
+    // следит за последовательностью без разрывов и коллизий.
+    expect(numbers).toContain(39);
+    expect(numbers[numbers.length - 1]).toBe(40);
     expect(new Set(numbers).size).toBe(numbers.length);
   });
 
