@@ -16,6 +16,13 @@ export const BEANS_EXPIRY_DAYS = 90;
 export const WELCOME_BEANS = 300;
 export const MAX_BEANS_SHARE_PERCENT = 50;
 
+// История операций в ЛК: на экране — HISTORY_PREVIEW_COUNT последних строк,
+// полный список — по кнопке «Посмотреть все чеки»; показываем операции
+// не старше HISTORY_WINDOW_MONTHS месяцев (данные в базе не удаляются —
+// только выборка; рангу нужны 30 дней, зёрнам 90 — окно безопасно).
+export const HISTORY_PREVIEW_COUNT = 3;
+export const HISTORY_WINDOW_MONTHS = 6;
+
 export interface ShopRank {
   id: string;
   shopId: string;
@@ -103,8 +110,8 @@ export interface LoyaltyHistoryItem {
   shopId: string;
 }
 
-// Одна гостевая карточка кофейни — всё, что «Мои карты» рендерит для одного
-// контура «Зал», pre-joined, чтобы UI не ходил across tables сам.
+// Одна гостевая карточка кофейни — всё, что страница «Лояльность» рендерит
+// для одного контура «Зал», pre-joined, чтобы UI не ходил across tables сам.
 export interface GuestHallCard {
   shopId: string;
   status: GuestShopStatus | null;

@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   beansCountdown,
+  BEANS_EXPIRY_DAYS,
+  HISTORY_PREVIEW_COUNT,
+  HISTORY_WINDOW_MONTHS,
+  MAX_BEANS_SHARE_PERCENT,
   maxBeansForCheck,
   nextRankAbove,
   pluralizeDays,
+  RANK_WINDOW_DAYS,
   spendToNextRank,
+  WELCOME_BEANS,
   type ShopRank,
 } from '@/lib/types/loyalty';
 
@@ -86,5 +92,22 @@ describe('pluralizeDays', () => {
     expect(pluralizeDays(11)).toBe('дней');
     expect(pluralizeDays(21)).toBe('день');
     expect(pluralizeDays(22)).toBe('дня');
+  });
+});
+
+describe('константы правил лояльности — одно место для UI и подписей', () => {
+  it('окна: ранг 30 дней, зёрна 90 дней, история 6 месяцев', () => {
+    expect(RANK_WINDOW_DAYS).toBe(30);
+    expect(BEANS_EXPIRY_DAYS).toBe(90);
+    expect(HISTORY_WINDOW_MONTHS).toBe(6);
+    // Окно истории шире окон ранга и зёрен — метрики от него не ломаются.
+    expect(HISTORY_WINDOW_MONTHS * 30).toBeGreaterThan(BEANS_EXPIRY_DAYS);
+    expect(HISTORY_WINDOW_MONTHS * 30).toBeGreaterThan(RANK_WINDOW_DAYS);
+  });
+
+  it('история в ЛК: превью 3 строки, welcome 300, потолок зёрен 50%', () => {
+    expect(HISTORY_PREVIEW_COUNT).toBe(3);
+    expect(WELCOME_BEANS).toBe(300);
+    expect(MAX_BEANS_SHARE_PERCENT).toBe(50);
   });
 });

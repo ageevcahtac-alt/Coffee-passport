@@ -22,10 +22,12 @@ describe('grind confirmations migration (0038)', () => {
     const numbers = files.map((file) => Number(file.slice(0, 4))).sort((a, b) => a - b);
     // 0039 — loyalty stage 1 (неидемпотентный черновик, нигде не применён);
     // 0040 — его самодостаточная идемпотентная замена; 0041/0042 — тестовый
-    // сид учётки владельца и его откат. Страж следит за последовательностью
-    // без разрывов и коллизий.
+    // сид учётки владельца и его откат; 0043 — орден только на топ-ранге;
+    // 0044 — ренейм ранга 6; 0045 — переезд ордена сида владельца на
+    // «Хранитель вкуса». Страж следит за последовательностью без разрывов
+    // и коллизий.
     expect(numbers).toContain(39);
-    expect(numbers[numbers.length - 1]).toBe(42);
+    expect(numbers[numbers.length - 1]).toBe(45);
     expect(new Set(numbers).size).toBe(numbers.length);
   });
 

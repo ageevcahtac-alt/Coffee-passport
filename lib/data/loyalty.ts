@@ -18,7 +18,7 @@ import type {
   LoyaltyHistoryItem,
   ShopRank,
 } from '@/lib/types/loyalty';
-import { HALL_CIRCUIT, nextRankAbove } from '@/lib/types/loyalty';
+import { HALL_CIRCUIT, HISTORY_WINDOW_MONTHS, nextRankAbove } from '@/lib/types/loyalty';
 import { getBrowserSupabaseClient } from '@/lib/supabase/browserClient';
 import { generateId } from '@/lib/utils/id';
 
@@ -448,15 +448,20 @@ export async function fetchGuestHallCards(guestId: string): Promise<GuestHallCar
 }
 
 // История операций гостя для ЛК: чеки + движения зёрен + движения карты,
-// склеенные в один список по времени (новые первыми).
-export async function fetchGuestHistory(guestId: string, limit = 30): Promise<LoyaltyHistoryItem[]> {
+// склеенные в один список по времени (новые первыми). Показываем окно
+// HISTORY_WINDOW_MONTHS месяцев — старше гостю не видно (выборка, данные в
+// базе остаются).
+export async function fetchGuestHistory(guestId: string, limit = 60): Promise<LoyaltyHistoryItem[]> {
   try {
     const supabase = getBrowserSupabaseClient();
+    const windowStart = new Date();
+    windowStart.setMonth(windowStart.getMonth() - HISTORY_WINDOW_MONTHS);
+    const windowIso = windowStart.toISOString();
     const [consumptionsRes, beansRes, cardsRes, ledgerRes] = await Promise.all([
-      supabase.from('loyalty_consumptions').select('*').eq('guest_id', guestId).order('created_at', { ascending: false }).limit(limit),
-      supabase.from('beans_ledger').select('*').eq('guest_id', guestId).order('created_at', { ascending: false }).limit(limit),
+      supabase.from('loyalty_consumptions').select('*').eq('guest_id', guestId).gte('created_at', windowIso).order('created_at', { ascending: false }).limit(limit),
+      supabase.from('beans_ledger').select('*').eq('guest_id', guestId).gte('created_at', windowIso).order('created_at', { ascending: false }).limit(limit),
       supabase.from('deposit_cards').select('*').eq('guest_id', guestId),
-      supabase.from('deposit_card_ledger').select('*').order('created_at', { ascending: false }).limit(limit),
+      supabase.from('deposit_card_ledger').select('*').gte('created_at', windowIso).order('created_at', { ascending: false }).limit(limit),
     ]);
     const cardShopById = new Map(((cardsRes.data ?? []) as DepositCardRow[]).map((row) => [row.id, row.shop_id]));
     const items: LoyaltyHistoryItem[] = [];

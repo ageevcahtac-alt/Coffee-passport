@@ -12,12 +12,14 @@ import {
 import { LoyaltyCardView } from '@/components/loyalty/LoyaltyCardView';
 import { GuestQrModal } from '@/components/loyalty/GuestQrModal';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
+import { HISTORY_PREVIEW_COUNT } from '@/lib/types/loyalty';
 import type { GuestHallCard, LoyaltyHistoryItem } from '@/lib/types/loyalty';
 
-// "Мои карты" — контур «Зал»: ранг с цветом обжарки и прогрессом по тратам
-// за 30 дней, зёрна с таймером сгорания, карта-депозит и история операций.
-// Пока один контур — вкладки «Зал»/«Дом» не рисуем. Без входа — приглашение
-// войти (баланс лояльности живёт только у зарегистрированного аккаунта).
+// "Лояльность" — контур «Зал»: ранг с цветом обжарки и прогрессом по тратам
+// за 30 дней (у орденоносца — плашка вместо прогресс-бара), зёрна с таймером
+// сгорания, карта-депозит и история операций (первые HISTORY_PREVIEW_COUNT
+// строк + кнопка «Посмотреть все чеки»). Без входа — приглашение войти
+// (баланс лояльности живёт только у зарегистрированного аккаунта).
 export default function LoyaltyPage() {
   const { userId, isAuthenticated, ready } = useCurrentUser();
   const [cards, setCards] = useState<GuestHallCard[] | null>(null);
@@ -26,6 +28,7 @@ export default function LoyaltyPage() {
   const [editingName, setEditingName] = useState(false);
   const [savingName, setSavingName] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
+  const [showAllHistory, setShowAllHistory] = useState(false);
 
   useEffect(() => {
     if (!ready || !isAuthenticated || !userId) return;
@@ -50,7 +53,7 @@ export default function LoyaltyPage() {
     return (
       <main className="min-h-dvh flex items-center justify-center px-6 py-16 text-center">
         <div className="max-w-xs">
-          <p className="font-display text-xl text-ink-900 mb-2">Мои карты</p>
+          <p className="font-display text-xl text-ink-900 mb-2">Лояльность</p>
           <p className="text-sm text-ink-500 mb-6">Войдите в аккаунт Coffee Passport, чтобы увидеть свои карты лояльности.</p>
           <Link
             href="/auth/login"
@@ -76,7 +79,7 @@ export default function LoyaltyPage() {
     <main className="min-h-dvh px-6 py-16">
       <div className="max-w-md mx-auto w-full">
         <p className="text-xs uppercase tracking-widest2 text-ink-400 font-body mb-2">Вы</p>
-        <h1 className="font-display text-2xl text-ink-900 mb-2">💳 Мои карты</h1>
+        <h1 className="font-display text-2xl text-ink-900 mb-2">💳 Лояльность</h1>
         <p className="text-sm text-ink-500 mb-6">
           Ранги, зёрна и карта-депозит в кофейнях-партнёрах — единая учётная запись Coffee Passport.
         </p>
@@ -149,7 +152,7 @@ export default function LoyaltyPage() {
           <div className="mt-10">
             <p className="section-label mb-4">История операций</p>
             <div className="flex flex-col gap-2">
-              {history.map((item) => {
+              {(showAllHistory ? history : history.slice(0, HISTORY_PREVIEW_COUNT)).map((item) => {
                 const shop = getCoffeeShopById(item.shopId);
                 return (
                   <div key={item.id} className="rounded-md border border-ink-200 bg-parchment-100 px-4 py-3">
@@ -167,6 +170,16 @@ export default function LoyaltyPage() {
                 );
               })}
             </div>
+            {history.length > HISTORY_PREVIEW_COUNT && (
+              <button
+                type="button"
+                onClick={() => setShowAllHistory((value) => !value)}
+                className="mt-3 w-full rounded-md border border-ink-200 px-4 py-2.5 text-sm text-ink-700
+                           hover:bg-parchment-300 transition-colors"
+              >
+                {showAllHistory ? 'Свернуть' : 'Посмотреть все чеки'}
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -50,7 +50,7 @@ export function navItemsFor(session: { role: ProfileRole } | null, currentPath: 
     : [
         { kind: 'link', href: '/journey', label: '🧳 Journey' },
         { kind: 'link', href: '/coffee-kitchen', label: '🍳 Coffee Kitchen' },
-        { kind: 'link', href: '/loyalty', label: '💳 Мои карты' },
+        { kind: 'link', href: '/loyalty', label: '💳 Лояльность' },
       ];
   return [...SHARED, ...own, { kind: 'signOut', label: 'Выйти' }];
 }

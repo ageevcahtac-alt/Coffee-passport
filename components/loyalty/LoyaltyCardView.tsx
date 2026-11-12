@@ -61,7 +61,11 @@ export function LoyaltyCardView({ card }: { card: GuestHallCard }) {
         )}
       </div>
 
-      {next ? (
+      {card.isOrden ? (
+        <p className="mb-4 rounded-md border border-gold-300 bg-parchment-100 px-3 py-2 text-xs text-gold-500">
+          Ранг закреплён орденом 🎖 — не скользит по тратам за 30 дней
+        </p>
+      ) : next ? (
         <div className="mb-4">
           <div className="flex items-baseline justify-between mb-1.5 text-xs">
             <span className="text-ink-500">До статуса «{next.rankName}» осталось</span>
@@ -81,7 +85,7 @@ export function LoyaltyCardView({ card }: { card: GuestHallCard }) {
           </p>
         </div>
       ) : rank ? (
-        <p className="text-xs text-ink-400 mb-4">Высший статус кофейни 🏆</p>
+        <p className="text-xs text-ink-400 mb-4">Максимальный ранг 🏆</p>
       ) : null}
 
       <div className="pt-3 border-t border-ink-200 flex flex-col gap-2 text-sm">
