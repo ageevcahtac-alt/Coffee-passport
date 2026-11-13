@@ -142,6 +142,7 @@ export function GuestProfileEditor({
           <select
             value={drinkSelect}
             onChange={(e) => setDrinkSelect(e.target.value)}
+            aria-label="Любимый напиток"
             className={inputClasses}
           >
             <option value="">Не выбран</option>
