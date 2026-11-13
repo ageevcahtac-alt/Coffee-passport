@@ -70,7 +70,13 @@ export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [beansInput, setBeansInput] = useState('');
 
-  async function loadGuest(guestId: string) {
+  // resetForm=false — рефреш ПОСЛЕ продажи/чека: форму и сообщение об итоге
+  // не трогаем. Иначе гонка: бариста вбивает сумму следующего чека, а
+  // долетающий ответ fetchGuestShopContext стирает поле (setGrossAmount(''))
+  // и дизейблит кнопки — операция «зависает» до ручного сброса. См. баг
+  // verify-barista-access (run 43451583228).
+  async function loadGuest(guestId: string, options?: { resetForm?: boolean }) {
+    const resetForm = options?.resetForm ?? true;
     setScanError('');
     const profile = await fetchGuestProfile(guestId);
     if (!profile) {
@@ -92,10 +98,12 @@ export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
     });
     setMode('guest');
     setAction(null);
-    setMessage(null);
-    setGrossAmount('');
-    setPlan(null);
-    setBeansInput('');
+    if (resetForm) {
+      setMessage(null);
+      setGrossAmount('');
+      setPlan(null);
+      setBeansInput('');
+    }
   }
 
   function handleDecode(raw: string) {
@@ -134,7 +142,7 @@ export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
         kind: 'ok',
         text: `Карта на ${fmt(nominal)} ₽ ${result.card && guest.card ? 'пополнена' : 'продана'}. Баланс: ${fmt(result.card?.balance ?? 0)} ₽. Ранг и зёрна не изменились.`,
       });
-      void loadGuest(guest.id);
+      void loadGuest(guest.id, { resetForm: false });
     } else {
       setMessage({ kind: 'error', text: result.error ?? 'Не удалось продать карту.' });
     }
@@ -190,7 +198,7 @@ export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
       });
       setGrossAmount('');
       setBeansInput('');
-      void loadGuest(guest.id);
+      void loadGuest(guest.id, { resetForm: false });
     } else {
       setMessage({ kind: 'error', text: result.error ?? 'Не удалось провести чек.' });
     }
