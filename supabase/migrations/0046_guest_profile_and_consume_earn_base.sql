@@ -194,3 +194,7 @@ begin
   );
 end;
 $$;
+
+-- DROP FUNCTION выше снёс и гранты — возвращаем EXECUTE authenticated'у
+-- (тот же грант, что и в 0040; клиенту SELECT-only, запись только через RPC).
+grant execute on function public.loyalty_consume(uuid, text, numeric, integer, numeric) to authenticated;
