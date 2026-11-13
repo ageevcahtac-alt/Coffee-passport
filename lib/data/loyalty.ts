@@ -110,19 +110,63 @@ function rowToCardLedger(row: DepositCardLedgerRow): DepositCardLedgerEntry {
 
 // Профиль гостя для приветствия после скана QR — политика «staff read
 // enthusiast display names» из 0012 (deliberately not scoped to a shop).
+// Фильтр role='enthusiast' здесь намеренный: это staff-чтение чужой карты.
+// Свой собственный профиль гость читает через fetchOwnProfile — у него НЕТ
+// ролевого фильтра (иначе staff-аккаунт (владелец, бариста) сохранял бы имя,
+// но никогда не читал его обратно — см. fetchOwnProfile).
 export async function fetchGuestProfile(
   guestId: string
-): Promise<{ id: string; displayName: string | null; email: string | null } | null> {
+): Promise<{ id: string; displayName: string | null; email: string | null; favoriteDrink: string | null } | null> {
   try {
     const supabase = getBrowserSupabaseClient();
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, display_name, email')
+      .select('id, display_name, email, favorite_drink')
       .eq('id', guestId)
       .eq('role', 'enthusiast')
       .maybeSingle();
     if (error || !data) return null;
-    return { id: data.id, displayName: data.display_name, email: data.email };
+    return { id: data.id, displayName: data.display_name, email: data.email, favoriteDrink: data.favorite_drink };
+  } catch {
+    return null;
+  }
+}
+
+// СВОЙ профиль для ЛК лояльности. RLS «user reads own profile» (0007) уже
+// ограничивает выборку собственной строкой, поэтому ролевого фильтра нет —
+// любая роль читает свой display_name/phone/city/favorite_drink обратно.
+// Это и есть фикс бага «имя слетает после перезахода»: fetchGuestProfile с
+// её role='enthusiast' для staff-аккаунта молча возвращала null.
+export interface OwnProfile {
+  id: string;
+  displayName: string | null;
+  email: string | null;
+  phone: string | null;
+  city: string | null;
+  favoriteDrink: string | null;
+}
+
+export async function fetchOwnProfile(): Promise<OwnProfile | null> {
+  try {
+    const supabase = getBrowserSupabaseClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, display_name, email, phone, city, favorite_drink')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (error || !data) return null;
+    return {
+      id: data.id,
+      displayName: data.display_name,
+      email: data.email,
+      phone: data.phone,
+      city: data.city,
+      favoriteDrink: data.favorite_drink,
+    };
   } catch {
     return null;
   }
@@ -146,14 +190,34 @@ export async function fetchGuestDisplayNames(guestIds: string[]): Promise<Map<st
   }
 }
 
-export async function updateOwnDisplayName(displayName: string): Promise<{ ok: boolean; error?: string }> {
+export interface OwnProfilePatch {
+  displayName: string;
+  phone: string;
+  city: string;
+  favoriteDrink: string;
+}
+
+// Сохранение мини-профиля гостя (задача 1.5): те же четыре колонки, что и в
+// column-grant 0046 — display_name, phone, city, favorite_drink. Пустые
+// строки сохраняются как null. Источник истины — БД: после сохранения ЛК
+// перечитывает профиль через fetchOwnProfile, так что введённое имя
+// переживает перезаход, перелогин и смену устройства.
+export async function updateOwnProfile(patch: OwnProfilePatch): Promise<{ ok: boolean; error?: string }> {
   try {
     const supabase = getBrowserSupabaseClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return { ok: false, error: 'Не удалось определить аккаунт.' };
-    const { error } = await supabase.from('profiles').update({ display_name: displayName }).eq('id', user.id);
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        display_name: patch.displayName.trim() || null,
+        phone: patch.phone.trim() || null,
+        city: patch.city.trim() || null,
+        favorite_drink: patch.favoriteDrink.trim() || null,
+      })
+      .eq('id', user.id);
     if (error) return { ok: false, error: error.message };
     return { ok: true };
   } catch (error) {

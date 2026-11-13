@@ -276,6 +276,13 @@ export type ProfileRow = {
   // staff-facing queries read a guest's email without joining auth.users
   // directly, which PostgREST can't do.
   email: string | null;
+  // Self-editable guest mini-profile (0046) — same column-grant pattern as
+  // display_name: the guest may fill these in, staff reads them (barista
+  // greets by name + favorite drink). phone is display-formatted (+7 …),
+  // no SMS verification by design.
+  phone: string | null;
+  city: string | null;
+  favorite_drink: string | null;
   created_at: string;
   updated_at: string;
 };
