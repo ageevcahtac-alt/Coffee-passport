@@ -6,10 +6,11 @@ import { useCurrentUser } from '@/lib/auth/currentUser';
 import {
   fetchGuestHallCards,
   fetchGuestHistory,
-  fetchGuestProfile,
-  updateOwnDisplayName,
+  fetchOwnProfile,
+  type OwnProfile,
 } from '@/lib/data/loyalty';
 import { LoyaltyCardView } from '@/components/loyalty/LoyaltyCardView';
+import { GuestProfileEditor } from '@/components/loyalty/GuestProfileEditor';
 import { GuestQrModal } from '@/components/loyalty/GuestQrModal';
 import { getCoffeeShopById } from '@/lib/data/coffeeShops';
 import { HISTORY_PREVIEW_COUNT } from '@/lib/types/loyalty';
@@ -24,9 +25,7 @@ export default function LoyaltyPage() {
   const { userId, isAuthenticated, ready } = useCurrentUser();
   const [cards, setCards] = useState<GuestHallCard[] | null>(null);
   const [history, setHistory] = useState<LoyaltyHistoryItem[]>([]);
-  const [displayName, setDisplayName] = useState('');
-  const [editingName, setEditingName] = useState(false);
-  const [savingName, setSavingName] = useState(false);
+  const [profile, setProfile] = useState<OwnProfile | null>(null);
   const [qrOpen, setQrOpen] = useState(false);
   const [showAllHistory, setShowAllHistory] = useState(false);
 
@@ -39,8 +38,10 @@ export default function LoyaltyPage() {
     fetchGuestHistory(userId).then((items) => {
       if (!cancelled) setHistory(items);
     });
-    fetchGuestProfile(userId).then((profile) => {
-      if (!cancelled && profile) setDisplayName(profile.displayName ?? '');
+    // Свой профиль — через fetchOwnProfile (без ролевого фильтра): источник
+    // истины БД, имя переживает перезаход/перелогин/смену устройства.
+    fetchOwnProfile().then((result) => {
+      if (!cancelled) setProfile(result);
     });
     return () => {
       cancelled = true;
@@ -68,60 +69,18 @@ export default function LoyaltyPage() {
     );
   }
 
-  async function handleSaveName() {
-    setSavingName(true);
-    const result = await updateOwnDisplayName(displayName.trim());
-    setSavingName(false);
-    if (result.ok) setEditingName(false);
-  }
-
   return (
     <main className="min-h-dvh px-6 py-16">
       <div className="max-w-md mx-auto w-full">
         <p className="text-xs uppercase tracking-widest2 text-ink-400 font-body mb-2">Вы</p>
-        <h1 className="font-display text-2xl text-ink-900 mb-2">💳 Лояльность</h1>
+        <h1 className="font-display text-2xl text-ink-900 mb-2">
+          💳 Лояльность{profile?.displayName ? ` — ${profile.displayName}` : ''}
+        </h1>
         <p className="text-sm text-ink-500 mb-6">
           Ранги, зёрна и карта-депозит в кофейнях-партнёрах — единая учётная запись Coffee Passport.
         </p>
 
-        <div className="rounded-md border border-ink-200 bg-parchment-100 p-4 mb-6">
-          {editingName ? (
-            <div className="flex gap-2">
-              <input
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="Как к вам обращаться?"
-                className="flex-1 rounded-md border border-ink-200 bg-parchment-100 px-3 py-2 text-sm
-                           text-ink-900 placeholder:text-ink-300 focus:border-gold-400"
-              />
-              <button
-                type="button"
-                onClick={handleSaveName}
-                disabled={savingName || !displayName.trim()}
-                className="rounded-md bg-ink-900 text-parchment-100 text-sm px-4 py-2
-                           hover:bg-ink-800 transition-colors disabled:opacity-40"
-              >
-                {savingName ? '…' : 'Сохранить'}
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm text-ink-900">
-                  Как к вам обращаться? <span className="font-medium">{displayName || 'не указано'}</span>
-                </p>
-                <p className="text-[11px] text-ink-400 mt-0.5">Это имя увидит бариста при заказе</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setEditingName(true)}
-                className="text-xs text-ink-500 underline underline-offset-2 hover:text-ink-900 shrink-0"
-              >
-                Изменить
-              </button>
-            </div>
-          )}
-        </div>
+        {profile && <GuestProfileEditor profile={profile} onSaved={setProfile} />}
 
         <button
           type="button"
