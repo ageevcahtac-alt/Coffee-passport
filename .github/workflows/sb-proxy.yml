@@ -1,0 +1,135 @@
+name: sb-proxy
+# Серверный прокси Supabase — только вручную:
+#   trace  (read-only) — стабильность трассы с сервера на cloud Supabase: 12 проходов
+#             curl -m 5 на /rest/v1/ и /auth/v1/health с интервалом 8 с. Transport-ошибка
+#             (timeout/DNS/TLS) или HTTP ≥ 403 — красный: через прокси идти нельзя.
+#   verify (read-only) — /sb/ через свой домен с самого сервера: auth health, REST read,
+#             RPC-маршрут, WebSocket-рукопожатие realtime. Ключи из .env.local не печатаются.
+#   switch (write)     — backup .env.local, гейты нового URL (auth+rest+storage), затем
+#             смена NEXT_PUBLIC_SUPABASE_URL и rebuild-public-env.sh (пересборка+restart+
+#             check-public-api.py). Только URL на своём домене.
+# Локальный ssh к серверу не используется (CLAUDE.md, «Деплой») — только этот workflow.
+# Секреты: DEPLOY_SSH_KEY, DEPLOY_KNOWN_HOSTS.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "trace | verify | switch"
+        required: true
+        default: "trace"
+        type: choice
+        options: [trace, verify, switch]
+      supabase_url:
+        description: "switch: новый NEXT_PUBLIC_SUPABASE_URL (например https://coffeepassport.ru/sb)"
+        required: false
+        type: string
+permissions:
+  contents: read
+jobs:
+  run:
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/fix/pre-pilot-shortlist'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: validate input
+        run: |
+          case "${{ inputs.mode }}" in
+            trace|verify) ;;
+            switch)
+              [[ "${{ inputs.supabase_url }}" =~ ^https://[a-z0-9.-]+(/[a-zA-Z0-9._~/-]*)?$ ]] \
+                || { echo "::error::supabase_url: https://..."; exit 1; } ;;
+            *) echo "::error::mode: trace | verify | switch"; exit 1;;
+          esac
+      - uses: ./.github/actions/ssh-setup
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      - name: trace — сервер → cloud Supabase (read-only)
+        if: inputs.mode == 'trace'
+        run: |
+          ssh prod 'bash -s' <<'REMOTE'
+          set -u
+          base=https://vodmmtzclvqemcujwmdf.supabase.co
+          bad=0
+          for dns in 1.1.1.1 8.8.8.8; do
+            if command -v nslookup > /dev/null 2>&1; then
+              nslookup vodmmtzclvqemcujwmdf.supabase.co "$dns" > /dev/null 2>&1 \
+                && echo "dns @$dns: ok" || { echo "dns @$dns: FAIL"; bad=$((bad+1)); }
+            else
+              echo "dns @$dns: nslookup не установлен, пропуск"
+            fi
+          done
+          for i in $(seq 1 12); do
+            line="attempt $i:"
+            for path in /rest/v1/ /auth/v1/health; do
+              out=$(curl -m 5 -sS -o /dev/null -w '%{http_code} %{time_total}s' "$base$path" 2>/dev/null)
+              rc=$?
+              if [ $rc -ne 0 ] || [ -z "$out" ]; then
+                line="$line $path=TRANSPORT_ERROR($rc)"
+                bad=$((bad+1))
+              else
+                code=${out%% *}
+                line="$line $path=$out"
+                case "$code" in 200|400|401|404) ;; *) bad=$((bad+1)); line="$line UNEXPECTED";; esac
+              fi
+            done
+            echo "$line"
+            [ "$i" -lt 12 ] && sleep 8
+          done
+          echo "bad=$bad"
+          [ "$bad" -eq 0 ]
+          REMOTE
+      - name: verify — /sb/ через домен с самого сервера (read-only)
+        if: inputs.mode == 'verify'
+        run: |
+          ssh prod 'bash -s' <<'REMOTE' 2>&1 | node scripts/ops/redact.mjs
+          set -euo pipefail
+          cd /opt/coffee-passport/app
+          key=$(sed -n 's/^NEXT_PUBLIC_SUPABASE_ANON_KEY=//p' .env.local | tr -d '"'"'"')
+          b=https://coffeepassport.ru
+          fail=0
+          code=$(curl -sS -m 10 -o /tmp/sb-health.json -w '%{http_code}' "$b/sb/auth/v1/health")
+          echo "/sb/auth/v1/health -> $code $(cat /tmp/sb-health.json)"
+          { [ "$code" = 200 ] && grep -q GoTrue /tmp/sb-health.json; } || fail=$((fail+1))
+          rm -f /tmp/sb-health.json
+          code=$(curl -sS -m 10 -H "apikey: $key" -H "Authorization: Bearer $key" -o /tmp/sb-lots.json -w '%{http_code}' "$b/sb/rest/v1/lots?select=public_id&limit=1")
+          echo "/sb/rest/v1/lots (anon key) -> $code, bytes=$(stat -c %s /tmp/sb-lots.json)"
+          [ "$code" = 200 ] || fail=$((fail+1))
+          rm -f /tmp/sb-lots.json
+          code=$(curl -sS -m 10 -X POST -H "apikey: $key" -H "Authorization: Bearer $key" -H 'Content-Type: application/json' -d '{}' -o /tmp/sb-rpc.json -w '%{http_code}' "$b/sb/rest/v1/rpc/__sb_proxy_probe__")
+          echo "/sb/rest/v1/rpc/__sb_proxy_probe__ (несуществующая) -> $code $(head -c 140 /tmp/sb-rpc.json)"
+          { [ "$code" = 401 ] || { [ "$code" = 404 ] && grep -q '"code"' /tmp/sb-rpc.json; }; } || fail=$((fail+1))
+          rm -f /tmp/sb-rpc.json
+          code=$(curl -sS -m 5 -o /dev/null -w '%{http_code}' -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
+                   -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
+                   -H "apikey: $key" "$b/sb/realtime/v1/websocket?apikey=$key&vsn=1.0.0" || true)
+          echo "/sb/realtime/v1/websocket (upgrade handshake) -> $code"
+          [ "$code" = 101 ] || fail=$((fail+1))
+          echo "fail=$fail"
+          [ "$fail" -eq 0 ]
+          REMOTE
+      - name: switch — NEXT_PUBLIC_SUPABASE_URL на проде (write)
+        if: inputs.mode == 'switch'
+        run: |
+          set -o pipefail
+          ssh prod "bash -s -- '${{ inputs.supabase_url }}'" <<'REMOTE' 2>&1 | node scripts/ops/redact.mjs
+          set -euo pipefail
+          cd /opt/coffee-passport/app
+          case "$1" in
+            https://coffeepassport.ru*)
+              key=$(sed -n 's/^NEXT_PUBLIC_SUPABASE_ANON_KEY=//p' .env.local | tr -d '"'"'"')
+              curl -fsS -m 10 "$1/auth/v1/health" | grep -q GoTrue \
+                || { echo "Гейт: $1/auth/v1/health не отвечает — switch отменён"; exit 1; }
+              code=$(curl -sS -m 10 -o /dev/null -w '%{http_code}' -H "apikey: $key" -H "Authorization: Bearer $key" "$1/rest/v1/lots?select=public_id&limit=1")
+              [ "$code" = 200 ] || { echo "Гейт: $1/rest/v1/lots -> $code — switch отменён"; exit 1; }
+              code=$(curl -sS -m 10 -o /dev/null -w '%{http_code}' -H "apikey: $key" -H "Authorization: Bearer $key" "$1/storage/v1/status")
+              [ "$code" = 200 ] || { echo "Гейт: $1/storage/v1/status -> $code — switch отменён"; exit 1; } ;;
+            *) echo 'Гейт: разрешены только URL на своём домене — switch отменён'; exit 1 ;;
+          esac
+          old=$(sed -n 's/^NEXT_PUBLIC_SUPABASE_URL=//p' .env.local)
+          echo "OLD_URL=$old"
+          sed -i "s|^NEXT_PUBLIC_SUPABASE_URL=.*|NEXT_PUBLIC_SUPABASE_URL=$1|" .env.local
+          echo "NEW_URL=$1"
+          bash deploy/timeweb/rebuild-public-env.sh
+          REMOTE
