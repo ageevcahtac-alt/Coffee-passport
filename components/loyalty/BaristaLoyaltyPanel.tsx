@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { QrScanner } from '@/components/coffee/QrScanner';
 import { extractGuestId } from '@/lib/utils/guestQr';
 import {
@@ -22,6 +22,7 @@ import {
 interface GuestContext {
   id: string;
   displayName: string | null;
+  favoriteDrink: string | null;
   status: GuestShopStatus | null;
   ranks: ShopRank[];
   effectiveRank: ShopRank | null;
@@ -32,17 +33,25 @@ interface GuestContext {
 }
 
 type Mode = 'idle' | 'scanning' | 'guest';
-type Action = null | 'sell' | 'consume';
+type Action = null | 'sell';
+type Plan = 'card' | 'beans' | 'earn';
 
 const fieldClasses =
   'w-full rounded-md border border-ink-200 bg-parchment-100 px-4 py-3 text-sm ' +
   'text-ink-900 placeholder:text-ink-300 focus:border-gold-400';
 
+const fmt = (value: number) => value.toLocaleString('ru-RU');
+
 // Barista's loyalty console (stage 1, контур «Зал»): scan a guest's QR →
-// провести чек (наличные + опционально зёрна до 50% и/или карта с доплатой)
-// или продать/пополнить карту-депозит. Все правила (потолок 50%, clamp к
-// живому балансу, кэшбэк % ранга, приветственные 300) — в RPC loyalty_consume;
-// этот компонент только рисует то, что сервер вернул.
+// карточка гостя (имя + любимый напиток крупно) → сумма чека → три действия:
+//   💳 списать с карты (частичное списание, нехватка — доплата живыми);
+//   ☕ списать зёрна (≤ 50% чека, остаток — доплата);
+//   ✨ только начислить кэшбэк.
+// Каждое действие — с модальным подтверждением итога. Все правила (потолок
+// 50%, clamp к балансам, кэшбэк на денежную часть, приветственные 300) — в
+// RPC loyalty_consume (0039/0040/0046); этот компонент рисует, что сервер
+// вернул, и глушит двойной тап рефом-in-flight, чтобы повторное нажатие не
+// провело чек дважды.
 export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
   const [mode, setMode] = useState<Mode>('idle');
   const [manualCode, setManualCode] = useState('');
@@ -50,16 +59,16 @@ export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
   const [guest, setGuest] = useState<GuestContext | null>(null);
   const [action, setAction] = useState<Action>(null);
   const [busy, setBusy] = useState(false);
+  const inFlight = useRef(false);
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
 
   // Sell/top-up form
   const [nominal, setNominal] = useState<number>(CARD_NOMINALS[0]);
 
-  // Consume form
+  // Consume plan: сумма чека + открытая модалка действия
   const [grossAmount, setGrossAmount] = useState('');
-  const [beansRedeem, setBeansRedeem] = useState('');
-  const [useCard, setUseCard] = useState(false);
-  const [cardPay, setCardPay] = useState('');
+  const [plan, setPlan] = useState<Plan | null>(null);
+  const [beansInput, setBeansInput] = useState('');
 
   async function loadGuest(guestId: string) {
     setScanError('');
@@ -72,6 +81,7 @@ export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
     setGuest({
       id: profile.id,
       displayName: profile.displayName,
+      favoriteDrink: profile.favoriteDrink,
       status: context.status,
       ranks: context.ranks,
       effectiveRank: context.effectiveRank,
@@ -84,9 +94,8 @@ export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
     setAction(null);
     setMessage(null);
     setGrossAmount('');
-    setBeansRedeem('');
-    setUseCard(false);
-    setCardPay('');
+    setPlan(null);
+    setBeansInput('');
   }
 
   function handleDecode(raw: string) {
@@ -109,20 +118,21 @@ export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
     setMessage(null);
     setManualCode('');
     setGrossAmount('');
-    setBeansRedeem('');
-    setUseCard(false);
-    setCardPay('');
+    setPlan(null);
+    setBeansInput('');
   }
 
   async function handleSell() {
-    if (!guest) return;
+    if (!guest || inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     const result = await purchaseCard(guest.id, shopId, nominal);
     setBusy(false);
+    inFlight.current = false;
     if (result.ok) {
       setMessage({
         kind: 'ok',
-        text: `Карта на ${nominal.toLocaleString('ru-RU')} ₽ ${result.card && guest.card ? 'пополнена' : 'продана'}. Баланс: ${(result.card?.balance ?? 0).toLocaleString('ru-RU')} ₽. Ранг и зёрна не изменились.`,
+        text: `Карта на ${fmt(nominal)} ₽ ${result.card && guest.card ? 'пополнена' : 'продана'}. Баланс: ${fmt(result.card?.balance ?? 0)} ₽. Ранг и зёрна не изменились.`,
       });
       void loadGuest(guest.id);
     } else {
@@ -131,45 +141,60 @@ export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
     setAction(null);
   }
 
-  async function handleConsume() {
-    if (!guest) return;
-    const gross = Number(grossAmount);
-    if (!Number.isFinite(gross) || gross <= 0) return;
-    const beans = Number(beansRedeem) || 0;
-    const card = useCard && guest.card ? Number(cardPay) || 0 : 0;
+  const grossValue = Number(grossAmount) || 0;
+  const rankPercent = guest?.effectiveRank?.beansPercent ?? 0;
+  const beansMax = guest ? Math.min(maxBeansForCheck(grossValue), guest.beansBalance) : 0;
+  // Превью считаем от клиентского clamp; в RPC уходит введённое значение —
+  // сервер и есть источник истины (потолок 50%/баланс), итог бариста видит
+  // в сообщении по факту ответа.
+  const beansTyped = Math.max(0, Number(beansInput) || 0);
+  const beansPlanned = Math.min(beansTyped, beansMax);
+  const cardPlanned = guest?.card ? Math.min(grossValue, guest.card.balance) : 0;
+  const cardCash = Math.max(0, grossValue - cardPlanned);
+  const beansCash = Math.max(0, grossValue - beansPlanned);
+  const earnOnCard = Math.round((grossValue * rankPercent) / 100);
+  const earnOnBeans = Math.round(((grossValue - beansPlanned) * rankPercent) / 100);
+  const countdown = guest ? beansCountdown(guest.beansExpireAt) : null;
+
+  function openPlan(next: Plan) {
+    if (next === 'beans') setBeansInput(String(beansMax));
+    setPlan(next);
+  }
+
+  async function handleConfirmPlan() {
+    if (!guest || !plan || inFlight.current || grossValue <= 0) return;
+    inFlight.current = true;
     setBusy(true);
-    const result = await consume(guest.id, shopId, gross, beans, card);
+    const args =
+      plan === 'card'
+        ? { beans: 0, card: grossValue }
+        : plan === 'beans'
+          ? { beans: beansTyped, card: 0 }
+          : { beans: 0, card: 0 };
+    const result = await consume(guest.id, shopId, grossValue, args.beans, args.card);
     setBusy(false);
+    inFlight.current = false;
+    setPlan(null);
     if (result.ok && result.result) {
       const { consumption, beansBalanceAfter } = result.result;
       const parts = [
-        consumption.beansEarned > 0 ? `кэшбэк +${consumption.beansEarned} зёрен` : null,
-        consumption.beansRedeemed > 0 ? `списано ${consumption.beansRedeemed} зёрен` : null,
-        consumption.welcomeGranted > 0 ? `приветственные +${consumption.welcomeGranted} зёрен` : null,
+        consumption.cardAmount > 0 ? `с карты ${fmt(consumption.cardAmount)} ₽` : null,
+        consumption.beansRedeemed > 0 ? `списано ${fmt(consumption.beansRedeemed)} зёрен` : null,
+        consumption.cashAmount > 0 ? `доплата живыми ${fmt(consumption.cashAmount)} ₽` : null,
+        consumption.beansEarned > 0 ? `кэшбэк +${fmt(consumption.beansEarned)} зёрен` : null,
+        consumption.welcomeGranted > 0 ? `приветственные +${fmt(consumption.welcomeGranted)} зёрен` : null,
       ].filter(Boolean);
       setMessage({
         kind: 'ok',
-        text: `Чек проведён (${parts.join(', ') || 'без зёрен'}). Баланс зёрен: ${beansBalanceAfter}. Ранг пересчитан.`,
+        text: `Чек проведён: ${parts.join(' · ') || 'без начислений'}. Баланс зёрен: ${fmt(beansBalanceAfter)}.`,
       });
       setGrossAmount('');
-      setBeansRedeem('');
-      setUseCard(false);
-      setCardPay('');
+      setBeansInput('');
       void loadGuest(guest.id);
     } else {
       setMessage({ kind: 'error', text: result.error ?? 'Не удалось провести чек.' });
     }
-    setAction(null);
   }
-
-  const grossValue = Number(grossAmount) || 0;
-  const beansMax = guest ? Math.min(maxBeansForCheck(grossValue), guest.beansBalance) : 0;
-  const beansValue = Math.min(Number(beansRedeem) || 0, beansMax);
-  const cardMax = guest?.card ? Math.min(guest.card.balance, Math.max(0, grossValue - beansValue)) : 0;
-  const cardValue = useCard ? Math.min(Number(cardPay) || 0, cardMax) : 0;
-  const cashValue = Math.max(0, grossValue - beansValue - cardValue);
-  const earnPreview = guest?.effectiveRank ? Math.round((grossValue * guest.effectiveRank.beansPercent) / 100) : 0;
-  const countdown = guest ? beansCountdown(guest.beansExpireAt) : null;
 
   return (
     <div className="rounded-md border border-ink-200 bg-parchment-100 p-5 mb-10">
@@ -218,11 +243,19 @@ export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
       {mode === 'guest' && guest && (
         <div className="flex flex-col gap-5">
           <div className="flex items-start justify-between gap-4">
-            <div>
-              <h3 className="font-display text-xl text-ink-900 leading-tight">
+            <div className="min-w-0">
+              <h3 className="font-display text-2xl text-ink-900 leading-tight">
                 {guest.displayName || 'Гость без имени'}
               </h3>
-              <p className="text-xs text-ink-400 mt-1">
+              {guest.favoriteDrink ? (
+                <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-gold-400/10 border border-gold-300 px-3 py-1 text-sm text-ink-900">
+                  ☕ <span className="font-medium">{guest.favoriteDrink}</span>
+                  <span className="text-[11px] text-ink-400">— как обычно?</span>
+                </p>
+              ) : (
+                <p className="text-xs text-ink-400 mt-1.5">Любимый напиток не указан</p>
+              )}
+              <p className="text-xs text-ink-400 mt-2">
                 {guest.effectiveRank ? (
                   <>
                     <span
@@ -246,12 +279,12 @@ export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
           <dl className="grid grid-cols-2 gap-3 text-sm">
             <div>
               <dt className="text-ink-400 text-xs mb-0.5">Траты за 30 дней, ₽</dt>
-              <dd className="data-value text-ink-900">{guest.spend30d.toLocaleString('ru-RU')}</dd>
+              <dd className="data-value text-ink-900">{fmt(guest.spend30d)}</dd>
             </div>
             <div>
               <dt className="text-ink-400 text-xs mb-0.5">Зёрна</dt>
               <dd className="data-value text-ink-900">
-                {guest.beansBalance.toLocaleString('ru-RU')}
+                {fmt(guest.beansBalance)}
                 {countdown && !countdown.expired && (
                   <span className="block text-[11px] text-ink-400">
                     сгорят через {countdown.days} {pluralizeDays(countdown.days)}
@@ -263,7 +296,7 @@ export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
 
           {guest.card && (
             <p className="text-sm text-ink-900">
-              💳 Карта: <span className="data-value">{guest.card.balance.toLocaleString('ru-RU')} ₽</span>
+              💳 Карта: <span className="data-value">{fmt(guest.card.balance)} ₽</span>
             </p>
           )}
 
@@ -275,22 +308,60 @@ export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
           )}
 
           {action === null && (
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3">
+              <div>
+                <label htmlFor="consume-amount" className="block text-xs text-ink-400 mb-1.5">
+                  Сумма чека, ₽
+                </label>
+                <input
+                  id="consume-amount"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={grossAmount}
+                  onChange={(e) => setGrossAmount(e.target.value)}
+                  className={fieldClasses}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {guest.card && (
+                  <button
+                    type="button"
+                    onClick={() => openPlan('card')}
+                    disabled={grossValue <= 0 || busy}
+                    className="rounded-md border border-gold-300 bg-gold-400/10 text-ink-900 text-sm px-3 py-3
+                               hover:bg-gold-400/20 transition-colors disabled:opacity-40"
+                  >
+                    💳 Списать с карты
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => openPlan('beans')}
+                  disabled={grossValue <= 0 || busy}
+                  className="rounded-md border border-ink-200 text-ink-700 text-sm px-3 py-3
+                             hover:bg-parchment-300 transition-colors disabled:opacity-40"
+                >
+                  ☕ Списать зёрна
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openPlan('earn')}
+                  disabled={grossValue <= 0 || busy}
+                  className="rounded-md bg-ink-900 text-parchment-100 text-sm px-3 py-3
+                             hover:bg-ink-800 transition-colors disabled:opacity-40"
+                >
+                  ✨ Только начислить
+                </button>
+              </div>
+
               <button
                 type="button"
                 onClick={() => setAction('sell')}
-                className="flex-1 rounded-md border border-ink-200 text-ink-700 text-sm px-4 py-3
-                           hover:bg-parchment-300 transition-colors"
+                className="text-xs text-ink-500 underline underline-offset-2 hover:text-ink-900 self-start"
               >
-                {guest.card ? 'Пополнить карту' : 'Продать карту'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setAction('consume')}
-                className="flex-[2] rounded-md bg-ink-900 text-parchment-100 text-sm px-4 py-3
-                           hover:bg-ink-800 transition-colors"
-              >
-                Провести чек
+                {guest.card ? 'Пополнить карту' : 'Продать карту-депозит'}
               </button>
             </div>
           )}
@@ -309,7 +380,7 @@ export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
                       nominal === option ? 'border-gold-400 bg-gold-400/10 text-ink-900' : 'border-ink-200 text-ink-700'
                     }`}
                   >
-                    {option.toLocaleString('ru-RU')} ₽
+                    {fmt(option)} ₽
                   </button>
                 ))}
               </div>
@@ -331,110 +402,126 @@ export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
                   className="flex-[2] rounded-md bg-ink-900 text-parchment-100 text-sm px-4 py-3
                              hover:bg-ink-800 transition-colors disabled:opacity-40"
                 >
-                  {busy ? 'Продаём…' : `${guest.card ? 'Пополнить' : 'Продать'} за ${nominal.toLocaleString('ru-RU')} ₽`}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {action === 'consume' && (
-            <div className="flex flex-col gap-3">
-              <div>
-                <label htmlFor="consume-amount" className="block text-xs text-ink-400 mb-1.5">
-                  Сумма чека, ₽
-                </label>
-                <input
-                  id="consume-amount"
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={grossAmount}
-                  onChange={(e) => setGrossAmount(e.target.value)}
-                  className={fieldClasses}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="pay-beans" className="block text-xs text-ink-400 mb-1.5">
-                  Списать зёрна (до 50% чека · доступно {guest.beansBalance.toLocaleString('ru-RU')})
-                </label>
-                <input
-                  id="pay-beans"
-                  type="number"
-                  min="0"
-                  step="1"
-                  max={beansMax}
-                  value={beansRedeem}
-                  onChange={(e) => setBeansRedeem(e.target.value)}
-                  placeholder="0"
-                  className={fieldClasses}
-                />
-              </div>
-
-              {guest.card && (
-                <div>
-                  <label className="flex items-center gap-2 text-xs text-ink-400 mb-1.5">
-                    <input
-                      type="checkbox"
-                      checked={useCard}
-                      onChange={(e) => setUseCard(e.target.checked)}
-                      className="rounded border-ink-200"
-                    />
-                    Оплатить с карты (баланс {guest.card.balance.toLocaleString('ru-RU')} ₽)
-                  </label>
-                  {useCard && (
-                    <input
-                      id="pay-card-amount"
-                      type="number"
-                      min="0"
-                      step="1"
-                      max={cardMax}
-                      value={cardPay}
-                      onChange={(e) => setCardPay(e.target.value)}
-                      placeholder={`До ${cardMax.toLocaleString('ru-RU')} ₽ — остаток наличными`}
-                      className={fieldClasses}
-                    />
-                  )}
-                </div>
-              )}
-
-              {grossValue > 0 && (
-                <p className="text-xs text-ink-500 rounded-md bg-parchment-200 px-3 py-2.5">
-                  К оплате:{' '}
-                  {beansValue > 0 && <span className="data-value text-ink-900">{beansValue.toLocaleString('ru-RU')} зёрен</span>}
-                  {beansValue > 0 && (cardValue > 0 || cashValue > 0) && ' + '}
-                  {cardValue > 0 && <span className="data-value text-ink-900">{cardValue.toLocaleString('ru-RU')} ₽ с карты</span>}
-                  {cardValue > 0 && cashValue > 0 && ' + '}
-                  {cashValue > 0 && <span className="data-value text-ink-900">{cashValue.toLocaleString('ru-RU')} ₽ наличными</span>}
-                  {earnPreview > 0 && (
-                    <span className="block mt-1">→ кэшбэк {guest.effectiveRank?.beansPercent ?? 0}%: +{earnPreview} зёрен</span>
-                  )}
-                </p>
-              )}
-
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setAction(null)}
-                  className="flex-1 rounded-md border border-ink-200 text-ink-700 text-sm px-4 py-3 hover:bg-parchment-300 transition-colors"
-                >
-                  Отмена
-                </button>
-                <button
-                  id="consume-submit"
-                  type="button"
-                  onClick={handleConsume}
-                  disabled={busy || grossValue <= 0}
-                  className="flex-[2] rounded-md bg-ink-900 text-parchment-100 text-sm px-4 py-3
-                             hover:bg-ink-800 transition-colors disabled:opacity-40"
-                >
-                  {busy ? 'Проводим…' : 'Провести чек'}
+                  {busy ? 'Продаём…' : `${guest.card ? 'Пополнить' : 'Продать'} за ${fmt(nominal)} ₽`}
                 </button>
               </div>
             </div>
           )}
         </div>
       )}
+
+      {plan && guest && grossValue > 0 && (
+        <ConfirmPlanModal
+          title={
+            plan === 'card' ? 'Списать с карты' : plan === 'beans' ? 'Списать зёрна' : 'Только начислить кэшбэк'
+          }
+          onClose={() => setPlan(null)}
+          onConfirm={handleConfirmPlan}
+          busy={busy}
+        >
+          {plan === 'card' && guest.card && (
+            <div className="flex flex-col gap-2 text-sm text-ink-700">
+              <PlanRow label="Чек" value={`${fmt(grossValue)} ₽`} />
+              <PlanRow label="С карты" value={`${fmt(cardPlanned)} ₽ (баланс ${fmt(guest.card.balance)} ₽)`} />
+              {cardCash > 0 && <PlanRow label="Доплата живыми" value={`${fmt(cardCash)} ₽`} accent />}
+              {cardCash === 0 && <PlanRow label="Доплата живыми" value="не нужна" />}
+              <PlanRow label="Кэшбэк" value={`+${fmt(earnOnCard)} зёрен (${rankPercent}%)`} />
+              <p className="text-[11px] text-ink-400">
+                Прогресс ранга идёт на всю сумму чека. Баланса не хватит — спишется весь остаток.
+              </p>
+            </div>
+          )}
+          {plan === 'beans' && (
+            <div className="flex flex-col gap-2 text-sm text-ink-700">
+              <PlanRow label="Чек" value={`${fmt(grossValue)} ₽`} />
+              <label className="block">
+                <span className="block text-xs text-ink-400 mb-1.5">
+                  Зёрнами (максимум {fmt(beansMax)} — 50% чека, доступно {fmt(guest.beansBalance)})
+                </span>
+                <input
+                  id="plan-beans"
+                  type="number"
+                  min="0"
+                  step="1"
+                  max={beansMax}
+                  value={beansInput}
+                  onChange={(e) => setBeansInput(e.target.value)}
+                  disabled={beansMax === 0}
+                  placeholder={beansMax === 0 ? 'Нет живых зёрен' : '0'}
+                  className={fieldClasses}
+                />
+              </label>
+              <PlanRow label="Доплата живыми" value={`${fmt(beansCash)} ₽`} accent />
+              <PlanRow label="Кэшбэк на денежную часть" value={`+${fmt(earnOnBeans)} зёрен (${rankPercent}%)`} />
+            </div>
+          )}
+          {plan === 'earn' && (
+            <div className="flex flex-col gap-2 text-sm text-ink-700">
+              <PlanRow label="Чек" value={`${fmt(grossValue)} ₽`} />
+              <PlanRow label="Списаний" value="нет" />
+              <PlanRow label="Кэшбэк" value={`+${fmt(earnOnCard)} зёрен (${rankPercent}%)`} accent />
+            </div>
+          )}
+        </ConfirmPlanModal>
+      )}
+    </div>
+  );
+}
+
+function PlanRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="text-ink-500">{label}</span>
+      <span className={`data-value text-right ${accent ? 'text-ink-900' : 'text-ink-700'}`}>{value}</span>
+    </div>
+  );
+}
+
+function ConfirmPlanModal({
+  title,
+  children,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  title: string;
+  children: ReactNode;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink-900/60 px-6" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onClick={(event) => event.stopPropagation()}
+        className="w-full max-w-sm rounded-md bg-parchment-100 p-5"
+      >
+        <p className="font-display text-lg text-ink-900 mb-3">{title}</p>
+        <div className="mb-5">{children}</div>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="flex-1 rounded-md border border-ink-200 text-ink-700 text-sm px-4 py-3
+                       hover:bg-parchment-300 transition-colors disabled:opacity-40"
+          >
+            Отмена
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={busy}
+            className="flex-[2] rounded-md bg-ink-900 text-parchment-100 text-sm px-4 py-3
+                       hover:bg-ink-800 transition-colors disabled:opacity-40"
+          >
+            {busy ? 'Проводим…' : 'Подтвердить'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
