@@ -88,10 +88,10 @@ export function LoyaltyCardView({ card }: { card: GuestHallCard }) {
         <p className="text-xs text-ink-400 mb-4">Максимальный ранг 🏆</p>
       ) : null}
 
-      <div className="pt-3 border-t border-ink-200 flex flex-col gap-2 text-sm">
-        <div className="flex items-center justify-between">
-          <span className="text-ink-500">Зёрна</span>
-          <span className="data-value text-ink-900">
+      <div className="pt-3 border-t border-ink-200 grid grid-cols-2 gap-2">
+        <div className="rounded-md bg-parchment-200/70 px-3 py-2.5">
+          <p className="text-[11px] text-ink-400 mb-0.5">Зёрна</p>
+          <p className="data-value text-ink-900">
             {card.beansBalance.toLocaleString('ru-RU')}
             {countdown && !countdown.expired && (
               <span className={`block text-[11px] text-right ${countdownWarn ? 'text-gold-600' : 'text-ink-400'}`}>
@@ -99,12 +99,13 @@ export function LoyaltyCardView({ card }: { card: GuestHallCard }) {
               </span>
             )}
             {countdown?.expired && <span className="block text-[11px] text-ink-400">зёрна сгорели</span>}
-          </span>
+          </p>
         </div>
         {card.card && (
-          <div className="flex items-center justify-between">
-            <span className="text-ink-500">Карта</span>
-            <span className="data-value text-ink-900">{card.card.balance.toLocaleString('ru-RU')} ₽</span>
+          <div className="rounded-md border border-gold-300 bg-gold-400/10 px-3 py-2.5">
+            <p className="text-[11px] text-gold-600 mb-0.5">💳 Баланс карты</p>
+            <p className="data-value text-ink-900">{card.card.balance.toLocaleString('ru-RU')} ₽</p>
+            <p className="text-[10px] text-ink-400 mt-0.5 leading-tight">не сгорает · оплата на кассе по QR</p>
           </div>
         )}
       </div>
