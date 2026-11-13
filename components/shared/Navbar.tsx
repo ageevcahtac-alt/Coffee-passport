@@ -30,12 +30,29 @@ export function Navbar({ session }: { session: { role: ProfileRole } | null }) {
   return (
     <header className="relative px-4 sm:px-6 py-4 border-b border-ink-100/0">
       <div className="flex items-center justify-between gap-3">
-        <Link
-          href="/"
-          className="text-xs uppercase tracking-widest2 text-ink-400 font-body shrink-0"
-        >
-          Coffee Passport
-        </Link>
+        <div className="flex items-center gap-3 min-w-0">
+          <Link
+            href="/"
+            className="text-xs uppercase tracking-widest2 text-ink-400 font-body shrink-0 leading-[1.35]"
+          >
+            Coffee
+            <br />
+            Passport
+          </Link>
+          {/* Магнит в магазин обжарщика — на всех страницах, для гостя и
+              вошедшего. target=_blank + rel=noopener: уходит со своего домена
+              наружу, текущую вкладку не трогает. Перелив — CSS (.shop-chip),
+              prefers-reduced-motion глушится глобальным правилом. */}
+          <a
+            href="https://xocoffee.ru"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shop-chip inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5
+                       text-[11px] sm:text-xs font-body font-medium text-ink-900 whitespace-nowrap"
+          >
+            🛍 Купить зерно домой
+          </a>
+        </div>
 
         {/* Desktop nav — hidden below md, where it would otherwise wrap and
             overlap the logo (see the reported mobile layout bug). */}

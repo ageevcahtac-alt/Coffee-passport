@@ -221,6 +221,32 @@ select:autofill {
   transform-origin: center;
 }
 
+/* Магнит «Купить зерно домой» в шапке (components/shared/Navbar.tsx):
+   акцентная золотая чипса с лёгким переливом. Чистый CSS, без библиотек;
+   анимацию глушит глобальный prefers-reduced-motion блок ниже. */
+@keyframes chip-shimmer {
+  0% { background-position: 130% 0; }
+  100% { background-position: -130% 0; }
+}
+
+.shop-chip {
+  background-image: linear-gradient(
+    110deg,
+    var(--color-gold-300) 20%,
+    #e8cf6a 38%,
+    var(--color-gold-300) 56%,
+    var(--color-gold-400) 80%
+  );
+  background-size: 220% 100%;
+  animation: chip-shimmer 3.4s ease-in-out infinite;
+  box-shadow: 0 1px 3px rgba(43, 33, 24, 0.25);
+  transition: filter 0.15s ease-out;
+}
+
+.shop-chip:hover {
+  filter: brightness(1.06) saturate(1.05);
+}
+
 /* /map module (components/map/*): the only attribution is the OSM credit the
    tile usage policy requires — small, in the corner, without Leaflet's flag. */
 .leaflet-container .leaflet-control-attribution {
