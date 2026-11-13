@@ -271,53 +271,58 @@ async function reissueSteps(browser) {
       await page.getByText(flow.guest.display_name).waitFor({ timeout: 20000 });
       pass('guest found', 'код гостя (формат QR) -> карточка временного гостя');
 
-      // Чек 1 (AMOUNT=317): оплата картой целиком; первое потребление гостя —
-      // welcome 300 + кэшбэк 2% (R1). Дальше два чека — границы правил этапа 1.
-      await page.getByRole('button', { name: 'Провести чек' }).click();
+      // Чек 1 (AMOUNT=317): «Списать с карты» — оплата картой целиком; первое
+      // потребление гостя — welcome 300 + кэшбэк 2% (R1). Дальше два чека —
+      // границы правил этапа 1.
       await page.fill('#consume-amount', String(flow.amount));
-      await page.getByLabel(/Оплатить с карты/).check();
-      await page.fill('#pay-card-amount', String(flow.amount));
       const [rpc] = await Promise.all([
         page.waitForResponse((r) => r.url().includes('/rpc/loyalty_consume'), { timeout: 30000 }),
-        page.getByRole('button', { name: 'Провести чек' }).last().click(),
+        (async () => {
+          await page.getByRole('button', { name: /Списать с карты/ }).click();
+          await page.getByRole('button', { name: 'Подтвердить' }).click();
+        })(),
       ]);
       if (rpc.status() !== 200) throw new Error(`rpc loyalty_consume -> HTTP ${rpc.status()}`);
       await page.getByText(/Чек проведён/).waitFor({ timeout: 15000 });
-      pass('consume', `«Провести чек» ${amountText} с карты -> rpc loyalty_consume HTTP 200, чек проведён`);
+      pass('consume', `«Списать с карты» ${amountText} -> rpc loyalty_consume HTTP 200, чек проведён`);
 
       // Чек 2: лимит зёрен 50% чека. Запрашиваем 250 зёрен на чек 400 ₽ —
       // сервер обязан clamp'ить до 200 (половина чека), остаток наличными.
       // Welcome на втором чеке не начисляется (только первое потребление).
-      await page.getByRole('button', { name: 'Провести чек', exact: true }).click();
+      // Кэшбэк (0046) — только на денежную часть: 2% × (400−200) = 4.
       await page.fill('#consume-amount', '400');
-      await page.fill('#pay-beans', '250');
       const [rpc2] = await Promise.all([
         page.waitForResponse((r) => r.url().includes('/rpc/loyalty_consume'), { timeout: 30000 }),
-        page.getByRole('button', { name: 'Провести чек' }).last().click(),
+        (async () => {
+          await page.getByRole('button', { name: /Списать зёрна/ }).click();
+          await page.fill('#plan-beans', '250');
+          await page.getByRole('button', { name: 'Подтвердить' }).click();
+        })(),
       ]);
       if (rpc2.status() !== 200) throw new Error(`rpc loyalty_consume #2 -> HTTP ${rpc2.status()}`);
       const c2 = (await rpc2.json()).consumption;
-      if (c2.beans_redeemed !== 200 || Number(c2.cash_amount) !== 200 || c2.beans_earned !== 8 || c2.welcome_granted !== 0) {
-        throw new Error(`чек 2: beans_redeemed=${c2.beans_redeemed} cash=${c2.cash_amount} earned=${c2.beans_earned} welcome=${c2.welcome_granted}, ожидалось 200/200/8/0`);
+      if (c2.beans_redeemed !== 200 || Number(c2.cash_amount) !== 200 || c2.beans_earned !== 4 || c2.welcome_granted !== 0) {
+        throw new Error(`чек 2: beans_redeemed=${c2.beans_redeemed} cash=${c2.cash_amount} earned=${c2.beans_earned} welcome=${c2.welcome_granted}, ожидалось 200/200/4/0`);
       }
-      pass('beans 50% cap', 'чек 400 ₽: запрошено 250 зёрен → списано 200 (ровно 50%), наличными 200, кэшбэк +8, welcome не повторился');
+      pass('beans 50% cap', 'чек 400 ₽: запрошено 250 зёрен → списано 200 (ровно 50%), наличными 200, кэшбэк +4 (денежная часть), welcome не повторился');
 
-      // Чек 3: частичное списание с карты + доплата. Запрашиваем 700 ₽ с карты
-      // при балансе 683 — сервер clamp'ит к балансу, недостача (117) наличными.
-      await page.getByRole('button', { name: 'Провести чек', exact: true }).click();
+      // Чек 3: частичное списание с карты + доплата. Запрашиваем чек 800 ₽
+      // целиком с карты при балансе 683 — сервер clamp'ит к балансу, недостача
+      // (117) наличными.
       await page.fill('#consume-amount', '800');
-      await page.getByLabel(/Оплатить с карты/).check();
-      await page.fill('#pay-card-amount', '700');
       const [rpc3] = await Promise.all([
         page.waitForResponse((r) => r.url().includes('/rpc/loyalty_consume'), { timeout: 30000 }),
-        page.getByRole('button', { name: 'Провести чек' }).last().click(),
+        (async () => {
+          await page.getByRole('button', { name: /Списать с карты/ }).click();
+          await page.getByRole('button', { name: 'Подтвердить' }).click();
+        })(),
       ]);
       if (rpc3.status() !== 200) throw new Error(`rpc loyalty_consume #3 -> HTTP ${rpc3.status()}`);
       const c3 = (await rpc3.json()).consumption;
       if (Number(c3.card_amount) !== 683 || Number(c3.cash_amount) !== 117 || c3.beans_earned !== 16 || c3.welcome_granted !== 0) {
         throw new Error(`чек 3: card=${c3.card_amount} cash=${c3.cash_amount} earned=${c3.beans_earned} welcome=${c3.welcome_granted}, ожидалось 683/117/16/0`);
       }
-      pass('partial card + cash', 'чек 800 ₽: запрошено 700 с карты → списано 683 (весь остаток), доплата 117 наличными, кэшбэк +16');
+      pass('partial card + cash', 'чек 800 ₽: баланс карты 683 → списано 683 (весь остаток), доплата 117 наличными, кэшбэк +16');
     });
 
     await step(browser, 'cafe sees the operation', async (page) => {
