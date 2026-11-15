@@ -26,6 +26,7 @@ export default function LoyaltyPage() {
   const [cards, setCards] = useState<GuestHallCard[] | null>(null);
   const [history, setHistory] = useState<LoyaltyHistoryItem[]>([]);
   const [profile, setProfile] = useState<OwnProfile | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [qrOpen, setQrOpen] = useState(false);
   const [showAllHistory, setShowAllHistory] = useState(false);
 
@@ -39,9 +40,13 @@ export default function LoyaltyPage() {
       if (!cancelled) setHistory(items);
     });
     // Свой профиль — через fetchOwnProfile (без ролевого фильтра): источник
-    // истины БД, имя переживает перезаход/перелогин/смену устройства.
+    // истины БД, имя переживает перезаход/перелогин/смену устройства. Ошибка
+    // чтения не глотается: уходит в блок профиля как текст + console.error
+    // (баг пакета №3: молчаливая null-ветка прятала блок целиком).
     fetchOwnProfile().then((result) => {
-      if (!cancelled) setProfile(result);
+      if (cancelled) return;
+      if (result.ok) setProfile(result.profile);
+      else setProfileError(result.error);
     });
     return () => {
       cancelled = true;
@@ -80,7 +85,15 @@ export default function LoyaltyPage() {
           Ранги, зёрна и карта-депозит в кофейнях-партнёрах — единая учётная запись Coffee Passport.
         </p>
 
-        {profile && <GuestProfileEditor profile={profile} onSaved={setProfile} />}
+        {/* Блок профиля — всегда: профиль не загрузился/пустой → форма с
+            пустыми полями и предупреждением, а не исчезнувшая секция. */}
+        <GuestProfileEditor
+          profile={profile}
+          loadError={profileError}
+          onSaved={(patch) =>
+            setProfile((prev) => ({ id: prev?.id ?? userId, email: prev?.email ?? null, ...patch }))
+          }
+        />
 
         <button
           type="button"

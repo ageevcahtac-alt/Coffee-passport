@@ -137,6 +137,10 @@ export async function fetchGuestProfile(
 // любая роль читает свой display_name/phone/city/favorite_drink обратно.
 // Это и есть фикс бага «имя слетает после перезахода»: fetchGuestProfile с
 // её role='enthusiast' для staff-аккаунта молча возвращала null.
+// Контракт результата — дискриминированный union: ЛК обязан рендерить блок
+// профиля ВСЕГДА, поэтому «не получилось» и «строки нет» — разные ветки,
+// ошибка не глотается (console.error + понятный текст на экране), иначе
+// пустой профиль неотличим от сбоя и блок целиком исчезает (баг пакета №3).
 export interface OwnProfile {
   id: string;
   displayName: string | null;
@@ -146,29 +150,47 @@ export interface OwnProfile {
   favoriteDrink: string | null;
 }
 
-export async function fetchOwnProfile(): Promise<OwnProfile | null> {
+export type OwnProfileResult =
+  | { ok: true; profile: OwnProfile | null }
+  | { ok: false; error: string };
+
+export async function fetchOwnProfile(): Promise<OwnProfileResult> {
   try {
     const supabase = getBrowserSupabaseClient();
     const {
       data: { user },
+      error: userError,
     } = await supabase.auth.getUser();
-    if (!user) return null;
+    if (userError || !user) {
+      console.error('[loyalty] fetchOwnProfile: сессия не определилась', userError?.message ?? '');
+      return { ok: false, error: 'Сессия не определилась — войдите ещё раз.' };
+    }
     const { data, error } = await supabase
       .from('profiles')
       .select('id, display_name, email, phone, city, favorite_drink')
       .eq('id', user.id)
       .maybeSingle();
-    if (error || !data) return null;
+    if (error) {
+      console.error('[loyalty] fetchOwnProfile:', error.message);
+      return { ok: false, error: error.message };
+    }
+    // Строки нет (аккаунт без profiles — форма покажется пустой): не ошибка.
+    if (!data) return { ok: true, profile: null };
     return {
-      id: data.id,
-      displayName: data.display_name,
-      email: data.email,
-      phone: data.phone,
-      city: data.city,
-      favoriteDrink: data.favorite_drink,
+      ok: true,
+      profile: {
+        id: data.id,
+        displayName: data.display_name,
+        email: data.email,
+        phone: data.phone,
+        city: data.city,
+        favoriteDrink: data.favorite_drink,
+      },
     };
-  } catch {
-    return null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Неизвестная ошибка';
+    console.error('[loyalty] fetchOwnProfile:', message);
+    return { ok: false, error: message };
   }
 }
 

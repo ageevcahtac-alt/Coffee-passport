@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { updateOwnProfile, type OwnProfile } from '@/lib/data/loyalty';
+import { updateOwnProfile, type OwnProfile, type OwnProfilePatch } from '@/lib/data/loyalty';
 import { formatPhoneMask } from '@/lib/utils/phone';
 
 // Типовые напитки выпадающего списка + «другое» со свободным текстом
@@ -40,27 +40,32 @@ const inputClasses =
 // Имя — то же display_name, что видит бариста при сканировании QR; почта —
 // read-only логин. Сохранение идёт в БД (updateOwnProfile), после чего ЛК
 // перечитывает профиль — введённое переживает перезаход и смену устройства.
+// Блок рендерится ВСЕГДА для вошедшего гостя: profile=null — пустая форма
+// (строки в БД ещё нет или чтение не удалось), loadError — понятное
+// сообщение в блоке вместо молча исчезнувшей секции (баг пакета №3).
 export function GuestProfileEditor({
   profile,
+  loadError = null,
   onSaved,
 }: {
-  profile: OwnProfile;
-  onSaved: (profile: OwnProfile) => void;
+  profile: OwnProfile | null;
+  loadError?: string | null;
+  onSaved: (patch: OwnProfilePatch) => void;
 }) {
-  const initialDrink = drinkToForm(profile.favoriteDrink);
-  const [displayName, setDisplayName] = useState(profile.displayName ?? '');
-  const [phone, setPhone] = useState(profile.phone ?? '');
-  const [city, setCity] = useState(profile.city ?? '');
+  const initialDrink = drinkToForm(profile?.favoriteDrink ?? null);
+  const [displayName, setDisplayName] = useState(profile?.displayName ?? '');
+  const [phone, setPhone] = useState(profile?.phone ?? '');
+  const [city, setCity] = useState(profile?.city ?? '');
   const [drinkSelect, setDrinkSelect] = useState(initialDrink.select);
   const [drinkOther, setDrinkOther] = useState(initialDrink.other);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
-    setDisplayName(profile.displayName ?? '');
-    setPhone(profile.phone ?? '');
-    setCity(profile.city ?? '');
-    const drink = drinkToForm(profile.favoriteDrink);
+    setDisplayName(profile?.displayName ?? '');
+    setPhone(profile?.phone ?? '');
+    setCity(profile?.city ?? '');
+    const drink = drinkToForm(profile?.favoriteDrink ?? null);
     setDrinkSelect(drink.select);
     setDrinkOther(drink.other);
   }, [profile]);
@@ -82,11 +87,10 @@ export function GuestProfileEditor({
     }
     setNotice({ kind: 'ok', text: 'Профиль сохранён.' });
     onSaved({
-      ...profile,
-      displayName: displayName.trim() || null,
-      phone: formatPhoneMask(phone) || null,
-      city: city.trim() || null,
-      favoriteDrink: formToDrink(drinkSelect, drinkOther) || null,
+      displayName: displayName.trim(),
+      phone: formatPhoneMask(phone),
+      city: city.trim(),
+      favoriteDrink: formToDrink(drinkSelect, drinkOther),
     });
   }
 
@@ -96,6 +100,12 @@ export function GuestProfileEditor({
         <p className="text-sm text-ink-900">Профиль</p>
         <p className="text-[11px] text-ink-400">Имя и любимый напиток увидит бариста при заказе</p>
       </div>
+
+      {loadError && (
+        <p role="alert" className="mb-4 text-sm text-rating">
+          ⚠ Профиль не загрузился: {loadError}. Заполните поля и сохраните — данные запишутся в ваш аккаунт.
+        </p>
+      )}
 
       <div className="flex flex-col gap-3.5">
         <label className="block">
@@ -111,7 +121,7 @@ export function GuestProfileEditor({
         <div>
           <span className="block text-xs text-ink-400 mb-1.5">Почта</span>
           <p className="rounded-md border border-ink-100 bg-parchment-200/60 px-3 py-2.5 text-sm text-ink-500 select-all">
-            {profile.email ?? '—'}
+            {profile?.email ?? '—'}
           </p>
           <p className="text-[11px] text-ink-400 mt-1">логин, изменить нельзя</p>
         </div>

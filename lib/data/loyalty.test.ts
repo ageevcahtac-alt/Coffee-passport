@@ -16,6 +16,7 @@ const recorded: RecordedQuery[] = [];
 
 let authUser: { id: string } | null = { id: 'user-1' };
 let profileRow: Record<string, unknown> | null = null;
+let readError: { message: string } | null = null;
 let writeError: { message: string } | null = null;
 
 function makeQuery(rec: RecordedQuery): unknown {
@@ -32,7 +33,9 @@ function makeQuery(rec: RecordedQuery): unknown {
       return chain;
     },
     maybeSingle() {
-      return Promise.resolve({ data: profileRow, error: profileRow ? null : { message: 'row not found' } });
+      // data=null + error=null — настоящий «строки нет» (maybeSingle);
+      // readError — сбой чтения (RLS/сеть).
+      return Promise.resolve({ data: profileRow, error: readError });
     },
     then(onFulfilled: (value: unknown) => unknown, onRejected: (reason: unknown) => unknown) {
       // .update(...).eq(...) await'ится как промис — разрешаем результатом записи.
@@ -73,6 +76,7 @@ describe('loyalty data layer — own profile vs staff guest lookup', () => {
     recorded.length = 0;
     authUser = { id: 'user-1' };
     profileRow = null;
+    readError = null;
     writeError = null;
   });
 
@@ -86,10 +90,13 @@ describe('loyalty data layer — own profile vs staff guest lookup', () => {
       favorite_drink: 'Флэт уайт',
     };
     const loyalty = await import('./loyalty');
-    const profile = await loyalty.fetchOwnProfile();
+    const result = await loyalty.fetchOwnProfile();
 
-    expect(profile?.displayName).toBe('Михаил');
-    expect(profile?.favoriteDrink).toBe('Флэт уайт');
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.profile?.displayName).toBe('Михаил');
+      expect(result.profile?.favoriteDrink).toBe('Флэт уайт');
+    }
     const rec = recorded.find((r) => r.table === 'profiles');
     expect(rec).toBeDefined();
     expect(rec!.eqs).toContainEqual(['id', 'user-1']);
@@ -97,6 +104,36 @@ describe('loyalty data layer — own profile vs staff guest lookup', () => {
     // у которой eq(role, 'enthusiast') молча давал null для staff-аккаунта.
     expect(rec!.eqs.some(([column]) => column === 'role')).toBe(false);
     expect(rec!.select).toContain('favorite_drink');
+  });
+
+  it('fetchOwnProfile: строки нет — ok с пустым профилем (форма рендерится пустой)', async () => {
+    const loyalty = await import('./loyalty');
+    const result = await loyalty.fetchOwnProfile();
+
+    expect(result).toEqual({ ok: true, profile: null });
+  });
+
+  it('fetchOwnProfile: сбой чтения — ok:false с текстом ошибки и console.error (баг пакета №3)', async () => {
+    readError = { message: 'RLS: политика не пускает' };
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const loyalty = await import('./loyalty');
+    const result = await loyalty.fetchOwnProfile();
+
+    expect(result).toEqual({ ok: false, error: 'RLS: политика не пускает' });
+    expect(spy).toHaveBeenCalledWith('[loyalty] fetchOwnProfile:', 'RLS: политика не пускает');
+    spy.mockRestore();
+  });
+
+  it('fetchOwnProfile: сессия не определилась — окно ошибки, а не молчаливый null', async () => {
+    authUser = null;
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const loyalty = await import('./loyalty');
+    const result = await loyalty.fetchOwnProfile();
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('Сессия');
+    expect(recorded.find((r) => r.table === 'profiles')).toBeUndefined();
+    spy.mockRestore();
   });
 
   it('fetchGuestProfile сохраняет фильтр role=enthusiast (staff читает карту гостя)', async () => {

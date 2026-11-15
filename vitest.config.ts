@@ -12,6 +12,12 @@ export default defineConfig({
       '@': path.resolve(__dirname, '.'),
     },
   },
+  // JSX у компонентов — automatic runtime (как у SWC в Next-сборке): иначе
+  // esbuild превращает JSX в React.createElement и падает с «React is not
+  // defined» — импорт React в каждый компонент ради тестов не заводим.
+  esbuild: {
+    jsx: 'automatic',
+  },
   test: {
     // Playwright-спеки в e2e/ не belong vitest'у — они гоняются через
     // `npm run test:e2e` (Chromium, webServer из playwright.config.ts).
