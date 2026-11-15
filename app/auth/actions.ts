@@ -58,9 +58,11 @@ export async function signInWithPassword(formData: FormData) {
   }
 
   // The form's default landings ('/' from /auth/login, '/journey' from the
-  // homepage) are the enthusiast's diary. A staff account arriving with one
-  // of those goes to its own cabinet instead; an explicit `next` (QR
-  // passport, requireStaffRole's bounce back to a dashboard) still wins.
+  // homepage) route by role — nobody stops on the homepage's intermediate
+  // "Вы вошли как / Перейти в кабинет" card after signing in (package №3):
+  // staff goes to its own cabinet (as before), the enthusiast goes straight
+  // to /loyalty. An explicit `next` (QR passport, requireStaffRole's bounce
+  // back to a dashboard) still wins — that is return context, not a default.
   let destination = next
   if ((next === '/' || next === '/journey') && data?.user) {
     const { data: profile } = await supabase
@@ -69,7 +71,9 @@ export async function signInWithPassword(formData: FormData) {
       .eq('id', data.user.id)
       .maybeSingle()
     const role = profile?.role as ProfileRole | undefined
-    destination = role && isStaffRole(role) ? cabinetPathFor(role) : next
+    if (role) {
+      destination = isStaffRole(role) ? cabinetPathFor(role) : '/loyalty'
+    }
   }
 
   revalidatePath('/', 'layout')

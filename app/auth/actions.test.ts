@@ -55,7 +55,7 @@ describe('password actions return usable contextual errors', () => {
   }
 });
 
-describe('login lands staff accounts in their own cabinet', () => {
+describe('login lands every role straight in its cabinet', () => {
   beforeEach(() => {
     mocks.auth.mockReset().mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
     mocks.profile.mockReset();
@@ -82,9 +82,16 @@ describe('login lands staff accounts in their own cabinet', () => {
       await expect(login()).rejects.toThrow(path);
     });
   }
-  it('enthusiast keeps the default landing', async () => {
+  it('enthusiast from a default landing goes straight to /loyalty (no intermediate screen)', async () => {
     mocks.profile.mockResolvedValue({ data: { role: 'enthusiast' }, error: null });
-    await expect(login('/journey')).rejects.toThrow(/^\/journey$/);
+    await expect(login('/journey')).rejects.toThrow(/^\/loyalty$/);
+    await expect(login('/')).rejects.toThrow(/^\/loyalty$/);
+    await expect(login()).rejects.toThrow(/^\/loyalty$/);
+  });
+  it('enthusiast with an explicit next keeps the return context', async () => {
+    mocks.profile.mockResolvedValue({ data: { role: 'enthusiast' }, error: null });
+    await expect(login('/passport/X')).rejects.toThrow(/^\/passport\/X$/);
+    expect(mocks.profile).not.toHaveBeenCalled();
   });
   it('profile lookup failure keeps the default landing', async () => {
     mocks.profile.mockResolvedValue({ data: null, error: { message: 'boom' } });
