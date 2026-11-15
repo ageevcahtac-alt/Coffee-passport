@@ -13,7 +13,7 @@
 //      (тот же путь, что после скана QR: extractGuestId → loadGuest) → четыре чека: 317 ₽ с карты
 //      (welcome +300, кэшбэк 2%), 400 ₽ со списанием зёрен (сервер clamp'ит до 50% чека),
 //      800 ₽ с частичной оплатой картой + доплата наличными, 200 ₽ «только начислить»
-//      (кэшбэк 2% × 200, списаний нет — сумма доводит траты до 1717, ранг «Любитель» не меняется);
+//      (списаний нет, кэшбэк по рангу «Любитель» 3% × 200 — траты уже 1517 с чека 3);
 //   3) кабинет кофейни → «Лояльность»: гость и операция на сумму чека видны.
 // Запуск (из workflow verify-barista-access): node verify-barista-access.cjs <путь к playwright> create|main
 // env: PROD_URL, FLOW_JSON (путь к JSON), SHOTS_DIR (скриншоты при сбое).
@@ -326,8 +326,9 @@ async function reissueSteps(browser) {
       pass('partial card + cash', 'чек 800 ₽: баланс карты 683 → списано 683 (весь остаток), доплата 117 наличными, кэшбэк +16');
 
       // Чек 4: «Только начислить» — гость платит 200 ₽ живыми, списаний нет
-      // (карта уже пуста), кэшбэк 2% × 200 = 4. Траты 317+400+800+200 = 1717 —
-      // ранг «Любитель» (≥1000, <2000 «Дегустатор»), welcome не повторяется.
+      // (карта уже пуста). Траты 317+400+800 = 1517 ≥ 1000 — с чека 3 ранг
+      // «Любитель» (3%), кэшбэк 3% × 200 = 6. Траты 1717 < 2000 — ранг после
+      // чека тот же, welcome не повторяется.
       await page.fill('#consume-amount', '200');
       const [rpc4] = await Promise.all([
         page.waitForResponse((r) => r.url().includes('/rpc/loyalty_consume'), { timeout: 30000 }),
@@ -338,10 +339,10 @@ async function reissueSteps(browser) {
       ]);
       if (rpc4.status() !== 200) throw new Error(`rpc loyalty_consume #4 -> HTTP ${rpc4.status()}`);
       const c4 = (await rpc4.json()).consumption;
-      if (Number(c4.card_amount) !== 0 || Number(c4.cash_amount) !== 200 || c4.beans_redeemed !== 0 || c4.beans_earned !== 4 || c4.welcome_granted !== 0) {
-        throw new Error(`чек 4: card=${c4.card_amount} cash=${c4.cash_amount} beans=${c4.beans_redeemed} earned=${c4.beans_earned} welcome=${c4.welcome_granted}, ожидалось 0/200/0/4/0`);
+      if (Number(c4.card_amount) !== 0 || Number(c4.cash_amount) !== 200 || c4.beans_redeemed !== 0 || c4.beans_earned !== 6 || c4.welcome_granted !== 0) {
+        throw new Error(`чек 4: card=${c4.card_amount} cash=${c4.cash_amount} beans=${c4.beans_redeemed} earned=${c4.beans_earned} welcome=${c4.welcome_granted}, ожидалось 0/200/0/6/0`);
       }
-      pass('earn only', 'чек 200 ₽ «только начислить»: списаний нет, наличными 200, кэшбэк +4, welcome не повторился');
+      pass('earn only', 'чек 200 ₽ «только начислить»: списаний нет, наличными 200, кэшбэк +6 (ранг «Любитель» 3%), welcome не повторился');
     });
 
     await step(browser, 'cafe sees the operation', async (page) => {

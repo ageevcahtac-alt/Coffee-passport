@@ -18,8 +18,8 @@ Email и пароли приходят только JSON-ом на stdin и ни
              (317 ₽ с карты + welcome 300 и кэшбэк 2%; 400 ₽ со списанием 250 зёрен,
              clamp до 50% чека = 200, кэшбэк только на денежную часть +4; 800 ₽ —
              частичная оплата картой 683 + доплата 117; 200 ₽ «только начислить» —
-             списаний нет, кэшбэк +4),
-             welcome ровно один раз, сумма движений зёрен 130, ранг по тратам
+             списаний нет, кэшбэк +6: ранг «Любитель» 3%, траты 1517 с чека 3),
+             welcome ровно один раз, сумма движений зёрен 132, ранг по тратам
              «Любитель»; те же строки глазами кабинета кофейни (вход паролем и чтение
              loyalty_consumptions по shop_id, как lib/data/loyalty.ts).
              expect=absent: гостя и его строк нет нигде. В обоих — чужие строки как в снимке.
@@ -347,13 +347,14 @@ def check(payload):
         # clamp до 200 (ровно 50% чека), наличными 200, кэшбэк 4 — только на
         # денежную часть 2% × (400−200); (3) чек 800 ₽ — запрошено целиком с
         # карты, clamp к балансу 683, доплата 117, кэшбэк 16 (карта — деньги);
-        # (4) чек 200 ₽ «только начислить» — списаний нет, наличными 200,
-        # кэшбэк 4. Траты 317+400+800+200 = 1717 — ранг «Любитель», не «Дегустатор».
+        # траты 1517 ≥ 1000 — статус уже «Любитель» (3%); (4) чек 200 ₽ «только
+        # начислить» — списаний нет, наличными 200, кэшбэк 3% × 200 = 6. Траты
+        # 1717 < 2000 — ранг после чека «Любитель», не «Дегустатор».
         expected_by_gross = {
             amount: {'card_amount': amount, 'cash_amount': 0, 'beans_redeemed': 0, 'beans_earned': 6, 'welcome_granted': 300},
             400: {'card_amount': 0, 'cash_amount': 200, 'beans_redeemed': 200, 'beans_earned': 4, 'welcome_granted': 0},
             800: {'card_amount': 683, 'cash_amount': 117, 'beans_redeemed': 0, 'beans_earned': 16, 'welcome_granted': 0},
-            200: {'card_amount': 0, 'cash_amount': 200, 'beans_redeemed': 0, 'beans_earned': 4, 'welcome_granted': 0},
+            200: {'card_amount': 0, 'cash_amount': 200, 'beans_redeemed': 0, 'beans_earned': 6, 'welcome_granted': 0},
         }
         actual_by_gross = {float(c['gross_amount']): c for c in consumptions}
         problems = []
@@ -370,14 +371,14 @@ def check(payload):
                 problems.append(f'чек {gross:g}: barista_id={c["barista_id"]}')
         expect('four consumes by barista with rule bounds', not problems,
                '; '.join(problems) if problems else
-               '317 с карты (+300 welcome, +6) · 400 с 200 зёрен clamp 50% (+4 на денежную часть) · 800: карта 683 + доплата 117 (+16) · 200 только начислить (+4)')
+               '317 с карты (+300 welcome, +6) · 400 с 200 зёрен clamp 50% (+4 на денежную часть) · 800: карта 683 + доплата 117 (+16) · 200 только начислить (+6, ранг «Любитель» 3%)')
         welcome_rows = [c for c in consumptions if c['welcome_granted'] == 300]
         expect('welcome granted exactly once', len(welcome_rows) == 1 and sum(c['welcome_granted'] for c in consumptions) == 300,
                f'строк с welcome=300: {len(welcome_rows)}, сумма {sum(c["welcome_granted"] for c in consumptions)}')
         beans = rows['beans_ledger']
         beans_total = sum(b['delta'] for b in beans)
-        expect('beans ledger total', len(beans) == 6 and beans_total == 130,
-               f'{len(beans)} движений, сумма {beans_total} (ожидалось 6/130: +300 +6 −200 +4 +16 +4): '
+        expect('beans ledger total', len(beans) == 6 and beans_total == 132,
+               f'{len(beans)} движений, сумма {beans_total} (ожидалось 6/132: +300 +6 −200 +4 +16 +6): '
                + ', '.join(f'{b["reason"]} {b["delta"]:+d}' for b in beans))
         _, rank_rows = call('GET', f'/rest/v1/shop_ranks?select=id,rank_name&shop_id=eq.{shop}&rank_name=eq.{quote("Любитель")}')
         rank_id = rank_rows[0]['id'] if rank_rows else None
