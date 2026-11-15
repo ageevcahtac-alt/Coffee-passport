@@ -131,6 +131,7 @@ describe('loyalty data layer — own profile vs staff guest lookup', () => {
     const result = await loyalty.fetchOwnProfile();
 
     expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('ожидался сбой чтения, получен профиль');
     expect(result.error).toContain('Сессия');
     expect(recorded.find((r) => r.table === 'profiles')).toBeUndefined();
     spy.mockRestore();
