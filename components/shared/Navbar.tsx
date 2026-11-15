@@ -28,7 +28,15 @@ export function Navbar({ session }: { session: { role: ProfileRole } | null }) {
   const items = navItemsFor(session, currentPath);
 
   return (
-    <header className="relative px-4 sm:px-6 py-4 border-b border-ink-100/0">
+    // Липкая шапка (пакет №3): sticky — при скролле остаётся наверху с
+    // непрозрачным фоном, границей и тенью; z-40 — НИЖЕ модалок/дроуера/
+    // панели уведомлений (z-50), чтобы не перекрывать их. Leaflet-панели
+    // карты (z до 1000) держим внутри .leaflet-container через z-index: 0
+    // в globals.css — иначе тайлы/маркеры рисовались бы поверх шапки.
+    // На мобиле — компактная высота (py-2.5), чипса «Купить зерно домой»
+    // остаётся на месте.
+    <header className="sticky top-0 z-40 bg-parchment-100 px-4 sm:px-6 py-2.5 md:py-4
+                       border-b border-ink-100 shadow-[0_1px_4px_rgba(43,33,24,0.08)]">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <Link
