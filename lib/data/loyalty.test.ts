@@ -18,6 +18,9 @@ let authUser: { id: string } | null = { id: 'user-1' };
 let profileRow: Record<string, unknown> | null = null;
 let readError: { message: string } | null = null;
 let writeError: { message: string } | null = null;
+// Строка, которую сервер «вернул» на UPDATE … RETURNING (null = RLS отсёк
+// UPDATE молча, ни одной затронутой строки — пустое 200 от PostgREST).
+let writeRow: Record<string, unknown> | null = { id: 'user-1' };
 
 function makeQuery(rec: RecordedQuery): unknown {
   const chain: Record<string, unknown> = {
@@ -33,12 +36,16 @@ function makeQuery(rec: RecordedQuery): unknown {
       return chain;
     },
     maybeSingle() {
-      // data=null + error=null — настоящий «строки нет» (maybeSingle);
-      // readError — сбой чтения (RLS/сеть).
+      // UPDATE-цепочка (rec.update уже записан) — результат записи:
+      // writeRow=null + writeError=null — молчаливый RLS-no-op (пакет №4);
+      // чтение — data=null + error=null — настоящий «строки нет», readError —
+      // сбой чтения (RLS/сеть).
+      if (rec.update !== null) return Promise.resolve({ data: writeRow, error: writeError });
       return Promise.resolve({ data: profileRow, error: readError });
     },
     then(onFulfilled: (value: unknown) => unknown, onRejected: (reason: unknown) => unknown) {
-      // .update(...).eq(...) await'ится как промис — разрешаем результатом записи.
+      // await чейна резрешается результатом записи (безопасный дефолт для
+      // цепочек без maybeSingle).
       return Promise.resolve({ error: writeError }).then(onFulfilled, onRejected);
     },
   };
@@ -78,6 +85,7 @@ describe('loyalty data layer — own profile vs staff guest lookup', () => {
     profileRow = null;
     readError = null;
     writeError = null;
+    writeRow = { id: 'user-1' };
   });
 
   it('fetchOwnProfile читает свой профиль без ролевого фильтра', async () => {
@@ -204,6 +212,40 @@ describe('loyalty data layer — own profile vs staff guest lookup', () => {
 
     expect(result.ok).toBe(false);
     expect(result.error).toBe('RLS denied');
+  });
+
+  it('updateOwnProfile требует подтверждения записи: .select() в цепочке UPDATE', async () => {
+    const loyalty = await import('./loyalty');
+    const result = await loyalty.updateOwnProfile({
+      displayName: 'Михаил',
+      phone: '',
+      city: '',
+      favoriteDrink: '',
+    });
+
+    expect(result.ok).toBe(true);
+    const rec = recorded.find((r) => r.table === 'profiles');
+    // Пакет №4: без RETURNING-части молчаливый RLS-no-op неотличим от успеха.
+    expect(rec!.select).toBe('id');
+  });
+
+  it('updateOwnProfile: 0 затронутых строк = честный сбой, не фальшивый успех (баг пакета №4)', async () => {
+    writeRow = null; // PostgREST: 200, пустое тело — RLS/грант отсекли UPDATE
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const loyalty = await import('./loyalty');
+    const result = await loyalty.updateOwnProfile({
+      displayName: 'Михаил',
+      phone: '+7 (900) 123-45-67',
+      city: '',
+      favoriteDrink: '',
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('не сохранил');
+    expect(spy).toHaveBeenCalledWith(
+      '[loyalty] updateOwnProfile: UPDATE не затронул строку (RLS/грант или отсутствие profiles-строки)'
+    );
+    spy.mockRestore();
   });
 
   it('без сессии updateOwnProfile отказывает без запроса к БД', async () => {

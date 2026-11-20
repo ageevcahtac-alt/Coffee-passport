@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/adminClient';
 import { isCronRequestAuthorized } from '@/lib/events/cronAuth';
 import { getEventSources } from '@/lib/events/sources';
+import { ensureCuratedEvents } from '@/lib/events/curatedEvents';
+import { isEventLinkAlive } from '@/lib/events/linkCheck';
 
 // Daily aggregator pass: pulls candidates from every configured
 // EventSource (see lib/events/sources — none by default, an operator
@@ -11,6 +13,11 @@ import { getEventSources } from '@/lib/events/sources';
 // twice, or an event this run already ingested before, is a no-op, not a
 // duplicate row. New candidates never touch the public board until an
 // admin approves them in /dashboard/admin/events.
+//
+// Пакет №4: (1) ссылка кандидата проверяется перед записью — битая
+// обнуляется, мёртвых ссылок на витрине нет; (2) после ingestion — top-up
+// кураторской лентой: на витрине ВСЕГДА ≥4 ближайших события, даже если
+// внешние источники молчат (гарантия на уровне данных, не UI).
 export async function POST(request: Request) {
   if (!isCronRequestAuthorized(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -21,6 +28,7 @@ export async function POST(request: Request) {
 
   let candidatesSeen = 0;
   let inserted = 0;
+  let deadLinksBlanked = 0;
   const sourceErrors: { source: string; error: string }[] = [];
 
   for (const source of sources) {
@@ -34,13 +42,20 @@ export async function POST(request: Request) {
 
     for (const candidate of candidates) {
       candidatesSeen += 1;
+      // Пакет №4: битая ссылка → событие публикуется без ссылки (link=''),
+      // а не с 404 на витрине. Источнику доверяем только живое.
+      let link = candidate.link.trim();
+      if (link && !(await isEventLinkAlive(link))) {
+        link = '';
+        deadLinksBlanked += 1;
+      }
       const { data, error } = await supabase.rpc('events_ingest_candidate', {
         p_title: candidate.title,
         p_location: candidate.location,
         p_description: candidate.description,
         p_start_date: candidate.startDate,
         p_end_date: candidate.endDate,
-        p_link: candidate.link,
+        p_link: link,
         p_source: source.id,
       });
       if (error) {
@@ -51,5 +66,21 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ sourcesConfigured: sources.length, candidatesSeen, inserted, sourceErrors });
+  let topUp = { activeCount: 0, inserted: 0 };
+  let topUpError: string | null = null;
+  try {
+    topUp = await ensureCuratedEvents(supabase);
+  } catch (err) {
+    topUpError = err instanceof Error ? err.message : 'Unknown top-up error';
+    console.error('[cron/events-aggregate] curated top-up failed', err);
+  }
+
+  return NextResponse.json({
+    sourcesConfigured: sources.length,
+    candidatesSeen,
+    inserted,
+    deadLinksBlanked,
+    sourceErrors,
+    curatedTopUp: { ...topUp, error: topUpError },
+  });
 }

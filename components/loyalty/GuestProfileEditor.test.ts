@@ -3,22 +3,28 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { GuestProfileEditor } from './GuestProfileEditor';
 
-// Регрессия бага пакета №3: в ЛК гостя блок «Профиль» исчезал целиком, когда
-// fetchOwnProfile возвращал null (пустой/недоступный профиль) — условие
-// {profile && …} на странице. Контракт теперь: блок рендерится ВСЕГДА,
-// ошибка чтения — видимое предупреждение в блоке. Тестируем SSR-разметку
-// (react-dom/server — без jsdom, который в проект намеренно не ставится).
+// Регрессия багов пакетов №3–4. Пакет №3: блок «Профиль» в ЛК гостя
+// исчезал целиком, когда fetchOwnProfile возвращал null — контракт теперь:
+// блок рендерится ВСЕГДА, ошибка чтения — видимое предупреждение в блоке.
+// Пакет №4: блок компактный — свёрнуто видно имя и любимый напиток (или
+// плейсхолдер «Как к вам обращаться?») + чипса «Изменить профиль»; форма
+// раскрывается только по клику, поэтому в SSR-разметке её полей нет.
+// Почта из блока убрана полностью (задача 3 пакета №4) — это логин, в
+// профиле не нужна. Тестируем SSR-разметку (react-dom/server — без jsdom,
+// который в проект намеренно не ставится).
 
-describe('GuestProfileEditor — блок профиля рендерится всегда (баг пакета №3)', () => {
-  it('при null-профиле: форма с пустыми полями и заглушкой почты, без undefined', () => {
+describe('GuestProfileEditor — компактный блок, рендерится всегда (пакеты №3–4)', () => {
+  it('при null-профиле: свёрнутый блок с плейсхолдером и чипсой, без undefined', () => {
     const html = renderToStaticMarkup(
       createElement(GuestProfileEditor, { profile: null, onSaved: () => {} })
     );
 
     expect(html).toContain('Профиль');
     expect(html).toContain('Как к вам обращаться?');
-    expect(html).toContain('Сохранить профиль');
-    expect(html).toContain('Любимый напиток');
+    expect(html).toContain('Изменить профиль');
+    // Форма свёрнута — её поля и кнопка сохранения не рендерятся.
+    expect(html).not.toContain('Сохранить профиль');
+    expect(html).not.toContain('Любимый напиток');
     expect(html).not.toContain('undefined');
   });
 
@@ -29,11 +35,11 @@ describe('GuestProfileEditor — блок профиля рендерится в
 
     expect(html).toContain('Профиль не загрузился');
     expect(html).toContain('RLS denied');
-    // Форма при этом остаётся доступна для заполнения.
-    expect(html).toContain('Сохранить профиль');
+    // Чипса при этом доступна — форму можно раскрыть и заполнить.
+    expect(html).toContain('Изменить профиль');
   });
 
-  it('при загруженном профиле: имя и почта подставлены в форму', () => {
+  it('свёрнуто видно имя и любимый напиток гостя', () => {
     const html = renderToStaticMarkup(
       createElement(GuestProfileEditor, {
         profile: {
@@ -48,7 +54,27 @@ describe('GuestProfileEditor — блок профиля рендерится в
       })
     );
 
-    expect(html).toContain('mihail@test.com');
-    expect(html).toContain('value="Михаил"');
+    expect(html).toContain('Михаил');
+    expect(html).toContain('Флэт уайт');
+  });
+
+  it('почта в блоке отсутствует полностью — ни поля, ни строки про логин', () => {
+    const html = renderToStaticMarkup(
+      createElement(GuestProfileEditor, {
+        profile: {
+          id: 'user-1',
+          displayName: 'Михаил',
+          email: 'mihail@test.com',
+          phone: null,
+          city: null,
+          favoriteDrink: null,
+        },
+        onSaved: () => {},
+      })
+    );
+
+    expect(html).not.toContain('mihail@test.com');
+    expect(html).not.toContain('логин');
+    expect(html).not.toContain('Почта');
   });
 });

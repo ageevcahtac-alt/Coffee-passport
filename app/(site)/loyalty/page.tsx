@@ -90,9 +90,20 @@ export default function LoyaltyPage() {
         <GuestProfileEditor
           profile={profile}
           loadError={profileError}
-          onSaved={(patch) =>
-            setProfile((prev) => ({ id: prev?.id ?? userId, email: prev?.email ?? null, ...patch }))
-          }
+          onSaved={() => {
+            // Пакет №4: после сохранения — перечитывание с сервера, а не
+            // оптимистичный локальный патч: витрина обязана показывать то,
+            // что реально лежит в БД (заполнить → сохранить → перечитать →
+            // значения совпадают).
+            fetchOwnProfile().then((result) => {
+              if (result.ok) {
+                setProfile(result.profile);
+                setProfileError(null);
+              } else {
+                setProfileError(result.error);
+              }
+            });
+          }}
         />
 
         <button

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { signOut } from '@/app/auth/actions';
@@ -8,8 +8,6 @@ import { navItemsFor, type NavItem } from '@/lib/auth/cabinet';
 import type { ProfileRole } from '@/lib/types/database';
 import { EnthusiastFeedbackWidget } from './EnthusiastFeedbackWidget';
 import { NotificationBell, NotificationCenterPanel } from './NotificationCenter';
-
-const NAV_LINK_CLASSES = 'hover:text-ink-900';
 
 // Пункты меню — из navItemsFor (lib/auth/cabinet.ts): гость видит только общее,
 // вошедший — пункты своей роли и «Выйти». Состояние входа — только серверная
@@ -27,14 +25,33 @@ export function Navbar({ session }: { session: { role: ProfileRole } | null }) {
   const currentPath = `${pathname}${search ? `?${search}` : ''}`;
   const items = navItemsFor(session, currentPath);
 
+  // Гамбургер-меню (пакет №4): на виду в шапке остаются только логотип и
+  // чипса «Купить зерно домой»; вся навигация — Карта кофеен, Топовые
+  // рецепты, Journey / кабинет роли, Обратная связь, Выйти — живёт в
+  // выпадашке ☰ (десктоп и мобила — одно меню). Закрытие: клик вне меню
+  // (прозрачный бэкдроп), повторный клик по ☰, Esc, переход по пункту.
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setMenuOpen(false);
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [menuOpen]);
+
+  const links = items.filter((item) => item.kind !== 'signOut');
+  const signOutItem = items.find((item) => item.kind === 'signOut');
+
   return (
     // Липкая шапка (пакет №3): sticky — при скролле остаётся наверху с
     // непрозрачным фоном, границей и тенью; z-40 — НИЖЕ модалок/дроуера/
-    // панели уведомлений (z-50), чтобы не перекрывать их. Leaflet-панели
-    // карты (z до 1000) держим внутри .leaflet-container через z-index: 0
-    // в globals.css — иначе тайлы/маркеры рисовались бы поверх шапки.
-    // На мобиле — компактная высота (py-2.5), чипса «Купить зерно домой»
-    // остаётся на месте.
+    // панели уведомлений (z-50), чтобы не перекрывать их. Выпадашка меню
+    // рендерится ВНУТРИ шапки — её z-index считается внутри контекста
+    // шапки, поэтому меню не перекроет модалки z-50 поверх неё. Leaflet-
+    // панели карты (z до 1000) держим внутри .leaflet-container через
+    // z-index: 0 в globals.css — иначе тайлы/маркеры рисовались бы поверх
+    // шапки. На мобиле — компактная высота (py-2.5), чипса «Купить зерно
+    // домой» остаётся на месте.
     <header className="sticky top-0 z-40 bg-parchment-100 px-4 sm:px-6 py-2.5 md:py-4
                        border-b border-ink-100 shadow-[0_1px_4px_rgba(43,33,24,0.08)]">
       <div className="flex items-center justify-between gap-3">
@@ -62,34 +79,19 @@ export function Navbar({ session }: { session: { role: ProfileRole } | null }) {
           </a>
         </div>
 
-        {/* Desktop nav — hidden below md, where it would otherwise wrap and
-            overlap the logo (see the reported mobile layout bug). */}
-        <div className="hidden md:flex md:flex-col md:items-end md:gap-1.5">
-          <nav className="flex items-center gap-4 text-sm text-ink-500">
-            {items.map((item) => (
-              <NavEntry key={item.label} item={item} className={NAV_LINK_CLASSES} />
-            ))}
-            {session && <NotificationBell />}
-          </nav>
-          {/* Right under Log in/Sign out — reachable from every guest-facing
-              page via this shared header, not just /journey. */}
-          <EnthusiastFeedbackWidget />
-        </div>
-
-        {/* Mobile hamburger — hidden from md up, where the full nav takes
-            over. Sits on one row with the logo at every width, per the
-            task's "логотип и кнопка меню в одну строку" requirement. The
-            bell sits right beside it (same row, same tap-target size) since
-            the mobile drawer is a plain link list, not a good home for a
-            live popover. */}
-        <div className="md:hidden flex items-center gap-1 shrink-0">
+        {/* Правая часть — на всех ширинах: колокольчик уведомлений
+            (вошедший энтузиаст) и ☰, открывающее единое меню. */}
+        <div className="flex items-center gap-1 shrink-0">
           <NotificationBell />
           <button
             type="button"
-            onClick={() => setMenuOpen(true)}
-            aria-label="Открыть меню"
+            onClick={() => setMenuOpen((open) => !open)}
+            aria-label={menuOpen ? 'Закрыть меню' : 'Открыть меню'}
+            aria-haspopup="true"
+            aria-controls="site-nav-menu"
             aria-expanded={menuOpen}
-            className="flex flex-col justify-center gap-1.5 w-9 h-9 items-center"
+            className="flex flex-col justify-center gap-1.5 w-9 h-9 items-center rounded-md
+                       hover:bg-parchment-300 transition-colors"
           >
             <span className="block w-5 h-px bg-ink-700" />
             <span className="block w-5 h-px bg-ink-700" />
@@ -98,44 +100,41 @@ export function Navbar({ session }: { session: { role: ProfileRole } | null }) {
         </div>
       </div>
 
-      {/* Mobile menu drawer */}
+      {/* Выпадающее меню — поверх контента страницы, но внутри контекста
+          шапки (ниже модалок z-50). Бэкдроп ловит клик вне меню. */}
       {menuOpen && (
-        <div className="md:hidden fixed inset-0 z-50 flex justify-end bg-ink-900/40" onClick={() => setMenuOpen(false)}>
+        <>
+          <div className="fixed inset-0 z-0" aria-hidden="true" onClick={() => setMenuOpen(false)} />
           <div
+            id="site-nav-menu"
             role="dialog"
-            aria-modal="true"
             aria-label="Меню"
-            onClick={(event) => event.stopPropagation()}
-            className="w-full max-w-xs h-full bg-parchment-100 px-6 py-6 flex flex-col gap-1 reveal-fade"
+            className="absolute right-2 sm:right-4 top-full mt-1 z-10 w-72 max-w-[calc(100vw-1rem)]
+                       rounded-md border border-ink-100 bg-parchment-100 py-2
+                       shadow-[0_8px_24px_-8px_rgba(26,20,16,0.35)] reveal-fade"
           >
-            <div className="flex items-center justify-between mb-6">
-              <span className="text-xs uppercase tracking-widest2 text-ink-400 font-body">Меню</span>
-              <button
-                type="button"
-                onClick={() => setMenuOpen(false)}
-                aria-label="Закрыть меню"
-                className="text-ink-400 text-2xl leading-none px-1"
-              >
-                ×
-              </button>
-            </div>
-
-            <nav className="flex flex-col gap-1 text-base text-ink-700">
-              {items.map((item) => (
+            <nav className="flex flex-col text-sm text-ink-700" aria-label="Навигация по сайту">
+              {links.map((item) => (
                 <NavEntry
                   key={item.label}
                   item={item}
                   onNavigate={() => setMenuOpen(false)}
-                  className="w-full text-left py-3 border-b border-ink-100 hover:text-ink-900"
+                  className="block px-4 py-2.5 hover:bg-parchment-300 hover:text-ink-900 transition-colors"
                 />
               ))}
+              {/* Обратная связь — перед «Выйти», как в прежней шапке. */}
+              <div className="px-4 py-2.5 hover:bg-parchment-300 transition-colors">
+                <EnthusiastFeedbackWidget />
+              </div>
+              {signOutItem && (
+                <NavEntry
+                  item={signOutItem}
+                  className="block px-4 py-2.5 hover:bg-parchment-300 hover:text-ink-900 transition-colors"
+                />
+              )}
             </nav>
-
-            <div className="mt-4">
-              <EnthusiastFeedbackWidget />
-            </div>
           </div>
-        </div>
+        </>
       )}
 
       <NotificationCenterPanel />

@@ -36,13 +36,19 @@ const inputClasses =
   'w-full rounded-md border border-ink-200 bg-parchment-100 px-3 py-2.5 text-sm ' +
   'text-ink-900 placeholder:text-ink-300 focus:border-gold-400';
 
-// Мини-профиль гостя («Изменить профиль» в ЛК Лояльности, этап 1.5).
-// Имя — то же display_name, что видит бариста при сканировании QR; почта —
-// read-only логин. Сохранение идёт в БД (updateOwnProfile), после чего ЛК
-// перечитывает профиль — введённое переживает перезаход и смену устройства.
-// Блок рендерится ВСЕГДА для вошедшего гостя: profile=null — пустая форма
-// (строки в БД ещё нет или чтение не удалось), loadError — понятное
-// сообщение в блоке вместо молча исчезнувшей секции (баг пакета №3).
+// Мини-профиль гостя (ЛК Лояльности, этап 1.5; пакеты №3–4). Имя — то же
+// display_name, что видит бариста при сканировании QR. Компактный вид
+// (пакет №4): свёрнуто видно имя и любимый напиток + чипса «Изменить
+// профиль»; полная форма (имя, телефон +7 без SMS-верификации, город,
+// любимый напиток — почта в профиль не входит, это логин) раскрывается по
+// чипсе и после сохранения сворачивается обратно.
+//
+// Блок рендерится ВСЕГДА для вошедшего гостя: profile=null — пустой
+// свёрнутый блок с плейсхолдером «Как к вам обращаться?», loadError —
+// понятное сообщение в блоке вместо молча исчезнувшей секции (баг пакета
+// №3). Сохранение идёт в БД (updateOwnProfile возвращает ok только когда
+// запись реально легла — молчаливый RLS-no-op неотличим от успеха иначе,
+// баг пакета №4), после чего ЛК перечитывает профиль с сервера.
 export function GuestProfileEditor({
   profile,
   loadError = null,
@@ -53,6 +59,7 @@ export function GuestProfileEditor({
   onSaved: (patch: OwnProfilePatch) => void;
 }) {
   const initialDrink = drinkToForm(profile?.favoriteDrink ?? null);
+  const [editing, setEditing] = useState(false);
   const [displayName, setDisplayName] = useState(profile?.displayName ?? '');
   const [phone, setPhone] = useState(profile?.phone ?? '');
   const [city, setCity] = useState(profile?.city ?? '');
@@ -92,105 +99,135 @@ export function GuestProfileEditor({
       city: city.trim(),
       favoriteDrink: formToDrink(drinkSelect, drinkOther),
     });
+    // Компактный вид: после успешного сохранения форма сворачивается
+    // обратно в строку имя + напиток.
+    setEditing(false);
   }
+
+  const nameLine = profile?.displayName?.trim() || '';
 
   return (
     <div className="rounded-md border border-ink-200 bg-parchment-100 p-4 mb-6">
-      <div className="flex items-center justify-between gap-3 mb-4">
-        <p className="text-sm text-ink-900">Профиль</p>
-        <p className="text-[11px] text-ink-400">Имя и любимый напиток увидит бариста при заказе</p>
-      </div>
-
       {loadError && (
-        <p role="alert" className="mb-4 text-sm text-rating">
+        <p role="alert" className="mb-3 text-sm text-rating">
           ⚠ Профиль не загрузился: {loadError}. Заполните поля и сохраните — данные запишутся в ваш аккаунт.
         </p>
       )}
 
-      <div className="flex flex-col gap-3.5">
-        <label className="block">
-          <span className="block text-xs text-ink-400 mb-1.5">Имя</span>
-          <input
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Как к вам обращаться?"
-            className={inputClasses}
-          />
-        </label>
-
-        <div>
-          <span className="block text-xs text-ink-400 mb-1.5">Почта</span>
-          <p className="rounded-md border border-ink-100 bg-parchment-200/60 px-3 py-2.5 text-sm text-ink-500 select-all">
-            {profile?.email ?? '—'}
-          </p>
-          <p className="text-[11px] text-ink-400 mt-1">логин, изменить нельзя</p>
-        </div>
-
-        <label className="block">
-          <span className="block text-xs text-ink-400 mb-1.5">Телефон</span>
-          <input
-            value={phone}
-            onChange={(e) => setPhone(formatPhoneMask(e.target.value))}
-            placeholder="+7 900 000-00-00"
-            inputMode="tel"
-            className={inputClasses}
-          />
-        </label>
-
-        <label className="block">
-          <span className="block text-xs text-ink-400 mb-1.5">Город</span>
-          <input
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-            placeholder="Санкт-Петербург"
-            className={inputClasses}
-          />
-        </label>
-
-        <div>
-          <span className="block text-xs text-ink-400 mb-1.5">Любимый напиток</span>
-          <select
-            value={drinkSelect}
-            onChange={(e) => setDrinkSelect(e.target.value)}
-            aria-label="Любимый напиток"
-            className={inputClasses}
+      {!editing ? (
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-widest2 text-ink-400 font-body mb-1">Профиль</p>
+            <p className="text-sm text-ink-900 truncate">
+              {nameLine || <span className="text-ink-300">Как к вам обращаться?</span>}
+              {profile?.favoriteDrink?.trim() && (
+                <span className="text-ink-500"> · {profile.favoriteDrink.trim()}</span>
+              )}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setEditing(true);
+              setNotice(null);
+            }}
+            aria-expanded={false}
+            className="inline-flex shrink-0 items-center rounded-full border border-ink-200 px-3 py-1.5
+                       text-xs font-body font-medium text-ink-700 whitespace-nowrap
+                       hover:bg-parchment-300 transition-colors"
           >
-            <option value="">Не выбран</option>
-            {FAVORITE_DRINK_PRESETS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-            <option value={OTHER}>Другое…</option>
-          </select>
-          {drinkSelect === OTHER && (
-            <input
-              value={drinkOther}
-              onChange={(e) => setDrinkOther(e.target.value)}
-              placeholder="Ваш вариант"
-              className={`${inputClasses} mt-2`}
-            />
-          )}
-          <p className="text-[11px] text-ink-400 mt-1">Бариста увидит его в вашей карточке при сканировании QR</p>
+            Изменить профиль
+          </button>
         </div>
+      ) : (
+        <div className="flex flex-col gap-3.5">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-ink-900">Профиль</p>
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="text-xs text-ink-400 underline underline-offset-2 hover:text-ink-700 shrink-0"
+            >
+              Свернуть
+            </button>
+          </div>
 
-        {notice && (
-          <p role="status" className={`text-sm ${notice.kind === 'ok' ? 'text-moss-700' : 'text-ink-500'}`}>
-            {notice.kind === 'ok' ? '✓ ' : '⚠ '}
-            {notice.text}
-          </p>
-        )}
+          <label className="block">
+            <span className="block text-xs text-ink-400 mb-1.5">Имя</span>
+            <input
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="Как к вам обращаться?"
+              className={inputClasses}
+            />
+          </label>
 
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving}
-          className="inline-flex items-center justify-center rounded-md bg-ink-900 text-parchment-100
-                     font-body font-medium text-sm px-6 py-3 hover:bg-ink-800 transition-colors disabled:opacity-40"
-        >
-          {saving ? 'Сохраняем…' : 'Сохранить профиль'}
-        </button>
-      </div>
+          <label className="block">
+            <span className="block text-xs text-ink-400 mb-1.5">Телефон</span>
+            <input
+              value={phone}
+              onChange={(e) => setPhone(formatPhoneMask(e.target.value))}
+              placeholder="+7 900 000-00-00"
+              inputMode="tel"
+              className={inputClasses}
+            />
+          </label>
+
+          <label className="block">
+            <span className="block text-xs text-ink-400 mb-1.5">Город</span>
+            <input
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder="Санкт-Петербург"
+              className={inputClasses}
+            />
+          </label>
+
+          <div>
+            <span className="block text-xs text-ink-400 mb-1.5">Любимый напиток</span>
+            <select
+              value={drinkSelect}
+              onChange={(e) => setDrinkSelect(e.target.value)}
+              aria-label="Любимый напиток"
+              className={inputClasses}
+            >
+              <option value="">Не выбран</option>
+              {FAVORITE_DRINK_PRESETS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+              <option value={OTHER}>Другое…</option>
+            </select>
+            {drinkSelect === OTHER && (
+              <input
+                value={drinkOther}
+                onChange={(e) => setDrinkOther(e.target.value)}
+                placeholder="Ваш вариант"
+                className={`${inputClasses} mt-2`}
+              />
+            )}
+            <p className="text-[11px] text-ink-400 mt-1">Имя и любимый напиток увидит бариста в вашей карточке при сканировании QR</p>
+          </div>
+
+          {notice && (
+            <p role="status" className={`text-sm ${notice.kind === 'ok' ? 'text-moss-700' : 'text-ink-500'}`}>
+              {notice.kind === 'ok' ? '✓ ' : '⚠ '}
+              {notice.text}
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="inline-flex items-center justify-center rounded-md bg-ink-900 text-parchment-100
+                       font-body font-medium text-sm px-6 py-3 hover:bg-ink-800 transition-colors disabled:opacity-40"
+          >
+            {saving ? 'Сохраняем…' : 'Сохранить профиль'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

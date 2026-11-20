@@ -220,10 +220,18 @@ export interface OwnProfilePatch {
 }
 
 // Сохранение мини-профиля гостя (задача 1.5): те же четыре колонки, что и в
-// column-grant 0046 — display_name, phone, city, favorite_drink. Пустые
+// column-grant 0046/0048 — display_name, phone, city, favorite_drink. Пустые
 // строки сохраняются как null. Источник истины — БД: после сохранения ЛК
 // перечитывает профиль через fetchOwnProfile, так что введённое имя
 // переживает перезаход, перелогин и смену устройства.
+//
+// Пакет №4, баг «профиль стирается после сохранения»: PostgREST на UPDATE,
+// который RLS-политика/column-grant не пропустили, возвращает 200 с пустым
+// телом — error=null при нуле затронутых строк. Поэтому запрос обязан
+// заканчиваться .select('id').maybeSingle(): вернулось 0 строк = запись НЕ
+// легла, и это честный сбой (ok:false + console.error), а не фальшивый
+// «успех». Ensure-миграция 0048 детерминированно восстанавливает
+// write-path (политика + grant) на любой базе.
 export async function updateOwnProfile(patch: OwnProfilePatch): Promise<{ ok: boolean; error?: string }> {
   try {
     const supabase = getBrowserSupabaseClient();
@@ -231,7 +239,7 @@ export async function updateOwnProfile(patch: OwnProfilePatch): Promise<{ ok: bo
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return { ok: false, error: 'Не удалось определить аккаунт.' };
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('profiles')
       .update({
         display_name: patch.displayName.trim() || null,
@@ -239,8 +247,21 @@ export async function updateOwnProfile(patch: OwnProfilePatch): Promise<{ ok: bo
         city: patch.city.trim() || null,
         favorite_drink: patch.favoriteDrink.trim() || null,
       })
-      .eq('id', user.id);
-    if (error) return { ok: false, error: error.message };
+      .eq('id', user.id)
+      .select('id')
+      .maybeSingle();
+    if (error) {
+      console.error('[loyalty] updateOwnProfile:', error.message);
+      return { ok: false, error: error.message };
+    }
+    if (!data) {
+      // RLS-фильтр отсёк свою же строку (политика/грант потерялись) или
+      // строки profiles для аккаунта нет — UPDATE не изменил ни одной строки.
+      const message =
+        'Сервер не сохранил изменения — профиль не обновился. Обновите страницу и попробуйте ещё раз; если повторится, напишите нам через «Обратная связь».';
+      console.error('[loyalty] updateOwnProfile: UPDATE не затронул строку (RLS/грант или отсутствие profiles-строки)');
+      return { ok: false, error: message };
+    }
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Неизвестная ошибка' };
