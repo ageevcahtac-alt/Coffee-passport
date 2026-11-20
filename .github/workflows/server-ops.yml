@@ -8,6 +8,9 @@ on:
       lines:
         description: "Строк лога (1–2000)"
         default: "200"
+      db_query:
+        description: "Read-only SELECT на боевой БД (одна команда, без ; и двойных кавычек; пусто — не выполнять)"
+        default: ""
 permissions:
   contents: read
 # bash явно — с pipefail: падение ssh не прячется за успешным redact; весь вывод (и stderr) — через redact
@@ -20,6 +23,7 @@ jobs:
     timeout-minutes: 10
     env:
       LINES: ${{ inputs.lines }}
+      DB_QUERY: ${{ inputs.db_query }}
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/ssh-setup
@@ -29,6 +33,15 @@ jobs:
       - name: validate input
         run: |
           [[ "$LINES" =~ ^[0-9]+$ ]] && [ "$LINES" -ge 1 ] && [ "$LINES" -le 2000 ] || { echo "::error::lines: 1–2000"; exit 1; }
+      - name: validate db query
+        if: env.DB_QUERY != ''
+        run: |
+          [[ "$DB_QUERY" =~ ^[Ss][Ee][Ll][Ee][Cc][Tt][[:space:]] ]] || { echo "::error::db_query must be a SELECT"; exit 1; }
+          [[ "$DB_QUERY" != *';'* ]] || { echo "::error::db_query: одна команда, без ;"; exit 1; }
+          [[ "$DB_QUERY" != *'"'* ]] || { echo "::error::db_query: без двойных кавычек"; exit 1; }
+      - name: db query
+        if: env.DB_QUERY != ''
+        run: ssh prod "docker exec supabase-db psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -P pager=off -c \"$DB_QUERY\"" 2>&1 | node scripts/ops/redact.mjs
       - name: app logs
         run: |
           ssh prod "journalctl -u coffee-passport -n $LINES --no-pager" 2>&1 | node scripts/ops/redact.mjs
