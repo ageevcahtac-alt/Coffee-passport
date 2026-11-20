@@ -167,7 +167,9 @@ export default function LoyaltyPage() {
         )}
       </div>
 
-      {qrOpen && <GuestQrModal guestId={userId} onClose={() => setQrOpen(false)} />}
+      {qrOpen && (
+        <GuestQrModal guestId={userId} guestCode={profile?.guestCode ?? null} onClose={() => setQrOpen(false)} />
+      )}
     </main>
   );
 }

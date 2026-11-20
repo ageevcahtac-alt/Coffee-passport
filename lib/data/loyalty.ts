@@ -148,6 +148,9 @@ export interface OwnProfile {
   phone: string | null;
   city: string | null;
   favoriteDrink: string | null;
+  // Постоянный 5-значный код гостя (0051) — фолбэк к QR. Текст с ведущими
+  // нулями; null, если код не выдан (staff-аккаунт — кодов не получают).
+  guestCode: string | null;
 }
 
 export type OwnProfileResult =
@@ -167,7 +170,7 @@ export async function fetchOwnProfile(): Promise<OwnProfileResult> {
     }
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, display_name, email, phone, city, favorite_drink')
+      .select('id, display_name, email, phone, city, favorite_drink, guest_code')
       .eq('id', user.id)
       .maybeSingle();
     if (error) {
@@ -185,12 +188,38 @@ export async function fetchOwnProfile(): Promise<OwnProfileResult> {
         phone: data.phone,
         city: data.city,
         favoriteDrink: data.favorite_drink,
+        guestCode: data.guest_code,
       },
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Неизвестная ошибка';
     console.error('[loyalty] fetchOwnProfile:', message);
     return { ok: false, error: message };
+  }
+}
+
+// Тот же staff-lookup, но по постоянному 5-значному коду гостя (0051) —
+// ручной фолбэк, когда QR не считывается. Та же политика «staff read
+// enthusiast display names» (0013) и тот же role-фильтр: по коду открывается
+// ровно та же карточка (имя + любимый напиток), что и по QR. 5 цифр угадать
+// можно, поэтому бариста сверяет личность голосом ДО любого списания
+// (UI-поток BaristaLoyaltyPanel). Код сравнивается как текст, точное
+// совпадение всех 5 символов (ведущие нули значимы).
+export async function fetchGuestProfileByCode(
+  code: string
+): Promise<{ id: string; displayName: string | null; email: string | null; favoriteDrink: string | null } | null> {
+  try {
+    const supabase = getBrowserSupabaseClient();
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, display_name, email, favorite_drink')
+      .eq('guest_code', code)
+      .eq('role', 'enthusiast')
+      .maybeSingle();
+    if (error || !data) return null;
+    return { id: data.id, displayName: data.display_name, email: data.email, favoriteDrink: data.favorite_drink };
+  } catch {
+    return null;
   }
 }
 

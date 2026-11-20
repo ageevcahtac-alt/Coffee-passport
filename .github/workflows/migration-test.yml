@@ -1,0 +1,56 @@
+name: migration-test
+# Интеграционный прогон миграций 0050/0051 против настоящего Postgres 16
+# (сервис-контейнер, scratch-база — прод не трогаем):
+#   * 0050: backfill недостающих profiles-строк (модель боевых сирот), lockdown
+#     дрейфующих table-level грантов до каноничного набора миграций;
+#   * 0051: постоянный 5-значный код гостя — уникальность под гонкой 320
+#     параллельных регистраций (constraint + retry в триггере), формат \d{5}
+#     с ведущими нулями (text), staff без кода, идемпотентность повтора.
+# SQL-харнесс и проверки — supabase/tests/profilesGuestCode/.
+on:
+  pull_request:
+  push:
+    branches: [main, fix/pre-pilot-shortlist]
+
+jobs:
+  profiles-guest-code:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      db:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PGCONNECT: host=localhost port=5432 user=postgres password=postgres dbname=postgres
+    steps:
+      - uses: actions/checkout@v5
+      - name: install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: harness (auth.users + profiles + функция 0012)
+        run: psql "$PGCONNECT" -v ON_ERROR_STOP=1 -f supabase/tests/profilesGuestCode/harness.sql
+      - name: apply 0050 (настоящий файл миграции)
+        run: psql "$PGCONNECT" -v ON_ERROR_STOP=1 -1 -f supabase/migrations/0050_profiles_backfill_and_grant_lockdown.sql
+      - name: apply 0051 (настоящий файл миграции)
+        run: psql "$PGCONNECT" -v ON_ERROR_STOP=1 -1 -f supabase/migrations/0051_guest_code.sql
+      - name: assertions
+        run: psql "$PGCONNECT" -v ON_ERROR_STOP=1 -f supabase/tests/profilesGuestCode/assert.sql
+      - name: re-apply 0050 + 0051 (идемпотентность)
+        run: |
+          psql "$PGCONNECT" -v ON_ERROR_STOP=1 -1 -f supabase/migrations/0050_profiles_backfill_and_grant_lockdown.sql
+          psql "$PGCONNECT" -v ON_ERROR_STOP=1 -1 -f supabase/migrations/0051_guest_code.sql
+      - name: idempotency check
+        run: psql "$PGCONNECT" -v ON_ERROR_STOP=1 -f supabase/tests/profilesGuestCode/idempotentCheck.sql
+      - name: гонка — 320 параллельных регистраций
+        run: |
+          seq 1 320 | xargs -P 32 -I{} \
+            psql "$PGCONNECT" -v ON_ERROR_STOP=1 \
+              -c "insert into auth.users (email) values ('race-{}@example.com')"
+      - name: race check
+        run: psql "$PGCONNECT" -v ON_ERROR_STOP=1 -f supabase/tests/profilesGuestCode/raceCheck.sql

@@ -49,6 +49,7 @@ describe('GuestProfileEditor — компактный блок, рендерит
           phone: null,
           city: 'Санкт-Петербург',
           favoriteDrink: 'Флэт уайт',
+          guestCode: '00123',
         },
         onSaved: () => {},
       })
@@ -68,6 +69,7 @@ describe('GuestProfileEditor — компактный блок, рендерит
           phone: null,
           city: null,
           favoriteDrink: null,
+          guestCode: null,
         },
         onSaved: () => {},
       })

@@ -261,4 +261,52 @@ describe('loyalty data layer — own profile vs staff guest lookup', () => {
     expect(result.ok).toBe(false);
     expect(recorded.find((r) => r.table === 'profiles')).toBeUndefined();
   });
+
+  // Задача 3 (0051): постоянный 5-значный код гостя.
+  it('fetchOwnProfile возвращает guest_code как текст с ведущими нулями', async () => {
+    profileRow = {
+      id: 'user-1',
+      display_name: 'Михаил',
+      email: 'owner@test.com',
+      phone: null,
+      city: null,
+      favorite_drink: null,
+      guest_code: '00123',
+    };
+    const loyalty = await import('./loyalty');
+    const result = await loyalty.fetchOwnProfile();
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.profile?.guestCode).toBe('00123');
+    const rec = recorded.find((r) => r.table === 'profiles');
+    expect(rec!.select).toContain('guest_code');
+  });
+
+  it('fetchGuestProfileByCode: поиск по guest_code с тем же role-фильтром enthusiast', async () => {
+    profileRow = {
+      id: 'guest-9',
+      display_name: 'Аня',
+      email: 'guest@test.com',
+      favorite_drink: 'Фильтр',
+    };
+    const loyalty = await import('./loyalty');
+    const profile = await loyalty.fetchGuestProfileByCode('00700');
+
+    expect(profile?.id).toBe('guest-9');
+    expect(profile?.displayName).toBe('Аня');
+    const rec = recorded.find((r) => r.table === 'profiles');
+    // Ведущие нули значимы: eq по точной строке '00700', не по числу 700.
+    expect(rec!.eqs).toContainEqual(['guest_code', '00700']);
+    expect(rec!.eqs).toContainEqual(['role', 'enthusiast']);
+  });
+
+  it('fetchGuestProfileByCode: кода нет — null (та же «честная» ветка, что и по QR)', async () => {
+    profileRow = null;
+    const loyalty = await import('./loyalty');
+    const profile = await loyalty.fetchGuestProfileByCode('99999');
+
+    expect(profile).toBeNull();
+    const rec = recorded.find((r) => r.table === 'profiles');
+    expect(rec!.eqs).toContainEqual(['guest_code', '99999']);
+  });
 });

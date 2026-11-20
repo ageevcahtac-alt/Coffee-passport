@@ -7,8 +7,19 @@ import { buildGuestQrPayload } from '@/lib/utils/guestQr';
 // Full-screen display of the guest's own loyalty QR — shown to a barista's
 // scanner (see components/loyalty/BaristaLoyaltyPanel.tsx). Encodes just
 // buildGuestQrPayload(guestId); no shop-specific content, since the same
-// code works at every partner coffee shop.
-export function GuestQrModal({ guestId, onClose }: { guestId: string; onClose: () => void }) {
+// code works at every partner coffee shop. Рядом с QR — постоянный
+// 5-значный код гостя (0051): человекочитаемый фолбэк, если камера не
+// считала QR. Длинная UUID-строка из-под QR убрана (задача 3): гостю она
+// не нужна, бариста работает с QR или 5 цифрами.
+export function GuestQrModal({
+  guestId,
+  guestCode,
+  onClose,
+}: {
+  guestId: string;
+  guestCode?: string | null;
+  onClose: () => void;
+}) {
   const [qrUrl, setQrUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -54,9 +65,16 @@ export function GuestQrModal({ guestId, onClose }: { guestId: string; onClose: (
             <p className="text-xs text-ink-400">Готовим код…</p>
           )}
         </div>
-        <p className="text-[11px] text-ink-400 mb-5">
-          Камеры нет под рукой? Продиктуйте код: <span className="data-value text-ink-700 select-all">{guestId}</span>
-        </p>
+        {guestCode ? (
+          <div className="mb-5">
+            <p className="text-[11px] text-ink-400 mb-1">Ваш код для бариста</p>
+            <p className="data-value text-3xl tracking-[0.3em] text-ink-900 select-all">{guestCode}</p>
+          </div>
+        ) : (
+          <p className="text-[11px] text-ink-400 mb-5">
+            Персональный код не выдан — покажите QR или обратитесь к нам через «Обратная связь».
+          </p>
+        )}
         <button
           type="button"
           onClick={onClose}

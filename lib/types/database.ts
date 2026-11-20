@@ -283,6 +283,11 @@ export type ProfileRow = {
   phone: string | null;
   city: string | null;
   favorite_drink: string | null;
+  // Постоянный 5-значный код гостя (0051) — человекочитаемый фолбэк к QR.
+  // Текст фиксированной длины с ведущими нулями ('00123' валиден). Генерирует
+  // и уникальность гарантирует база (unique index profiles_guest_code_key);
+  // NULL у staff-строк и у гостя, для которого код не выдался.
+  guest_code: string | null;
   created_at: string;
   updated_at: string;
 };

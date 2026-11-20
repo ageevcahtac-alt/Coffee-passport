@@ -29,10 +29,13 @@ describe('grind confirmations migration (0038)', () => {
     // зависеть от ручных правок базы); 0048 — ensure-политика «user updates own
     // display name» + column-grant (write-path мини-профиля: PostgREST молча
     // возвращает пустое 200, если RLS/грант отсёк UPDATE); 0049 — правка двух
-    // неверных сидовых строк афиши + кураторская лента ≥4 событий. Страж следит
-    // за последовательностью без разрывов и коллизий.
+    // неверных сидовых строк афиши + кураторская лента ≥4 событий; 0050 —
+    // backfill недостающих profiles-строк (общий корень багов «профиль не
+    // сохраняется»/«Гость не найден») + lockdown дрейфующих table-level
+    // грантов; 0051 — постоянный 5-значный код гостя (фолбэк к QR). Страж
+    // следит за последовательностью без разрывов и коллизий.
     expect(numbers).toContain(39);
-    expect(numbers[numbers.length - 1]).toBe(49);
+    expect(numbers[numbers.length - 1]).toBe(51);
     expect(new Set(numbers).size).toBe(numbers.length);
   });
 

@@ -3,9 +3,11 @@
 import { useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { QrScanner } from '@/components/coffee/QrScanner';
 import { extractGuestId } from '@/lib/utils/guestQr';
+import { normalizeGuestCode } from '@/lib/utils/guestCode';
 import {
   consume,
   fetchGuestProfile,
+  fetchGuestProfileByCode,
   fetchGuestShopContext,
   purchaseCard,
 } from '@/lib/data/loyalty';
@@ -55,8 +57,10 @@ const fmt = (value: number) => value.toLocaleString('ru-RU');
 export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
   const [mode, setMode] = useState<Mode>('idle');
   const [manualCode, setManualCode] = useState('');
+  const [manualGuestCode, setManualGuestCode] = useState('');
   const [scanError, setScanError] = useState('');
   const [guest, setGuest] = useState<GuestContext | null>(null);
+  const [guestViaCode, setGuestViaCode] = useState(false);
   const [action, setAction] = useState<Action>(null);
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
@@ -75,7 +79,7 @@ export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
   // долетающий ответ fetchGuestShopContext стирает поле (setGrossAmount(''))
   // и дизейблит кнопки — операция «зависает» до ручного сброса. См. баг
   // verify-barista-access (run 43451583228).
-  async function loadGuest(guestId: string, options?: { resetForm?: boolean }) {
+  async function loadGuest(guestId: string, options?: { resetForm?: boolean; viaCode?: boolean }) {
     const resetForm = options?.resetForm ?? true;
     setScanError('');
     const profile = await fetchGuestProfile(guestId);
@@ -96,6 +100,7 @@ export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
       beansExpireAt: context.beansExpireAt,
       card: context.card,
     });
+    setGuestViaCode(options?.viaCode ?? false);
     setMode('guest');
     setAction(null);
     if (resetForm) {
@@ -119,12 +124,31 @@ export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
     void loadGuest(guestId);
   }
 
+  // Ручной фолбэк к QR (0051): гость называет 5 цифр — бариста вбивает код.
+  // По коду открывается та же карточка, что и по QR; перед любым списанием
+  // бариста обязан сверить личность голосом (подсказка на карточке) — 5 цифр
+  // теоретически можно угадать.
+  async function handleGuestCodeSubmit(event: FormEvent) {
+    event.preventDefault();
+    const code = normalizeGuestCode(manualGuestCode);
+    if (!code) return;
+    setScanError('');
+    const profile = await fetchGuestProfileByCode(code);
+    if (!profile) {
+      setScanError('Гость с таким кодом не найден — проверьте цифры.');
+      return;
+    }
+    await loadGuest(profile.id, { viaCode: true });
+  }
+
   function reset() {
     setMode('idle');
     setGuest(null);
+    setGuestViaCode(false);
     setAction(null);
     setMessage(null);
     setManualCode('');
+    setManualGuestCode('');
     setGrossAmount('');
     setPlan(null);
     setBeansInput('');
@@ -235,6 +259,26 @@ export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
               Найти
             </button>
           </form>
+          <form onSubmit={handleGuestCodeSubmit} className="flex gap-2">
+            <input
+              value={manualGuestCode}
+              onChange={(e) => setManualGuestCode(e.target.value)}
+              placeholder="Код гостя: 5 цифр"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={5}
+              className={fieldClasses}
+            />
+            <button
+              type="submit"
+              disabled={!normalizeGuestCode(manualGuestCode)}
+              className="shrink-0 rounded-md border border-gold-300 bg-gold-400/10 px-4 text-sm text-ink-900
+                         hover:bg-gold-400/20 transition-colors disabled:opacity-40"
+            >
+              Найти
+            </button>
+          </form>
+          {scanError && <p className="text-xs text-ink-500">⚠ {scanError}</p>}
         </div>
       )}
 
@@ -255,6 +299,7 @@ export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
               <h3 className="font-display text-2xl text-ink-900 leading-tight">
                 {guest.displayName || 'Гость без имени'}
               </h3>
+              {guestViaCode && <GuestIdentityHint />}
               {guest.favoriteDrink ? (
                 <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-gold-400/10 border border-gold-300 px-3 py-1 text-sm text-ink-900">
                   ☕ <span className="font-medium">{guest.favoriteDrink}</span>
@@ -482,6 +527,19 @@ function PlanRow({ label, value, accent }: { label: string; value: string; accen
       <span className="text-ink-500">{label}</span>
       <span className={`data-value text-right ${accent ? 'text-ink-900' : 'text-ink-700'}`}>{value}</span>
     </div>
+  );
+}
+
+// Подсказка сверки личности при ручном вводе 5-значного кода (0051): код
+// можно угадать, поэтому карточка (имя + любимый напиток) показывается
+// баристе ДО любого списания — бариста обязан спросить гостя, как его зовут,
+// и только потом вбивать сумму чека. Выделена в компонент, чтобы зафиксировать
+// поведение SSR-тестом (components/loyalty/BaristaLoyaltyPanel.test.ts).
+export function GuestIdentityHint() {
+  return (
+    <p className="mt-1.5 rounded-md border border-gold-300 bg-gold-400/10 px-3 py-1.5 text-xs text-ink-900">
+      🔎 Найдено по коду — перед списанием спросите гостя, как его зовут, и сверьте с карточкой.
+    </p>
   );
 }
 
