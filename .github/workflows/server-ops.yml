@@ -9,7 +9,7 @@ on:
         description: "Строк лога (1–2000)"
         default: "200"
       db_query:
-        description: "Read-only SELECT на боевой БД (одна команда, без ; и двойных кавычек; пусто — не выполнять)"
+        description: "Read-only SELECT на боевой БД (одна команда: без ;, кавычек, $, обратных слэшей и слова INTO; пусто — не выполнять)"
         default: ""
 permissions:
   contents: read
@@ -44,6 +44,10 @@ jobs:
           # без интерполяции оболочек.
           [[ ! "$DB_QUERY" =~ (^|[^a-zA-Z_])[Ii][Nn][Tt][Oo][[:space:]] ]] || { echo "::error::db_query: INTO запрещён (это запись)"; exit 1; }
           [[ "$DB_QUERY" != *'$'* && "$DB_QUERY" != *'`'* ]] || { echo "::error::db_query: без $ и обратных кавычек"; exit 1; }
+          # psql -f - читает stdin как скрипт: любая backslash-команда (\! id,
+          # \copy, \o …) выполнится процессом psql ВНЕ транзакции read-only.
+          # Разрешаем только чистый SQL — без единого обратного слэша.
+          [[ "$DB_QUERY" != *'\'* ]] || { echo "::error::db_query: без обратных слэшей (psql-метакоманды запрещены)"; exit 1; }
       - name: db query
         if: env.DB_QUERY != ''
         # Транспорт — через stdin (printf | ssh | docker exec -i | psql -f -):

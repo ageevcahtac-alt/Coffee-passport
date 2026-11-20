@@ -19,16 +19,18 @@ do $$
 declare
   v_bad integer;
 begin
-  -- Досланные сироты — ровно enthusiast, email перенесён из auth.users.
+  -- Досланные гостевые сироты — ровно enthusiast, email перенесён из
+  -- auth.users. orphan-staff сюда НЕ входит: workflow повысил его до 0051
+  -- (он проверяется отдельно, со своим инвариантом «staff без кода»).
   select count(*) into v_bad
   from auth.users u
-  where u.email like 'orphan-%@example.com'
+  where u.email like 'orphan-guest-%@example.com'
     and not exists (
       select 1 from public.profiles p
       where p.id = u.id and p.role = 'enthusiast' and p.email = u.email
     );
   if v_bad <> 0 then
-    raise exception 'backfill: % сирот получили неверную роль/email', v_bad;
+    raise exception 'backfill: % сирот-гостей получили неверную роль/email', v_bad;
   end if;
 end $$;
 
@@ -101,6 +103,19 @@ end $$;
 -- фиксируем инвариант «коды выдаются гостям».
 
 \echo '== 0051: backfill кода — все enthusiast с кодом, коды уникальны и по 5 цифр =='
+do $$
+declare
+  v_staff_role text;
+  v_staff_code text;
+begin
+  -- Шаг workflow между миграциями повысил orphan-staff: роль barista,
+  -- привязка к кофейне — и backfill 0051 его не тронул (кода нет).
+  select role, guest_code into v_staff_role, v_staff_code
+  from public.profiles where email = 'orphan-staff@example.com';
+  if v_staff_role is distinct from 'barista' or v_staff_code is not null then
+    raise exception 'orphan-staff: role=% guest_code=% (ожидался barista без кода)', v_staff_role, v_staff_code;
+  end if;
+end $$;
 do $$
 declare
   v_total integer;

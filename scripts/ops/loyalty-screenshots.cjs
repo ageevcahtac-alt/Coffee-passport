@@ -89,9 +89,10 @@ async function withViewport(browser, width, height, fn) {
       pass('temp barista created', 'кофейня создала временного бариста');
     });
 
-    // Бариста: первый вход (временный пароль → смена → кабинет) — скриншоты
-    // кабинета с полем «Код гостя: 5 цифр» рядом со сканером.
-    async function baristaCabinet(page) {
+    // Бариста: первый вход (временный пароль → смена → кабинет) — один раз;
+    // временный пароль после смены гаснет (как в verify: «temporary password
+    // retired»), повторный вход — уже постоянным паролем.
+    async function baristaFirstLogin(page) {
       const landed = await login(page, temp.email, temp.temp_password);
       if (landed.pathname !== '/auth/change-password') throw new Error(`временный пароль привёл на ${landed.pathname}`);
       await page.fill('#new-password', temp.password);
@@ -102,18 +103,22 @@ async function withViewport(browser, width, height, fn) {
       ]);
       const after = await settle(page);
       if (after.pathname !== '/dashboard/barista') throw new Error(`после смены пароля — ${after.pathname}`);
+      pass('barista first login', 'временный пароль → /auth/change-password → свой пароль → /dashboard/barista');
+    }
+    async function baristaCabinetShot(page, name) {
+      const landed = await login(page, temp.email, temp.password);
+      if (landed.pathname !== '/dashboard/barista') throw new Error(`вход бариста привёл на ${landed.pathname}`);
       await page.getByText('Лояльность гостя').waitFor({ timeout: 20000 });
       await page.getByPlaceholder('Код гостя: 5 цифр').waitFor({ timeout: 20000 });
+      await shot(page, name);
+      pass(name, 'кабинет бариста: «Код гостя: 5 цифр» на месте');
     }
     await withViewport(browser, 1440, 900, async (page) => {
-      await baristaCabinet(page);
-      await shot(page, 'barista-cabinet-desktop-1440x900');
-      pass('barista desktop', 'кабинет бариста: «Код гостя: 5 цифр» на месте');
+      await baristaFirstLogin(page);
+      await baristaCabinetShot(page, 'barista-cabinet-desktop-1440x900');
     });
     await withViewport(browser, 390, 844, async (page) => {
-      await baristaCabinet(page);
-      await shot(page, 'barista-cabinet-mobile-390x844');
-      pass('barista mobile', 'кабинет бариста (390×844): «Код гостя: 5 цифр» на месте');
+      await baristaCabinetShot(page, 'barista-cabinet-mobile-390x844');
     });
 
     // Гость: ЛК → QR-модалка с 5-значным кодом (UUID не показывается).
@@ -122,8 +127,8 @@ async function withViewport(browser, width, height, fn) {
       if (landed.pathname !== '/loyalty') throw new Error(`вход гостя привёл на ${landed.pathname}`);
       await page.getByRole('button', { name: /Показать мой QR-код/ }).click();
       await page.getByText('Ваш код для бариста').waitFor({ timeout: 20000 });
-      const code = await page.locator('.data-value').last().innerText();
-      if (!/^\d{5}$/.test(code.trim())) throw new Error(`код «${code}» не по формату \d{5}`);
+      const code = (await page.getByRole('dialog').locator('.data-value').innerText()).trim();
+      if (!/^\d{5}$/.test(code)) throw new Error(`код «${code}» не по формату \\d{5}`);
       await shot(page, name);
       pass(name, `QR-модалка с кодом ${code}`);
     }

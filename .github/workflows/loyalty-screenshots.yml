@@ -1,0 +1,98 @@
+name: loyalty-screenshots
+# Скриншоты ключевых экранов задачи 3 пакета №5 (постоянный 5-значный код
+# гостя): ЛК гостя с кодом в QR-модалке и кабинет бариста с полем ручного
+# ввода. Только вручную. Временные учётки — шаблоны verify-barista-access
+# (barista-verify-temp-<run>@example.com создаёт кофейня через интерфейс,
+# barista-verify-guest-<run>@example.com — серверный python prepare), уборка —
+# тем же python (purge). Артефакты: 4 PNG (десктоп 1440×900, мобильный 390×844).
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: loyalty-screenshots
+  cancel-in-progress: false
+jobs:
+  shots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PROD_URL: ${{ vars.PROD_URL }}
+      CAFE_EMAIL: ${{ secrets.CABINET_CAFE_EMAIL }}
+      CAFE_PASSWORD: ${{ secrets.CABINET_CAFE_PASSWORD }}
+      BARISTA_EMAIL: ${{ secrets.CABINET_BARISTA_EMAIL }}
+      BARISTA_PASSWORD: ${{ secrets.CABINET_BARISTA_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: validate input
+        run: |
+          [ -n "$PROD_URL" ] || { echo "::error::PROD_URL не задан"; exit 1; }
+          for name in CAFE_EMAIL CAFE_PASSWORD BARISTA_EMAIL BARISTA_PASSWORD; do
+            [ -n "${!name}" ] || { echo "::error::секрет CABINET_$name не задан"; exit 1; }
+          done
+      - name: payloads
+        run: |
+          umask 077
+          temp_password=$(openssl rand -base64 24 | tr -d '/+=\n')
+          guest_password=$(openssl rand -base64 33 | tr -d '/+=\n')
+          staff_password=$(openssl rand -base64 33 | tr -d '/+=\n')
+          for secret in "$temp_password" "$guest_password" "$staff_password"; do
+            echo "::add-mask::$secret"
+          done
+          python3 - "$temp_password" "$guest_password" "$staff_password" <<'PY'
+          import json, os, sys
+          run = os.environ['GITHUB_RUN_ID']
+          base = os.environ['RUNNER_TEMP'] + '/base.json'
+          json.dump({
+              'base_url': os.environ['PROD_URL'],
+              'cafe_id': 'shop-xo-vsevolozhsk',
+              'reset_barista': False,
+              'amount': 317,
+              'cafe': {'email': os.environ['CAFE_EMAIL'], 'password': os.environ['CAFE_PASSWORD']},
+              'barista': {'email': os.environ['BARISTA_EMAIL'], 'password': os.environ['BARISTA_PASSWORD'],
+                          'temp_password': sys.argv[1]},
+              'guest': {'email': f'barista-verify-guest-{run}@example.com', 'password': sys.argv[2],
+                        'display_name': f'Скриншоты {run}'},
+              'temp_barista': {'email': f'barista-verify-temp-{run}@example.com',
+                               'name': f'Скриншоты бариста {run}',
+                               'note': f'Скриншоты {run}', 'temp_password': sys.argv[1],
+                               'temp_password2': sys.argv[1], 'password': sys.argv[3]},
+          }, open(base, 'w'))
+          PY
+      - uses: ./.github/actions/ssh-setup
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      - name: upload server script
+        id: remote
+        run: |
+          remote=$(ssh prod 'mktemp /tmp/loyalty-screenshots.XXXXXX')
+          echo "path=$remote" >> "$GITHUB_OUTPUT"
+          scp -q deploy/timeweb/verify-barista-access.py "prod:$remote"
+      - name: playwright
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
+          npm init -y > /dev/null
+          npm install --silent --no-audit --no-fund playwright@1.48.2
+          npx playwright install --with-deps chromium > /dev/null
+      - name: temp guest (server prepare)
+        run: |
+          set -o pipefail
+          ssh prod "python3 ${{ steps.remote.outputs.path }} prepare" < "$RUNNER_TEMP/base.json" | tee "$RUNNER_TEMP/prepare.out"
+          grep -q '^temp guest: created' "$RUNNER_TEMP/prepare.out"
+      - name: screenshots (prod UI)
+        run: node scripts/ops/loyalty-screenshots.cjs "$RUNNER_TEMP/pw/node_modules/playwright" "$RUNNER_TEMP/shots" "$RUNNER_TEMP/base.json"
+      - name: cleanup (temp guest and temp barista)
+        if: always()
+        run: ssh prod "python3 ${{ steps.remote.outputs.path }} purge" < "$RUNNER_TEMP/base.json" || true
+      - name: remove server script
+        if: always()
+        run: ssh prod "rm -f ${{ steps.remote.outputs.path }} ${{ steps.remote.outputs.path }}.others.json" || true
+      - name: upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loyalty-screenshots
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: ignore
+          retention-days: 7
