@@ -94,9 +94,11 @@ begin
   end if;
 end $$;
 
--- staff-аккаунт: ему код НЕ выдаётся (backfill только enthusiast).
-update public.profiles set role = 'barista', cafe_id = 'shop-x', barista_id = 'barista-1'
-where email = 'orphan-staff@example.com';
+-- staff-аккаунт (один из сирот) получил роль бариста ДО 0050 (шаг workflow
+-- между миграциями): backfill кода 0051 его не должен затронуть — коды
+-- только у enthusiast. Если конвертированный из гостя staff код и сохранил,
+-- lookup по коду всё равно отфильтрует его по role='enthusiast' — здесь
+-- фиксируем инвариант «коды выдаются гостям».
 
 \echo '== 0051: backfill кода — все enthusiast с кодом, коды уникальны и по 5 цифр =='
 do $$
@@ -139,26 +141,36 @@ begin
 end $$;
 
 \echo '== 0051: уникальный индекс не пускает дубликат =='
+-- Детерминированно и без гонки: у существующего гостя код меняем на уже
+-- занятый '00007' (занят форсированной строкой выше) — unique index
+-- profiles_guest_code_key обязан отклонить. Прямой insert не подходит:
+-- вставка в auth.users сама создаёт строку триггером (конфликт PK, а не
+-- проверяемого индекса).
 do $$
 declare
-  v_free_id uuid;
+  v_other uuid;
   v_raised boolean := false;
+  v_msg text;
 begin
-  -- Свежий юзер: его id свободен, конфликтует ТОЛЬКО код '00007'.
-  insert into auth.users (email) values ('dup-probe@example.com') returning id into v_free_id;
+  select id into v_other from public.profiles
+  where role = 'enthusiast' and guest_code <> '00007'
+  order by created_at, id limit 1;
   begin
-    insert into public.profiles (id, role, guest_code)
-    values (v_free_id, 'enthusiast', '00007');
+    update public.profiles set guest_code = '00007' where id = v_other;
   exception
     when unique_violation then
       v_raised := true;
+      get stacked diagnostics v_msg = message_text;
   end;
   if not v_raised then
     raise exception 'guest_code: дубликат 00007 прошёл — уникальный индекс не сработал';
   end if;
-  -- Проба не должна оставить строку profiles (вставка откатилась).
-  if exists (select 1 from public.profiles where id = v_free_id) then
-    raise exception 'guest_code: дубликат оставил строку profiles';
+  if v_msg not like '%profiles_guest_code_key%' then
+    raise exception 'guest_code: unique_violation от «%», ожидался индекс profiles_guest_code_key', v_msg;
+  end if;
+  -- Попытка откатилась: код гостя прежний, не 00007.
+  if exists (select 1 from public.profiles where id = v_other and guest_code = '00007') then
+    raise exception 'guest_code: отклонённый дубликат остался в строке';
   end if;
 end $$;
 

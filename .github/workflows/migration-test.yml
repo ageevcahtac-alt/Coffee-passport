@@ -37,6 +37,10 @@ jobs:
         run: psql "$PGCONNECT" -v ON_ERROR_STOP=1 -f supabase/tests/profilesGuestCode/harness.sql
       - name: apply 0050 (настоящий файл миграции)
         run: psql "$PGCONNECT" -v ON_ERROR_STOP=1 -1 -f supabase/migrations/0050_profiles_backfill_and_grant_lockdown.sql
+      - name: promote orphan-staff до 0051 (backfill кода не должен затронуть staff)
+        run: |
+          psql "$PGCONNECT" -v ON_ERROR_STOP=1 \
+            -c "update public.profiles set role = 'barista', cafe_id = 'shop-x', barista_id = 'barista-1' where email = 'orphan-staff@example.com'"
       - name: apply 0051 (настоящий файл миграции)
         run: psql "$PGCONNECT" -v ON_ERROR_STOP=1 -1 -f supabase/migrations/0051_guest_code.sql
       - name: assertions

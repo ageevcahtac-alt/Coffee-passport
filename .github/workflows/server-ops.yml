@@ -39,9 +39,18 @@ jobs:
           [[ "$DB_QUERY" =~ ^[Ss][Ee][Ll][Ee][Cc][Tt][[:space:]] ]] || { echo "::error::db_query must be a SELECT"; exit 1; }
           [[ "$DB_QUERY" != *';'* ]] || { echo "::error::db_query: одна команда, без ;"; exit 1; }
           [[ "$DB_QUERY" != *'"'* ]] || { echo "::error::db_query: без двойных кавычек"; exit 1; }
+          # SELECT INTO — это запись: блокируем слово целиком (границы слова),
+          # а также shell-подстановки — запрос уходит на сервер через stdin,
+          # без интерполяции оболочек.
+          [[ ! "$DB_QUERY" =~ (^|[^a-zA-Z_])[Ii][Nn][Tt][Oo][[:space:]] ]] || { echo "::error::db_query: INTO запрещён (это запись)"; exit 1; }
+          [[ "$DB_QUERY" != *'$'* && "$DB_QUERY" != *'`'* ]] || { echo "::error::db_query: без $ и обратных кавычек"; exit 1; }
       - name: db query
         if: env.DB_QUERY != ''
-        run: ssh prod "docker exec supabase-db psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -P pager=off -c \"$DB_QUERY\"" 2>&1 | node scripts/ops/redact.mjs
+        # Транспорт — через stdin (printf | ssh | docker exec -i | psql -f -):
+        # текст запроса не проходит ни через локальную, ни через удалённую
+        # оболочку ($()-подстановки не выполнятся). PGOPTIONS read-only на
+        # уровне БД: даже обходной SELECT … INTO/DDL отклонит транзакция.
+        run: printf '%s' "$DB_QUERY" | ssh prod "docker exec -i -e PGOPTIONS=-cdefault_transaction_read_only=on supabase-db psql -U postgres -d postgres -X -v ON_ERROR_STOP=1 -P pager=off -f -" 2>&1 | node scripts/ops/redact.mjs
       - name: app logs
         run: |
           ssh prod "journalctl -u coffee-passport -n $LINES --no-pager" 2>&1 | node scripts/ops/redact.mjs

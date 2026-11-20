@@ -166,7 +166,9 @@ export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
         kind: 'ok',
         text: `Карта на ${fmt(nominal)} ₽ ${result.card && guest.card ? 'пополнена' : 'продана'}. Баланс: ${fmt(result.card?.balance ?? 0)} ₽. Ранг и зёрна не изменились.`,
       });
-      void loadGuest(guest.id, { resetForm: false });
+      // viaCode сохраняем: карточка найдена по коду — подсказка сверки
+      // личности обязана остаться до любого списания (codex review, пакет №5).
+      void loadGuest(guest.id, { resetForm: false, viaCode: guestViaCode });
     } else {
       setMessage({ kind: 'error', text: result.error ?? 'Не удалось продать карту.' });
     }
@@ -222,7 +224,8 @@ export function BaristaLoyaltyPanel({ shopId }: { shopId: string }) {
       });
       setGrossAmount('');
       setBeansInput('');
-      void loadGuest(guest.id, { resetForm: false });
+      // См. handleSell: поиск по коду — подсказка сверки личности сохраняется.
+      void loadGuest(guest.id, { resetForm: false, viaCode: guestViaCode });
     } else {
       setMessage({ kind: 'error', text: result.error ?? 'Не удалось провести чек.' });
     }
