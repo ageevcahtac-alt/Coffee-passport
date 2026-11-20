@@ -260,9 +260,9 @@ describe('GET /api/cafe/staff/barista-accounts', () => {
     const response = await GET();
     expect(response.status).toBe(200);
     expect((await response.json()).accounts).toEqual([
-      { baristaId: 'barista-pending', name: 'Анна', email: 'u-pending@example.com', status: 'pending', expiresAt: new Date(now + HOUR).toISOString() },
-      { baristaId: 'barista-expired', name: 'Борис', email: 'u-expired@example.com', status: 'expired', expiresAt: new Date(now - HOUR).toISOString() },
-      { baristaId: 'barista-active', name: 'Вера', email: 'vera@example.com', status: 'active', expiresAt: null },
+      { baristaId: 'barista-pending', userId: 'u-pending', name: 'Анна', email: 'u-pending@example.com', status: 'pending', expiresAt: new Date(now + HOUR).toISOString() },
+      { baristaId: 'barista-expired', userId: 'u-expired', name: 'Борис', email: 'u-expired@example.com', status: 'expired', expiresAt: new Date(now - HOUR).toISOString() },
+      { baristaId: 'barista-active', userId: 'u-active', name: 'Вера', email: 'vera@example.com', status: 'active', expiresAt: null },
     ]);
   });
 });

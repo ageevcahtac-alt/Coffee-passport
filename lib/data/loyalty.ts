@@ -18,7 +18,7 @@ import type {
   LoyaltyHistoryItem,
   ShopRank,
 } from '@/lib/types/loyalty';
-import { HALL_CIRCUIT, HISTORY_WINDOW_MONTHS, nextRankAbove } from '@/lib/types/loyalty';
+import { ANOMALY_FETCH_LIMIT, HALL_CIRCUIT, HISTORY_WINDOW_MONTHS, nextRankAbove } from '@/lib/types/loyalty';
 import { getBrowserSupabaseClient } from '@/lib/supabase/browserClient';
 import { generateId } from '@/lib/utils/id';
 
@@ -225,20 +225,40 @@ export async function fetchGuestProfileByCode(
 
 // Batch guest-name lookup for the dashboard's registries — same "staff read
 // enthusiast display names" RLS policy as fetchGuestProfile, for many ids.
-export async function fetchGuestDisplayNames(guestIds: string[]): Promise<Map<string, string>> {
-  const uniqueIds = Array.from(new Set(guestIds));
-  if (uniqueIds.length === 0) return new Map();
-  try {
-    const supabase = getBrowserSupabaseClient();
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, display_name')
-      .in('id', uniqueIds);
-    if (error || !data) return new Map();
-    return new Map(data.map((row) => [row.id, row.display_name ?? row.id.slice(0, 8)]));
-  } catch {
-    return new Map();
+// Чанкинг IN-запросов: сотни UUID одной строкой query могут не пролезть в
+// лимит URL прокси (находка Codex, round 2 пакета №6) — рвём на пачки и
+// склеиваем; упавший чанк просто даёт неполную карту, без исключения.
+const PROFILE_IN_CHUNK = 100;
+
+async function selectProfilesByIds(ids: string[], select: string): Promise<{ id: string }[]> {
+  const uniqueIds = Array.from(new Set(ids));
+  const rows: { id: string }[] = [];
+  for (let i = 0; i < uniqueIds.length; i += PROFILE_IN_CHUNK) {
+    try {
+      const supabase = getBrowserSupabaseClient();
+      const { data, error } = await supabase.from('profiles').select(select).in('id', uniqueIds.slice(i, i + PROFILE_IN_CHUNK));
+      if (error || !data) continue;
+      rows.push(...(data as unknown as { id: string }[]));
+    } catch {
+      /* чанк пропущен */
+    }
   }
+  return rows;
+}
+
+export async function fetchGuestDisplayNames(guestIds: string[]): Promise<Map<string, string>> {
+  if (guestIds.length === 0) return new Map();
+  const rows = (await selectProfilesByIds(guestIds, 'id, display_name')) as { id: string; display_name?: string | null }[];
+  return new Map(rows.map((row) => [row.id, row.display_name ?? row.id.slice(0, 8)]));
+}
+
+// 5-значные коды гостей (0051) для экрана «Аномалии»: имя + код однозначно
+// показывают, чей это аккаунт, без UUID. Код nullable (backfill 0051) —
+// старым строкам может не быть кода, UI это терпит.
+export async function fetchGuestCodes(guestIds: string[]): Promise<Map<string, string | null>> {
+  if (guestIds.length === 0) return new Map();
+  const rows = (await selectProfilesByIds(guestIds, 'id, guest_code')) as { id: string; guest_code?: string | null }[];
+  return new Map(rows.map((row) => [row.id, row.guest_code ?? null]));
 }
 
 export interface OwnProfilePatch {
@@ -681,5 +701,63 @@ export async function fetchShopConsumptions(shopId: string, limit = 200): Promis
     return (data as LoyaltyConsumptionRow[]).map(rowToConsumption);
   } catch {
     return [];
+  }
+}
+
+// Чеки за скользящее окно (экран «Аномалии»): те же RLS, что и у журнала
+// сверки, выборка по дате + потолок строк, чтобы агрегация жила на клиенте
+// и оба переключателя (неделя/месяц) не дёргали базу заново. Результат
+// отличает «чеков нет» (ok, пустые rows) от «не загрузилось» (ok: false) —
+// иначе сбой чтения неотличим от честного отсутствия данных. Обрезка
+// детектится запросом limit+1: хвостовая строка — не данные, а флаг «за окно
+// чеков больше, чем показано» (иначе ровно limit чеков выглядел бы обрезанным).
+export type ShopConsumptionsResult =
+  | { ok: true; rows: Consumption[]; truncated: boolean }
+  | { ok: false };
+
+export async function fetchShopConsumptionsSince(
+  shopId: string,
+  sinceDays: number,
+  limit = ANOMALY_FETCH_LIMIT,
+): Promise<ShopConsumptionsResult> {
+  try {
+    const supabase = getBrowserSupabaseClient();
+    const since = new Date(Date.now() - sinceDays * 86_400_000).toISOString();
+    const { data, error } = await supabase
+      .from('loyalty_consumptions')
+      .select('*')
+      .eq('shop_id', shopId)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(limit + 1);
+    if (error || !data) return { ok: false };
+    const rows = data as LoyaltyConsumptionRow[];
+    return {
+      ok: true,
+      rows: rows.slice(0, limit).map(rowToConsumption),
+      truncated: rows.length > limit,
+    };
+  } catch {
+    return { ok: false };
+  }
+}
+
+// Имена бариста для «Аномалий»: профили staff кофейня из браузера не читает
+// (политика 0013 — staff читает display_name только у энтузиастов), поэтому
+// имена берём из учёток команды — тот же GET, что и страница «Команда».
+export async function fetchCafeBaristaNames(): Promise<Map<string, string>> {
+  try {
+    const response = await fetch('/api/cafe/staff/barista-accounts', { cache: 'no-store' });
+    const result = (await response.json().catch(() => ({}))) as {
+      accounts?: { userId?: string; name?: string }[];
+    };
+    if (!response.ok || !result.accounts) return new Map();
+    return new Map(
+      result.accounts.flatMap((account) =>
+        account.userId && account.name ? [[account.userId, account.name]] : [],
+      ),
+    );
+  } catch {
+    return new Map();
   }
 }

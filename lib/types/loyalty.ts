@@ -160,6 +160,71 @@ export function maxBeansForCheck(grossAmount: number): number {
   return Math.floor(grossAmount / 2);
 }
 
+// ── «Аномалии» (кабинет кофейни) ──────────────────────────────────────────
+// Экран read-only прозрачности: запретов не вводим, владелец видит
+// подозрительное глазами. Источник — тот же журнал loyalty_consumptions,
+// что и у «Журнала чеков»; логику начислений здесь НЕТ — только выборки.
+// Порог «чека выше нормы» — одна константа на весь экран (по умолчанию
+// заметно выше среднего чека кофейни ~536 ₽).
+export const ANOMALY_CHECK_THRESHOLD_RUBLES = 1500;
+export const ANOMALY_TOP_GUESTS_LIMIT = 10;
+export const ANOMALY_TALL_CHECKS_LIMIT = 50;
+// Потолок выборки за месяц: больше — экран честно говорит, что данные окна
+// неполные, а не молча режет (обе таблицы строятся из этих строк).
+export const ANOMALY_FETCH_LIMIT = 1000;
+// Скользящие окна — как у ранга (7/30 дней), не календарные.
+export type AnomalyPeriod = 'week' | 'month';
+export const ANOMALY_PERIOD_DAYS: Record<AnomalyPeriod, number> = { week: 7, month: 30 };
+
+export interface TopCashbackGuest {
+  guestId: string;
+  // Кэшбэк за окно, зёрна (1 зерно = 1 ₽): только earn-процент с чека,
+  // welcome-бонус сюда не входит — это не кэшбэк.
+  earnedBeans: number;
+  checksCount: number;
+}
+
+// Чеки внутри скользящего окна [now − days, now].
+export function windowConsumptions(consumptions: Consumption[], days: number, now: Date = new Date()): Consumption[] {
+  const sinceMs = now.getTime() - days * 86_400_000;
+  return consumptions.filter((c) => new Date(c.createdAt).getTime() >= sinceMs);
+}
+
+// Топ гостей по начисленному кэшбэку за (уже оконченный) набор чеков.
+// Порядок: по убыванию кэшбэка, при равенстве — по числу чеков.
+export function topGuestsByCashback(
+  consumptions: Consumption[],
+  limit = ANOMALY_TOP_GUESTS_LIMIT,
+): TopCashbackGuest[] {
+  const byGuest = new Map<string, TopCashbackGuest>();
+  for (const c of consumptions) {
+    const entry = byGuest.get(c.guestId) ?? { guestId: c.guestId, earnedBeans: 0, checksCount: 0 };
+    entry.earnedBeans += c.beansEarned;
+    entry.checksCount += 1;
+    byGuest.set(c.guestId, entry);
+  }
+  return [...byGuest.values()]
+    .sort((a, b) => b.earnedBeans - a.earnedBeans || b.checksCount - a.checksCount)
+    .slice(0, limit);
+}
+
+// Чеки строго выше порога (превышают — равный порогу не аномалия),
+// по убыванию суммы, затем свежести; limit обрезает самое старое.
+export function tallChecks(
+  consumptions: Consumption[],
+  threshold: number = ANOMALY_CHECK_THRESHOLD_RUBLES,
+  limit: number = ANOMALY_TALL_CHECKS_LIMIT,
+): Consumption[] {
+  return consumptions
+    .filter((c) => c.grossAmount > threshold)
+    .sort(
+      (a, b) =>
+        b.grossAmount - a.grossAmount ||
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    )
+    .slice(0, limit);
+}
+
 export function pluralizeDays(count: number): string {
   const mod10 = count % 10;
   const mod100 = count % 100;

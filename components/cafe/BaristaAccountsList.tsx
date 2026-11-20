@@ -5,7 +5,10 @@ import { StaffAvatar } from './StaffAvatar';
 import { TemporaryPasswordInput, formatExpiry } from './BaristaAccountForm';
 
 export type BaristaAccount = {
+  // id строки barista_profiles — для привязки прав; userId — id auth.users,
+  // ссылкой на него журнал чеков (loyalty_consumptions.barista_id).
   baristaId: string;
+  userId: string;
   name: string;
   email: string;
   status: 'active' | 'pending' | 'expired';

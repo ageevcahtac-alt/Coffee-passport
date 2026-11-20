@@ -70,10 +70,12 @@ export async function signInWithPassword(formData: FormData) {
       .select('role')
       .eq('id', data.user.id)
       .maybeSingle()
-    const role = profile?.role as ProfileRole | undefined
-    if (role) {
-      destination = isStaffRole(role) ? cabinetPathFor(role) : '/loyalty'
-    }
+    // Профиль не прочитался (строки нет — сирота/триггер, сбой запроса) —
+    // тот же дефолт, что и у getSiteSession: энтузиаст. Иначе destination
+    // остаётся '/' и гость приземляется на карточку-посредника (замечание
+    // владельца после приёмки: «выход → вход → "Вы вошли как"»).
+    const role = (profile?.role as ProfileRole | undefined) ?? 'enthusiast'
+    destination = isStaffRole(role) ? cabinetPathFor(role) : '/loyalty'
   }
 
   revalidatePath('/', 'layout')
@@ -97,8 +99,11 @@ export async function signUpWithPassword(formData: FormData) {
     redirect(authErrorPath(errorRedirect, error.message))
   }
 
+  // Дефолтные лендинги формы (та же пара, что у входа) ведут энтузиаста сразу
+  // в /loyalty: регистрация с /auth/login не должна приземляться на карточку
+  // «Вы вошли как» на главной. Явный next (QR-паспорт) сохраняет контекст.
   revalidatePath('/', 'layout')
-  redirect(next)
+  redirect(next === '/' || next === '/journey' ? '/loyalty' : next)
 }
 
 export async function signOut() {

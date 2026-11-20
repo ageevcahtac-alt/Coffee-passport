@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ANOMALY_CHECK_THRESHOLD_RUBLES,
+  ANOMALY_PERIOD_DAYS,
   beansCountdown,
   BEANS_EXPIRY_DAYS,
   HISTORY_PREVIEW_COUNT,
@@ -10,7 +12,11 @@ import {
   pluralizeDays,
   RANK_WINDOW_DAYS,
   spendToNextRank,
+  tallChecks,
+  topGuestsByCashback,
+  windowConsumptions,
   WELCOME_BEANS,
+  type Consumption,
   type ShopRank,
 } from '@/lib/types/loyalty';
 
@@ -109,5 +115,92 @@ describe('константы правил лояльности — одно ме
     expect(HISTORY_PREVIEW_COUNT).toBe(3);
     expect(WELCOME_BEANS).toBe(300);
     expect(MAX_BEANS_SHARE_PERCENT).toBe(50);
+  });
+});
+
+// Заводка чека для тестов аномалий — только поля, которые читают агрегаторы.
+function check(overrides: Partial<Consumption> & { guestId: string }): Consumption {
+  return {
+    id: `c-${overrides.guestId}-${overrides.grossAmount ?? 100}`,
+    shopId: 'shop-xo-vsevolozhsk',
+    baristaId: 'barista-1',
+    rankId: null,
+    grossAmount: 100,
+    beansRedeemed: 0,
+    cardAmount: 0,
+    cashAmount: 100,
+    beansEarned: 2,
+    welcomeGranted: 0,
+    createdAt: '2026-11-10T12:00:00Z',
+    ...overrides,
+  };
+}
+
+describe('аномалии — порог чека «выше нормы»', () => {
+  it('строгое превышение: равный порогу чек не аномалия', () => {
+    const rows = [check({ guestId: 'g1', grossAmount: 1500 }), check({ guestId: 'g2', grossAmount: 1501 })];
+    const tall = tallChecks(rows);
+    expect(tall.map((c) => c.grossAmount)).toEqual([1501]);
+  });
+
+  it('порог — константа одного места (по умолчанию 1500 ₽) и её можно переопределить', () => {
+    expect(ANOMALY_CHECK_THRESHOLD_RUBLES).toBe(1500);
+    const rows = [check({ guestId: 'g1', grossAmount: 900 })];
+    expect(tallChecks(rows, 500).map((c) => c.grossAmount)).toEqual([900]);
+  });
+
+  it('сортировка по убыванию суммы, при равенстве — свежее первым, limit обрезает', () => {
+    const rows = [
+      check({ guestId: 'g1', grossAmount: 2000, createdAt: '2026-11-01T09:00:00Z' }),
+      check({ guestId: 'g2', grossAmount: 3000, createdAt: '2026-11-01T08:00:00Z' }),
+      check({ guestId: 'g3', grossAmount: 2000, createdAt: '2026-11-05T09:00:00Z' }),
+      check({ guestId: 'g4', grossAmount: 5000, createdAt: '2026-10-01T09:00:00Z' }),
+    ];
+    const tall = tallChecks(rows, 1500, 3);
+    expect(tall.map((c) => c.guestId)).toEqual(['g4', 'g2', 'g3']);
+  });
+});
+
+describe('аномалии — скользящее окно периода', () => {
+  const now = new Date('2026-11-11T12:00:00Z');
+
+  it('неделя 7 дней, месяц 30 дней — граница включена', () => {
+    expect(ANOMALY_PERIOD_DAYS).toEqual({ week: 7, month: 30 });
+    const edge = check({ guestId: 'g1', createdAt: '2026-11-04T12:00:00Z' });
+    const beforeEdge = check({ guestId: 'g2', createdAt: '2026-11-04T11:59:59Z' });
+    expect(windowConsumptions([edge, beforeEdge], ANOMALY_PERIOD_DAYS.week, now).map((c) => c.guestId)).toEqual(['g1']);
+    const monthEdge = check({ guestId: 'g3', createdAt: '2026-10-12T12:00:00Z' });
+    expect(windowConsumptions([monthEdge], ANOMALY_PERIOD_DAYS.month, now)).toHaveLength(1);
+  });
+});
+
+describe('аномалии — топ гостей по кэшбэку', () => {
+  it('суммирует earn-процент по гостю, welcome не считает кэшбэком, считает чеки', () => {
+    const rows = [
+      check({ guestId: 'g1', grossAmount: 1000, beansEarned: 20, createdAt: '2026-11-10T10:00:00Z' }),
+      check({ guestId: 'g1', grossAmount: 500, beansEarned: 10, welcomeGranted: 300, createdAt: '2026-11-10T11:00:00Z' }),
+      check({ guestId: 'g2', grossAmount: 2000, beansEarned: 40, createdAt: '2026-11-09T10:00:00Z' }),
+    ];
+    const top = topGuestsByCashback(rows);
+    expect(top).toEqual([
+      { guestId: 'g2', earnedBeans: 40, checksCount: 1 },
+      { guestId: 'g1', earnedBeans: 30, checksCount: 2 },
+    ]);
+  });
+
+  it('при равном кэшбэке выше тот, у кого больше чеков; лимит обрезает', () => {
+    const rows = [
+      check({ guestId: 'g1', beansEarned: 10, createdAt: '2026-11-10T10:00:00Z' }),
+      check({ guestId: 'g1', beansEarned: 10, createdAt: '2026-11-10T11:00:00Z' }),
+      check({ guestId: 'g2', beansEarned: 20, createdAt: '2026-11-10T09:00:00Z' }),
+      check({ guestId: 'g3', beansEarned: 5, createdAt: '2026-11-10T08:00:00Z' }),
+    ];
+    const top = topGuestsByCashback(rows, 2);
+    // Кэшбэк равен (20): у g1 два чека — он выше; g3 (5) лимитом отрезан.
+    expect(top.map((t) => t.guestId)).toEqual(['g1', 'g2']);
+  });
+
+  it('гость без чеков в выборку не попадает', () => {
+    expect(topGuestsByCashback([])).toEqual([]);
   });
 });

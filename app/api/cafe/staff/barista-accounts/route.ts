@@ -156,6 +156,7 @@ export async function GET() {
     return [
       {
         baristaId,
+        userId: user.id,
         name: names.get(baristaId)!,
         email: user.email ?? '',
         status: state === 'none' ? 'active' : state === 'active' ? 'pending' : 'expired',

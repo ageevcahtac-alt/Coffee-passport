@@ -93,9 +93,14 @@ describe('login lands every role straight in its cabinet', () => {
     await expect(login('/passport/X')).rejects.toThrow(/^\/passport\/X$/);
     expect(mocks.profile).not.toHaveBeenCalled();
   });
-  it('profile lookup failure keeps the default landing', async () => {
+  it('profile lookup failure still goes to /loyalty — never the intermediate card', async () => {
+    // Регрессия приёмки владельца: «выход → вход → "Вы вошли как"». Профиль
+    // не прочитался (сирота/сбой) — гость всё равно сразу в /loyalty
+    // (тот же дефолт, что у getSiteSession), а не на карточку-посредника.
     mocks.profile.mockResolvedValue({ data: null, error: { message: 'boom' } });
-    await expect(login('/journey')).rejects.toThrow(/^\/journey$/);
+    await expect(login('/')).rejects.toThrow(/^\/loyalty$/);
+    await expect(login('/journey')).rejects.toThrow(/^\/loyalty$/);
+    await expect(login()).rejects.toThrow(/^\/loyalty$/);
   });
   it('an explicit next wins over the role cabinet', async () => {
     mocks.profile.mockResolvedValue({ data: { role: 'cafe_admin' }, error: null });
