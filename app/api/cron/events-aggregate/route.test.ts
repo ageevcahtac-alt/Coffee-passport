@@ -11,6 +11,7 @@ const insertedRows: Record<string, unknown>[] = [];
 const updatedRows: { id: string; status?: unknown }[] = [];
 const existingRows: { id: string; title: string; start_date: string; status: string }[] = [];
 let insertError: { message: string } | null = null;
+let simulateRace = false;
 let activeCount = 0;
 
 vi.mock('@/lib/supabase/adminClient', () => ({
@@ -39,11 +40,22 @@ vi.mock('@/lib/supabase/adminClient', () => ({
         return Promise.resolve({ error: insertError });
       },
       update: (patch: Record<string, unknown>) => ({
-        eq: (column: string, value: unknown) => {
-          expect(column).toBe('id');
-          updatedRows.push({ id: String(value), status: patch.status });
-          return Promise.resolve({ error: null });
-        },
+        eq: (column: string, value: unknown) => ({
+          eq: () => ({
+            select: () => ({
+              maybeSingle: () => {
+                expect(column).toBe('id');
+                updatedRows.push({ id: String(value), status: patch.status });
+                // simulateRace=true — строку заархивировали между чтением и
+                // UPDATE: условие статуса не дало затронуть ни одну строку.
+                return Promise.resolve({
+                  data: simulateRace ? null : { id: String(value) },
+                  error: null,
+                });
+              },
+            }),
+          }),
+        }),
       }),
     }),
   }),
@@ -80,6 +92,7 @@ describe('POST /api/cron/events-aggregate (пакет №4)', () => {
     updatedRows.length = 0;
     existingRows.length = 0;
     insertError = null;
+    simulateRace = false;
     activeCount = 0;
     vi.resetModules();
     process.env.EVENTS_CRON_SECRET = 'test-cron-secret';
@@ -122,6 +135,23 @@ describe('POST /api/cron/events-aggregate (пакет №4)', () => {
     expect(updatedRows).toEqual([{ id: 'p1', status: 'active' }]);
     // Добор остановился на минимуме: ОГОНЁК не вставляли.
     expect(insertedRows).toHaveLength(0);
+  });
+
+  it('top-up: гонка — pending заархивировали до UPDATE → не воскрешаем, добираем следующим каталожным', async () => {
+    activeCount = 3;
+    simulateRace = true;
+    existingRows.push(
+      { id: 'p1', title: 'Open Coffee Fest', start_date: '2026-12-05', status: 'pending_review' }
+    );
+    const { POST } = await import('./route');
+    const response = await POST(cronRequest());
+    const body = await response.json();
+
+    expect(body.curatedTopUp.promoted).toBe(0);
+    expect(body.curatedTopUp.inserted).toBe(1);
+    expect(body.curatedTopUp.activeCount).toBe(4);
+    // Вместо воскрешения вставили следующее по близости событие ленты.
+    expect(insertedRows[0].title).toBe('Фестиваль «ОГОНЁК»');
   });
 
   it('top-up: ошибки вставки уходят в отчёт прогона, а не проглатываются', async () => {

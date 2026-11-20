@@ -93,12 +93,33 @@ export async function ensureCuratedEvents(supabase: SupabaseClient): Promise<Top
     const key = `${event.title}|${event.startDate}`;
     const pendingId = pendingByKey.get(key);
     if (pendingId) {
-      const { error } = await supabase
+      // Повышение по условию статуса и с полями ДОВЕРЕННОГО каталога:
+      // pending-строка из внешнего источника могла принести устаревшие
+      // даты/ссылку — перезаписываем целиком (Codex review round 2). Если
+      // админ за время прогона уже заархивировал строку, условие статуса
+      // не даст UPDATE'у ничего затронуть — и мы её не «воскресим».
+      const { data: promoted, error } = await supabase
         .from('events')
-        .update({ status: 'active', updated_at: new Date().toISOString() })
-        .eq('id', pendingId);
+        .update({
+          title: event.title,
+          location: event.location,
+          description: event.description,
+          start_date: event.startDate,
+          end_date: event.endDate,
+          link: event.link,
+          status: 'active',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', pendingId)
+        .eq('status', 'pending_review')
+        .select('id')
+        .maybeSingle();
       if (error) {
         result.errors.push(`promote ${key}: ${error.message}`);
+        continue;
+      }
+      if (!promoted) {
+        // Гонка со сменой статуса другой сессией — строка не воскрешена.
         continue;
       }
       result.promoted += 1;

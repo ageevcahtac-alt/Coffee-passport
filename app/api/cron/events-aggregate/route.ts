@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/adminClient';
 import { isCronRequestAuthorized } from '@/lib/events/cronAuth';
 import { getEventSources } from '@/lib/events/sources';
-import { ensureCuratedEvents } from '@/lib/events/curatedEvents';
+import { ensureCuratedEvents, type TopUpResult } from '@/lib/events/curatedEvents';
 import { checkEventLink } from '@/lib/events/linkCheck';
 
 // Daily aggregator pass: pulls candidates from every configured
@@ -68,10 +68,15 @@ export async function POST(request: Request) {
     }
   }
 
-  let topUp = { activeCount: 0, inserted: 0 };
+  let topUp: TopUpResult = { activeCount: 0, inserted: 0, promoted: 0, errors: [] };
   let topUpError: string | null = null;
   try {
     topUp = await ensureCuratedEvents(supabase);
+    if (topUp.errors.length > 0) {
+      // Ошибки insert/promote — обычный (не исключительный) результат:
+      // без лога они исчезнут вместе с ответом (Codex review round 2).
+      console.error('[cron/events-aggregate] curated top-up errors:', topUp.errors);
+    }
   } catch (err) {
     topUpError = err instanceof Error ? err.message : 'Unknown top-up error';
     console.error('[cron/events-aggregate] curated top-up failed', err);
