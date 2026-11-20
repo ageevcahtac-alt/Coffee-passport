@@ -95,6 +95,34 @@ describe('POST /api/cron/events-archive (пакет №4)', () => {
     expect(blankedUpdates).toHaveLength(0);
   });
 
+  it('сетевой сбой (таймаут/DNS) — ссылка НЕ трогается, строка уходит в unchecked', async () => {
+    // Finding 1 ревью: временная недоступность не должна безвозвратно
+    // стирать рабочую ссылку.
+    activeAutoRows = [{ id: 'evt-offline', link: 'https://offline.example.com/fest' }];
+    fetchMock.mockRejectedValue(new Error('fetch failed'));
+
+    const { POST } = await import('./route');
+    const response = await POST(cronRequest());
+    const body = await response.json();
+
+    expect(body.deadLinksBlanked).toBe(0);
+    expect(body.unchecked).toBe(1);
+    expect(blankedUpdates).toHaveLength(0);
+  });
+
+  it('HTTP 500 от сервера — не «dead», ссылка переживёт чужой плохой день', async () => {
+    activeAutoRows = [{ id: 'evt-500', link: 'https://oops.example.com/fest' }];
+    fetchMock.mockResolvedValue({ ok: false, status: 500 } as Response);
+
+    const { POST } = await import('./route');
+    const response = await POST(cronRequest());
+    const body = await response.json();
+
+    expect(body.deadLinksBlanked).toBe(0);
+    expect(body.unchecked).toBe(1);
+    expect(blankedUpdates).toHaveLength(0);
+  });
+
   it('без секрета крона — 401', async () => {
     process.env.EVENTS_CRON_SECRET = '';
     const { POST } = await import('./route');

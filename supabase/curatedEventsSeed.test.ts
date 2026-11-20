@@ -20,11 +20,18 @@ describe('curated events seed (0049)', () => {
   it('исправляет обе неверные сидовые строки и только их', () => {
     const sql = readSql(MIGRATION);
     const updates = sql.match(/update\s+public\.events/g) ?? [];
-    expect(updates).toHaveLength(2);
+    // По две ветки на строку: (a) ключ свободен → перезапись, (b) занят →
+    // архивация дубля (Codex review round 1, finding 4).
+    expect(updates).toHaveLength(4);
     // Coffee Fest (Севкабель, 21–22 ноября 2026) → Open Coffee Fest.
     expect(sql).toMatch(/where\s+title\s*=\s*'Coffee Fest'\s+and\s+start_date\s*=\s*'2026-11-21'/i);
     // «World of Coffee Милан» → Дубай.
     expect(sql).toMatch(/where\s+title\s*=\s*'World of Coffee'\s+and\s+start_date\s*=\s*'2027-02-19'/i);
+    // Конфликт-безопасность: каждая перезапись защищена not exists на целевой
+    // ключ, каждая архивация — exists + статус.
+    expect(sql).toMatch(/not\s+exists\s*\(\s*select\s+1\s+from\s+public\.events\s+where\s+title\s*=\s*'Open Coffee Fest'/i);
+    expect(sql).toMatch(/not\s+exists\s*\(\s*select\s+1\s+from\s+public\.events\s+where\s+title\s*=\s*'World of Coffee Дубай'/i);
+    expect((sql.match(/status\s*<>\s*'archived'/g) ?? []).length).toBe(2);
     // UPDATE'ы не переписывают чужие строки: ни одного UPDATE без where.
     expect(sql).not.toMatch(/update\s+public\.events\s+set(?:(?!where)[\s\S])*?;/i);
   });

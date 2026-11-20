@@ -30,15 +30,25 @@ export const MIN_ACTIVE_EVENTS = 4;
 export interface TopUpResult {
   activeCount: number;
   inserted: number;
+  promoted: number;
+  errors: string[];
 }
 
 // Гарантия «на витрине ВСЕГДА ≥ MIN_ACTIVE_EVENTS ближайших событий»:
 // если активных незавершившихся строк меньше минимума, добираем самыми
 // ближайшими из кураторской ленты (статус active — это доверенный
 // ручной кураторский источник, модерация не нужна; внешние ICS-кандидаты
-// по-прежнему проходят pending_review). Дедуп — ключ (title, start_date)
-// таблицы + предварительная выборка существующих ключей. Идемпотентна:
-// повторный прогон на той же базе ничего не вставляет.
+// по-прежнему проходят pending_review). Идемпотентна: повторный прогон на
+// той же базе ничего не вставляет.
+//
+// Обработка существующих строк с ключом (title, start_date) каталога
+// (Codex review, пакет №4 round 1):
+// - pending_review — это то же событие из другого источника: ПОВЫШАЕМ до
+//   active (каталог доверенный), дубль не вставляем;
+// - archived — осознанное решение админа/крона: НЕ воскрешаем, пропускаем;
+// - active — уже на витрине: учтено в счётчике, пропускаем.
+// Ошибки вставки/повышения НЕ проглатываем: возвращаем в errors, роут
+// пишет их в ответ и лог — иначе крон молча завершился бы с <4 событиями.
 export async function ensureCuratedEvents(supabase: SupabaseClient): Promise<TopUpResult> {
   const today = new Date().toISOString().slice(0, 10);
 
@@ -51,21 +61,51 @@ export async function ensureCuratedEvents(supabase: SupabaseClient): Promise<Top
     throw new Error(`ensureCuratedEvents: не удалось посчитать активные события: ${countError.message}`);
   }
   let activeCount = activeCountBefore ?? 0;
-  if (activeCount >= MIN_ACTIVE_EVENTS) return { activeCount, inserted: 0 };
+  const result: TopUpResult = { activeCount, inserted: 0, promoted: 0, errors: [] };
+  if (activeCount >= MIN_ACTIVE_EVENTS) return result;
 
-  const { data: existing, error: readError } = await supabase.from('events').select('title, start_date');
+  const { data: existing, error: readError } = await supabase
+    .from('events')
+    .select('id, title, start_date, status');
   if (readError) {
     throw new Error(`ensureCuratedEvents: не удалось прочитать события: ${readError.message}`);
   }
-  const existingKeys = new Set((existing ?? []).map((row) => `${row.title}|${row.start_date}`));
+  const takenKeys = new Set((existing ?? []).map((row) => `${row.title}|${row.start_date}`));
+  // Блокируют вставку новой строки; pending_review отдельно — не блокирует,
+  // а повышается до active (это то же событие из другого источника).
+  const blockedKeys = new Set(
+    (existing ?? [])
+      .filter((row) => row.status !== 'pending_review')
+      .map((row) => `${row.title}|${row.start_date}`)
+  );
+  const pendingByKey = new Map(
+    (existing ?? [])
+      .filter((row) => row.status === 'pending_review')
+      .map((row) => [`${row.title}|${row.start_date}`, row.id as string])
+  );
 
   const upcoming = CURATED_EVENTS.filter(
-    (event) => event.endDate >= today && !existingKeys.has(`${event.title}|${event.startDate}`)
+    (event) => event.endDate >= today && !blockedKeys.has(`${event.title}|${event.startDate}`)
   ).sort((a, b) => a.startDate.localeCompare(b.startDate));
 
-  let inserted = 0;
   for (const event of upcoming) {
     if (activeCount >= MIN_ACTIVE_EVENTS) break;
+    const key = `${event.title}|${event.startDate}`;
+    const pendingId = pendingByKey.get(key);
+    if (pendingId) {
+      const { error } = await supabase
+        .from('events')
+        .update({ status: 'active', updated_at: new Date().toISOString() })
+        .eq('id', pendingId);
+      if (error) {
+        result.errors.push(`promote ${key}: ${error.message}`);
+        continue;
+      }
+      result.promoted += 1;
+      activeCount += 1;
+      continue;
+    }
+    if (takenKeys.has(key)) continue; // pending без id в выборке — гонка, не дублируем
     const { error } = await supabase.from('events').insert({
       title: event.title,
       location: event.location,
@@ -77,16 +117,17 @@ export async function ensureCuratedEvents(supabase: SupabaseClient): Promise<Top
       source: 'curated',
     });
     if (error) {
-      // Уникальный конфликт (title, start_date) — строку вставили другим
-      // путём; остальные ошибки проглатывать нельзя, но и весь прогон ломать
-      // не стоит — следующая итерация доберёт.
+      // Уникальный конфликт (title, start_date) вставили другим путём между
+      // чтением и записью; прочие ошибки — в отчёт прогона.
+      result.errors.push(`insert ${key}: ${error.message}`);
       continue;
     }
-    inserted += 1;
+    result.inserted += 1;
     activeCount += 1;
   }
 
-  return { activeCount, inserted };
+  result.activeCount = activeCount;
+  return result;
 }
 
 export const CURATED_EVENTS: CuratedEvent[] = [

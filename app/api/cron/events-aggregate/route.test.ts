@@ -8,6 +8,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const rpcCalls: { fn: string; params: Record<string, unknown> }[] = [];
 const insertedRows: Record<string, unknown>[] = [];
+const updatedRows: { id: string; status?: unknown }[] = [];
+const existingRows: { id: string; title: string; start_date: string; status: string }[] = [];
+let insertError: { message: string } | null = null;
 let activeCount = 0;
 
 vi.mock('@/lib/supabase/adminClient', () => ({
@@ -28,13 +31,20 @@ vi.mock('@/lib/supabase/adminClient', () => ({
         }
         return {
           then: (onFulfilled: (value: { data: unknown; error: null }) => unknown) =>
-            onFulfilled({ data: [], error: null }),
+            onFulfilled({ data: existingRows, error: null }),
         };
       },
       insert: (row: Record<string, unknown>) => {
         insertedRows.push(row);
-        return Promise.resolve({ error: null });
+        return Promise.resolve({ error: insertError });
       },
+      update: (patch: Record<string, unknown>) => ({
+        eq: (column: string, value: unknown) => {
+          expect(column).toBe('id');
+          updatedRows.push({ id: String(value), status: patch.status });
+          return Promise.resolve({ error: null });
+        },
+      }),
     }),
   }),
 }));
@@ -67,6 +77,9 @@ describe('POST /api/cron/events-aggregate (пакет №4)', () => {
   beforeEach(() => {
     rpcCalls.length = 0;
     insertedRows.length = 0;
+    updatedRows.length = 0;
+    existingRows.length = 0;
+    insertError = null;
     activeCount = 0;
     vi.resetModules();
     process.env.EVENTS_CRON_SECRET = 'test-cron-secret';
@@ -92,6 +105,35 @@ describe('POST /api/cron/events-aggregate (пакет №4)', () => {
     expect(call).toBeDefined();
     expect(call!.params.p_link).toBe('');
     expect(call!.params.p_title).toBe('Test Coffee Fest');
+  });
+
+  it('top-up: pending_review с ключом каталога повышается до active, дубль не вставляется', async () => {
+    activeCount = 3;
+    existingRows.push(
+      { id: 'p1', title: 'Open Coffee Fest', start_date: '2026-12-05', status: 'pending_review' }
+    );
+    const { POST } = await import('./route');
+    const response = await POST(cronRequest());
+    const body = await response.json();
+
+    expect(body.curatedTopUp.error).toBeNull();
+    expect(body.curatedTopUp.promoted).toBe(1);
+    expect(body.curatedTopUp.activeCount).toBe(4);
+    expect(updatedRows).toEqual([{ id: 'p1', status: 'active' }]);
+    // Добор остановился на минимуме: ОГОНЁК не вставляли.
+    expect(insertedRows).toHaveLength(0);
+  });
+
+  it('top-up: ошибки вставки уходят в отчёт прогона, а не проглатываются', async () => {
+    activeCount = 0;
+    insertError = { message: 'connection reset' };
+    const { POST } = await import('./route');
+    const response = await POST(cronRequest());
+    const body = await response.json();
+
+    expect(Array.isArray(body.curatedTopUp.errors)).toBe(true);
+    expect(body.curatedTopUp.errors.length).toBeGreaterThan(0);
+    expect(body.curatedTopUp.errors[0]).toContain('connection reset');
   });
 
   it('top-up: меньше минимума → добирает ближайшими кураторскими как active', async () => {

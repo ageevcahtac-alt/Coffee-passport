@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminSupabaseClient } from '@/lib/supabase/adminClient';
 import { isCronRequestAuthorized } from '@/lib/events/cronAuth';
-import { isEventLinkAlive } from '@/lib/events/linkCheck';
+import { checkEventLink } from '@/lib/events/linkCheck';
 
 // Daily archive pass: any event whose end_date is in the past flips from
 // 'active' to 'archived' — it drops off the public board (/api/events'
@@ -10,9 +10,11 @@ import { isEventLinkAlive } from '@/lib/events/linkCheck';
 // see .github/workflows/events-cron.yml for the one wired up in this repo.
 //
 // Пакет №4: заодно перепроверяем ссылки у активных событий из АВТО-источников
-// (source != 'manual' — кураторская лента и ICS-ленты; ручные админские
-// записи не трогаем). Битая ссылка обнуляется: мёртвых ссылок на витрине
-// нет, у события остаётся карточка без ссылки до правки админом.
+// (source != 'manual' — кураторская лента, ICS-ленты; ручные админские
+// записи не трогаем). Обнуляем только ДОКАЗАННО битые (HTTP 404/410/451):
+// временная сетевая ошибка или «сайт сегодня лежит» не должны безвозвратно
+// стирать рабочую ссылку — такие строки перепроверим завтра (Codex review,
+// пакет №4 round 1).
 export async function POST(request: Request) {
   if (!isCronRequestAuthorized(request)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -36,11 +38,17 @@ export async function POST(request: Request) {
     .neq('link', '');
 
   let deadLinksBlanked = 0;
+  let unchecked = 0;
   if (activeError) {
     console.error('[cron/events-archive] link re-check read failed', activeError);
   } else {
     for (const row of activeAuto ?? []) {
-      if (await isEventLinkAlive(row.link)) continue;
+      const status = await checkEventLink(row.link);
+      if (status === 'unknown') {
+        unchecked += 1;
+        continue;
+      }
+      if (status === 'ok') continue;
       const { error: updateError } = await supabase
         .from('events')
         .update({ link: '', updated_at: new Date().toISOString() })
@@ -53,5 +61,5 @@ export async function POST(request: Request) {
     }
   }
 
-  return NextResponse.json({ archived: data ?? 0, deadLinksBlanked });
+  return NextResponse.json({ archived: data ?? 0, deadLinksBlanked, unchecked });
 }

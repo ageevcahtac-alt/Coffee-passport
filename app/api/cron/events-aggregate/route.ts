@@ -3,7 +3,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase/adminClient';
 import { isCronRequestAuthorized } from '@/lib/events/cronAuth';
 import { getEventSources } from '@/lib/events/sources';
 import { ensureCuratedEvents } from '@/lib/events/curatedEvents';
-import { isEventLinkAlive } from '@/lib/events/linkCheck';
+import { checkEventLink } from '@/lib/events/linkCheck';
 
 // Daily aggregator pass: pulls candidates from every configured
 // EventSource (see lib/events/sources — none by default, an operator
@@ -42,10 +42,12 @@ export async function POST(request: Request) {
 
     for (const candidate of candidates) {
       candidatesSeen += 1;
-      // Пакет №4: битая ссылка → событие публикуется без ссылки (link=''),
-      // а не с 404 на витрине. Источнику доверяем только живое.
+      // Пакет №4: ссылку, которая не подтвердилась живой, обнуляем — событие
+      // публикуется без ссылки, а не с 404 на витрине. Кандидат ещё не
+      // публичен (pending_review), поэтому «unknown» (сеть/таймаут) здесь
+      // тоже обнуляем: непроверенная ссылка на витрину не попадает никогда.
       let link = candidate.link.trim();
-      if (link && !(await isEventLinkAlive(link))) {
+      if (link && (await checkEventLink(link)) !== 'ok') {
         link = '';
         deadLinksBlanked += 1;
       }

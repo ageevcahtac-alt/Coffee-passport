@@ -24,9 +24,13 @@
 -- дублирует строки. Остальные шесть событий ленты вставляются с тем же
 -- идемпотентным ключом.
 --
--- Идемпотентность: UPDATE привязан к старым сидовым значениям (повторный
--- прогон их не находит — no-op), INSERT — ON CONFLICT (title, start_date)
--- DO NOTHING. Чистая база и повторный прогон дают одинаковый результат.
+-- Идемпотентность и конфликт-безопасность (Codex review, пакет №4 round 1,
+-- finding 4): каждый UPDATE двухветочный — (a) целевой ключ (title,
+-- start_date) ещё НЕ занят → старый сидовый ряд перезаписываем в значения
+-- ленты; (b) ключ УЖЕ занят (ежедневный top-up успел вставить каталожную
+-- строку до того, как владелец накатил миграцию) → старый ряд архивируем,
+-- дубликат не создаём, миграция не падает на unique (title, start_date).
+-- Повторный прогон: (a) не находит старых значений, (b) — no-op по статусу.
 --
 -- Проверка после наката:
 --   select title, start_date, end_date, link, status from public.events
@@ -34,7 +38,7 @@
 --     order by start_date;  -- ≥4 строк, у каждой непустой https-link
 -- =========================================================
 
--- 1. Coffee Fest → Open Coffee Fest (зимний, Брусницын Холл, 5–6 декабря 2026)
+-- 1a. Coffee Fest → Open Coffee Fest (зимний, Брусницын Холл, 5–6 декабря 2026)
 update public.events
 set title = 'Open Coffee Fest',
     location = 'Санкт-Петербург, Брусницын Холл',
@@ -45,9 +49,25 @@ set title = 'Open Coffee Fest',
     updated_at = now()
 where title = 'Coffee Fest'
   and start_date = '2026-11-21'
-  and end_date = '2026-11-22';
+  and end_date = '2026-11-22'
+  and not exists (
+    select 1 from public.events
+    where title = 'Open Coffee Fest' and start_date = '2026-12-05'
+  );
 
--- 2. World of Coffee (несуществующий «Милан») → World of Coffee Дубай
+-- 1b. Тот же переход при уже занятом ключе: дубль не плодим, старый ряд архивируем.
+update public.events
+set status = 'archived',
+    updated_at = now()
+where title = 'Coffee Fest'
+  and start_date = '2026-11-21'
+  and status <> 'archived'
+  and exists (
+    select 1 from public.events
+    where title = 'Open Coffee Fest' and start_date = '2026-12-05'
+  );
+
+-- 2a. World of Coffee (несуществующий «Милан») → World of Coffee Дубай
 update public.events
 set title = 'World of Coffee Дубай',
     location = 'Дубай, Dubai World Trade Centre',
@@ -58,7 +78,23 @@ set title = 'World of Coffee Дубай',
     updated_at = now()
 where title = 'World of Coffee'
   and start_date = '2027-02-19'
-  and end_date = '2027-02-21';
+  and end_date = '2027-02-21'
+  and not exists (
+    select 1 from public.events
+    where title = 'World of Coffee Дубай' and start_date = '2027-01-26'
+  );
+
+-- 2b. Ключ занят — старый ряд архивируем без дубля.
+update public.events
+set status = 'archived',
+    updated_at = now()
+where title = 'World of Coffee'
+  and start_date = '2027-02-19'
+  and status <> 'archived'
+  and exists (
+    select 1 from public.events
+    where title = 'World of Coffee Дубай' and start_date = '2027-01-26'
+  );
 
 -- 3. Остальные события кураторской ленты (lib/events/curatedEvents.ts —
 --    источник истины для top-up; сюда копируются дословно, drift ловит
