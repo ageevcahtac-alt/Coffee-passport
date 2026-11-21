@@ -24,8 +24,10 @@ on:
   # workflow попадёт на main. Deploy на такие пуши не бежит (paths-ignore
   # в deploy.yml) — прод стабилен на всём прогоне. Скрипт
   # переживает интермитентный краш карты (ErrorBoundary)
-  # перезагрузкой. Deploy на [shots]-пуши не бежит: paths-ignore в deploy.yml
-  # покрывает workflow и оба runner-скрипта.
+  # перезагрузкой. Deploy на [shots]-пуши не бежит: paths-ignore в
+  # deploy.yml покрывает workflow и оба runner-скрипта (проверено: пуш
+  # 58c6be2 после пути f57514c задеплоился только из-за правки самого
+  # deploy.yml — дальше деплоёв на [shots] не будет).
   push:
     branches: [fix/pre-pilot-shortlist]
     paths:
