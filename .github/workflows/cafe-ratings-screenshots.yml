@@ -21,7 +21,10 @@ on:
   # запускает прогон; обычные пуши — нет (гейт на job).
   push:
     branches: [fix/pre-pilot-shortlist]
-    paths: ['.github/workflows/cafe-ratings-screenshots.yml']
+    paths:
+      - '.github/workflows/cafe-ratings-screenshots.yml'
+      - 'scripts/ops/cafe-ratings-screenshots.cjs'
+      - 'deploy/timeweb/cafe-ratings-screenshots.py'
 permissions:
   contents: read
 concurrency:
