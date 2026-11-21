@@ -9,6 +9,11 @@ on:
   workflow_dispatch:
   push:
     branches: [fix/pre-pilot-shortlist]
+    # Скриншотный workflow (cafe-ratings-screenshots) правится отдельными
+    # [shots]-пушами; деплой приложения они не требуют, а рестарт прода
+    # посреди его прогона ломает сессию браузера (ChunkLoadError).
+    paths-ignore:
+      - '.github/workflows/cafe-ratings-screenshots.yml'
 permissions:
   contents: read
 concurrency:
