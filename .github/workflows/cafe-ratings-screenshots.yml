@@ -12,6 +12,13 @@ name: cafe-ratings-screenshots
 # Артефакты: 5 PNG. Модель: loyalty-screenshots.
 on:
   workflow_dispatch:
+  # Временный триггер для первого прогона: workflow_dispatch из GitHub CLI
+  # доступен только с default branch (main), а мерж в main — отдельное
+  # решение владельца (DEPLOY_MAIN_SWITCH). Пуш с меткой [shots] в сообщении
+  # коммита запускает прогон один раз; обычные пуши — нет (гейт на job).
+  push:
+    branches: [fix/pre-pilot-shortlist]
+    paths: ['.github/workflows/cafe-ratings-screenshots.yml']
 permissions:
   contents: read
 concurrency:
@@ -19,6 +26,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   shots:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[shots]')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
