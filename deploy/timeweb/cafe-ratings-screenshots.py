@@ -7,16 +7,24 @@ Email и пароли приходят только JSON-ом на stdin и ни
 в вывод идут метки, id строк, счётчики и HTTP-коды.
 
 Режимы (argv[1]):
-  prepare — создать временных гостей и их активные оценки кофейны
-            (cafe_id из payload): N «сидов» с оценками/отзывами (их данные
-            видны на публичной карточке и в кабинете) + 1 «актёр» без оценки
-            (форма оценки заполняется playwright'ом через живой UI).
-            Оценки сидов кладутся напрямую в cafe_ratings (сервис-роль) —
-            RPC-путь этим прогоном тоже закрывается, но через UI актёра.
-            stdin: cafe_id, seeds: [{email,password,display_name,score,review}],
+  prepare — (1) убедиться, что строка-партнёр кофейны есть в coffee_shops
+            (идемпотентная тонкая строка ровно того вида, что создаёт
+            app/api/cafe/map-profile при первом сохранении: без неё карточка
+            на /map — только сид, FK рейтингов не на что ссылаться, а гость
+            не увидит секцию оценки); (2) создать временных гостей и их
+            активные оценки кофейны (cafe_id из payload): N «сидов» с
+            оценками/отзывами (их данные видны на публичной карточке и в
+            кабинете) + 1 «актёр» без оценки (форма оценки заполняется
+            playwright'ом через живой UI). Оценки сидов кладутся напрямую в
+            cafe_ratings (сервис-роль) — RPC-путь этим прогоном тоже
+            закрывается, но через UI актёра. Строка-партнёр ПОСЛЕ прогона
+            остаётся (реальные данные каталога; админ ей владеет дальше).
+            stdin: cafe_id, partner: {slug,name,status,brand_color,city,lat,lng},
+                   seeds: [{email,password,display_name,score,review}],
                    actor: {email,password,display_name}
   purge   — удалить всех временных гостей этого прогона и их строк
             (cafe_ratings по user_id, profiles, auth user — каскадом).
+            Строку-партнёр НЕ трогает.
             stdin: {emails: [...]} — каждый обязан быть по шаблону
             cafe-ratings-seed-<run>-<буква>@example.com или
             cafe-ratings-actor-<run>@example.com.
@@ -107,8 +115,24 @@ def create_guest(entry, cafe_id, with_rating):
     return user_id
 
 
+def ensure_partner_row(partner):
+    # Идемпотентно: если строки-партнёра ещё нет (карточка на /map живёт
+    # только сидом), создать тонкую строку — ровно то, что делает
+    # app/api/cafe/map-profile при первом сохранении кабинетом. Данные
+    # строки (координаты/город/цвет) — из сида; дальше ей владеет админ.
+    slug = partner['slug']
+    _, rows = call('GET', f'/rest/v1/coffee_shops?select=slug&slug=eq.{slug}')
+    if rows:
+        print(f'partner row: exists slug={slug}')
+        return
+    row = {key: partner[key] for key in ('slug', 'name', 'status', 'brand_color', 'city', 'lat', 'lng')}
+    call('POST', '/rest/v1/coffee_shops', row, prefer='return=representation')
+    print(f'partner row: created slug={slug}')
+
+
 def prepare(payload):
     cafe_id = payload['cafe_id']
+    ensure_partner_row(payload['partner'])
     # Факт ДО сидов: workflow учитывает уже существующие оценки в ожиданиях
     # (среднее/количество), а не предполагает пустую кофейню.
     _, rows = call('GET', f'/rest/v1/cafe_ratings?select=score&cafe_id=eq.{cafe_id}&deleted_at=is.null')

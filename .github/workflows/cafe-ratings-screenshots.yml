@@ -6,16 +6,19 @@ name: cafe-ratings-screenshots
 # уже в базе: 5 «Вера» с отзывом, 5 без имени с отзывом — фолбэк «Гость без
 # имени», 4 «Марк» без текста) и cafe-ratings-actor-<run>@example.com
 # (оценивает 5 через живой UI — заодно дымовой E2E). Уборка — тем же
-# server-скриптом (purge; неудача уборки красит job, а не тонет в «|| true»).
+# server-скриптом (prepare/purge на модели verify-barista-access; prepare
+# идемпотентно создаёт строку-партнёр, если её ещё нет — без неё секция
+# оценки на карточке не появится; purge строку-партнёр не трогает; неудача
+# уборки красит job, а не тонет в «|| true»).
 # Ожидания среднего/количества считаются от факта прода: prepare печатает
 # EXISTING_SCORES/RATINGS_SEEDED, существующие оценки кофейны учитываются.
 # Артефакты: 5 PNG. Модель: loyalty-screenshots.
 on:
   workflow_dispatch:
-  # Временный триггер для первого прогона: workflow_dispatch из GitHub CLI
-  # доступен только с default branch (main), а мерж в main — отдельное
-  # решение владельца (DEPLOY_MAIN_SWITCH). Пуш с меткой [shots] в сообщении
-  # коммита запускает прогон один раз; обычные пуши — нет (гейт на job).
+  # Временный триггер для прогонов: workflow_dispatch из GitHub CLI доступен
+  # только с default branch (main), а мерж в main — отдельное решение
+  # владельца (DEPLOY_MAIN_SWITCH). Пуш с меткой [shots] в сообщении коммита
+  # запускает прогон; обычные пуши — нет (гейт на job).
   push:
     branches: [fix/pre-pilot-shortlist]
     paths: ['.github/workflows/cafe-ratings-screenshots.yml']
@@ -63,6 +66,10 @@ jobs:
               'base_url': os.environ['PROD_URL'],
               'cafe_id': 'shop-xo-vsevolozhsk',
               'shop_name': 'XO Coffee',
+              # Тонкая строка-партнёр (как создаёт map-profile): без неё
+              # карточка на /map — только сид и секции оценки нет.
+              'partner': {'slug': 'shop-xo-vsevolozhsk', 'name': 'XO Coffee', 'status': 'active',
+                          'brand_color': '#D4AF37', 'city': 'Всеволожск', 'lat': 60.0167, 'lng': 30.6394},
               'seeds': seeds,
               'actor': {'email': f'cafe-ratings-actor-{run}@example.com', 'password': password,
                         'display_name': 'Гостья скриншотов', 'review': 'Симпатичное место, отличный сервис!'},
