@@ -16,24 +16,11 @@ name: cafe-ratings-screenshots
 # (fetchRatingAuthorNames без id-среза).
 # Артефакты: 5 PNG. Модель: loyalty-screenshots.
 on:
+  # Внимание: workflow_dispatch доступен только когда файл есть на default
+  # branch (main). Пока main не получил этот файл, прогон делается пушем с
+  # меткой [shots] и временным push-триггером (как в коммите e039f76) —
+  # deploy на него не бежит благодаря paths-ignore в deploy.yml.
   workflow_dispatch:
-  # Временный триггер для прогонов: workflow_dispatch из GitHub CLI доступен
-  # только с default branch (main), а мерж в main — отдельное решение
-  # владельца (DEPLOY_MAIN_SWITCH). Пуш с меткой [shots] в сообщении коммита
-  # запускает прогон; обычные пуши — нет (гейт на job). Убрать блок, когда
-  # workflow попадёт на main. Deploy на такие пуши не бежит (paths-ignore
-  # в deploy.yml) — прод стабилен на всём прогоне. Скрипт
-  # переживает интермитентный краш карты (ErrorBoundary)
-  # перезагрузкой. Deploy на [shots]-пуши не бежит: paths-ignore в
-  # deploy.yml покрывает workflow и оба runner-скрипта (проверено: пуш
-  # 58c6be2 после пути f57514c задеплоился только из-за правки самого
-  # deploy.yml — дальше деплоёв на [shots] не будет).
-  push:
-    branches: [fix/pre-pilot-shortlist]
-    paths:
-      - '.github/workflows/cafe-ratings-screenshots.yml'
-      - 'scripts/ops/cafe-ratings-screenshots.cjs'
-      - 'deploy/timeweb/cafe-ratings-screenshots.py'
 permissions:
   contents: read
 concurrency:
@@ -41,7 +28,6 @@ concurrency:
   cancel-in-progress: false
 jobs:
   shots:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[shots]')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
