@@ -20,7 +20,8 @@ on:
   # Временный триггер для прогонов: workflow_dispatch из GitHub CLI доступен
   # только с default branch (main), а мерж в main — отдельное решение
   # владельца (DEPLOY_MAIN_SWITCH). Пуш с меткой [shots] в сообщении коммита
-  # запускает прогон; обычные пуши — нет (гейт на job).
+  # запускает прогон; обычные пуши — нет (гейт на job). Убрать блок, когда
+  # workflow попадёт на main.
   push:
     branches: [fix/pre-pilot-shortlist]
     paths:
