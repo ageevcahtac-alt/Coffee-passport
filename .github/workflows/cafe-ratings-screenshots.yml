@@ -22,7 +22,8 @@ on:
   # владельца (DEPLOY_MAIN_SWITCH). Пуш с меткой [shots] в сообщении коммита
   # запускает прогон; обычные пуши — нет (гейт на job). Убрать блок, когда
   # workflow попадёт на main. Deploy на такие пуши не бежит (paths-ignore
-  # в deploy.yml) — прод стабилен на всём прогоне.
+  # в deploy.yml) — прод стабилен на всём прогоне. Скрипт
+  # переживает интермитентный краш карты (ErrorBoundary) перезагрузкой.
   push:
     branches: [fix/pre-pilot-shortlist]
     paths:

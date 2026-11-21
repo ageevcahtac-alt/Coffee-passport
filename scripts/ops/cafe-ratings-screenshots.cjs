@@ -38,7 +38,16 @@ async function shot(page, name) {
 // 2) прыжок на город селектором (zoom 13, кластеров быть не должно);
 // 3) раскрытие кластеров по очереди. На фейле — debug-дамп в shotsDir.
 async function openShopCard(page, averageText) {
-  await page.goto(base + '/map', { waitUntil: 'networkidle' });
+  // Интермитентный краш самой карты (leaflet-cluster, pre-existing): иногда
+  // /map падает в ErrorBoundary «Не удалось отобразить карту». Секция
+  // рейтинга тут ни при чём (панель ещё не открыта) — лечится перезагрузкой.
+  for (let loadAttempt = 0; loadAttempt < 3; loadAttempt += 1) {
+    await page.goto(base + '/map', { waitUntil: 'networkidle' });
+    const crashed = page.getByText('Не удалось отобразить карту', { exact: true });
+    if (!(await crashed.isVisible().catch(() => false))) break;
+    pass('карта упала в ErrorBoundary, перезагрузка', `попытка ${loadAttempt + 1}`);
+    await page.waitForTimeout(1200);
+  }
   const marker = page.locator(`.leaflet-marker-icon[title="${flow.shop_name}"]`).first();
   const inDom = async () => (await marker.count()) > 0;
 
