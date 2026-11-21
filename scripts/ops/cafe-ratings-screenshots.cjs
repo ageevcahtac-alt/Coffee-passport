@@ -54,14 +54,20 @@ async function openShopCard(page, averageText) {
       await page.waitForTimeout(1500);
     }
   }
-  for (let attempt = 0; attempt < 8 && !(await inDom()); attempt += 1) {
-    // Слой 3: кластеры по очереди (animate:false — DOM стабилен после zoom).
+  let found = await inDom();
+  for (let attempt = 0; attempt < 25 && !found; attempt += 1) {
+    // Слой 3: кластеры по очереди (animate:false — DOM стабилен после
+    // zoom). Ни маркера, ни кластеров — кофейни ещё грузятся: ждём,
+    // а не вываливаемся (иначе гонка с fetch coffee_shops).
     const clusters = page.locator('.leaflet-marker-cluster');
-    if ((await clusters.count()) === 0) break;
-    await clusters.nth(attempt % (await clusters.count())).click({ force: true });
+    const n = await clusters.count();
+    if (n > 0) {
+      await clusters.nth(attempt % n).click({ force: true });
+    }
     await page.waitForTimeout(800);
+    found = await inDom();
   }
-  if (!(await inDom())) {
+  if (!found) {
     await page.screenshot({ path: path.join(shotsDir, 'debug-map.png') }).catch(() => {});
     const html = await page.content().catch(() => '');
     fs.writeFileSync(path.join(shotsDir, 'debug-map.html'), html);
