@@ -596,6 +596,28 @@ export type CoffeeShopOrgRow = {
 export type CoffeeShopOrgInsert = Pick<CoffeeShopOrgRow, 'slug' | 'name'> &
   Partial<Omit<CoffeeShopOrgRow, 'id' | 'created_at' | 'slug' | 'name'>>;
 
+// =========================================================
+// Cafe ratings «зёрнами» — see supabase/migrations/0052_cafe_ratings.sql.
+// Оценка гостя (1–5 зёрен) + необязательный текстовый отзыв одной строкой:
+// текст без оценки невозможен, удаление сносит оба. Одна АКТИВНАЯ оценка на
+// пару гость+кофейня (частичный unique index, deleted_at is null); удалённые
+// строки остаются в таблице для аудита и будущей премии.
+// Insert/Update: never — клиент пишет только через RPC cafe_rate/cafe_unrate
+// (security definer, конвенция лояльности), прямые insert/update/delete у
+// anon/authenticated отозваны и политиками не покрыты.
+// =========================================================
+export type CafeRatingRow = {
+  id: string;
+  cafe_id: string;
+  // NULL — аккаунт гостя удалён (FK on delete set null 0052): оценка живёт
+  // для агрегатов/аудита, но личность обезличена.
+  user_id: string | null;
+  score: number; // smallint 1–5
+  review: string | null;
+  created_at: string;
+  deleted_at: string | null;
+};
+
 export type CoffeeRow = {
   id: string;
   roaster_id: string;
@@ -752,6 +774,7 @@ export type Database = {
         Update: never;
       } & NoRelationships;
       profiles: { Row: ProfileRow; Insert: Partial<ProfileRow>; Update: Partial<ProfileRow> } & NoRelationships;
+      cafe_ratings: { Row: CafeRatingRow; Insert: never; Update: never } & NoRelationships;
       platform_feedback: {
         Row: PlatformFeedbackRow;
         Insert: PlatformFeedbackInsert;
@@ -858,6 +881,18 @@ export type Database = {
       cafe_menu_expire_discontinuing: { Args: Record<string, never>; Returns: number };
       // See supabase/migrations/0014_events_module.sql.
       events_archive_expired: { Args: Record<string, never>; Returns: number };
+      // See supabase/migrations/0052_cafe_ratings.sql — рейтинг кофеен
+      // зёрнами: публичные агрегаты/отзывы (anon+) и записи только гостями.
+      cafe_rating_summary: { Args: { p_cafe_id: string }; Returns: Record<string, unknown> };
+      cafe_rating_reviews: {
+        Args: { p_cafe_id: string; p_limit?: number };
+        Returns: { score: number; review: string | null; author_name: string; created_at: string }[];
+      };
+      cafe_rate: {
+        Args: { p_cafe_id: string; p_score: number; p_review?: string | null };
+        Returns: Record<string, unknown>;
+      };
+      cafe_unrate: { Args: { p_cafe_id: string }; Returns: Record<string, unknown> };
       events_ingest_candidate: {
         Args: {
           p_title: string;

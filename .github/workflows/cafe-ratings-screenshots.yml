@@ -1,0 +1,138 @@
+name: cafe-ratings-screenshots
+# Скриншоты задачи рейтинга кофеен «зёрнами» (0052): публичная карточка
+# партнёрской кофейны с рейтингом (десктоп 1440×900, мобильный 390×844),
+# форма оценки гостя и кабинет кофейни с гистограммой. Только вручную.
+# Временные учётки — cafe-ratings-seed-<run>-[a-c]@example.com (их оценки
+# уже в базе: 5 «Вера» с отзывом, 5 без имени с отзывом — фолбэк «Гость без
+# имени», 4 «Марк» без текста) и cafe-ratings-actor-<run>@example.com
+# (оценивает 5 через живой UI — заодно дымовой E2E). Уборка — тем же
+# server-скриптом (purge; неудача уборки красит job, а не тонет в «|| true»).
+# Ожидания среднего/количества считаются от факта прода: prepare печатает
+# EXISTING_SCORES/RATINGS_SEEDED, существующие оценки кофейны учитываются.
+# Артефакты: 5 PNG. Модель: loyalty-screenshots.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cafe-ratings-screenshots
+  cancel-in-progress: false
+jobs:
+  shots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PROD_URL: ${{ vars.PROD_URL }}
+      CAFE_EMAIL: ${{ secrets.CABINET_CAFE_EMAIL }}
+      CAFE_PASSWORD: ${{ secrets.CABINET_CAFE_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: validate input
+        run: |
+          [ -n "$PROD_URL" ] || { echo "::error::PROD_URL не задан"; exit 1; }
+          for name in CAFE_EMAIL CAFE_PASSWORD; do
+            [ -n "${!name}" ] || { echo "::error::секрет CABINET_$name не задан"; exit 1; }
+          done
+      - name: payloads
+        run: |
+          umask 077
+          pw=$(openssl rand -base64 24 | tr -d '/+=\n')
+          echo "::add-mask::$pw"
+          python3 - "$pw" <<'PY'
+          import json, os, sys
+          run = os.environ['GITHUB_RUN_ID']
+          password = sys.argv[1]
+          base = os.environ['RUNNER_TEMP'] + '/base.json'
+          seeds = [
+              {'email': f'cafe-ratings-seed-{run}-a@example.com', 'password': password,
+               'display_name': 'Вера', 'score': 5, 'review': 'Лучший фильтр в городе, бариста помнит постоянных.'},
+              {'email': f'cafe-ratings-seed-{run}-b@example.com', 'password': password,
+               'display_name': None, 'score': 5, 'review': 'Капучино — огонь, приходим каждые выходные.'},
+              {'email': f'cafe-ratings-seed-{run}-c@example.com', 'password': password,
+               'display_name': 'Марк', 'score': 4, 'review': None},
+          ]
+          json.dump({
+              'base_url': os.environ['PROD_URL'],
+              'cafe_id': 'shop-xo-vsevolozhsk',
+              'shop_name': 'XO Coffee',
+              'seeds': seeds,
+              'actor': {'email': f'cafe-ratings-actor-{run}@example.com', 'password': password,
+                        'display_name': 'Гостья скриншотов', 'review': 'Симпатичное место, отличный сервис!'},
+              'cafe': {'email': os.environ['CAFE_EMAIL'], 'password': os.environ['CAFE_PASSWORD']},
+          }, open(base, 'w'))
+          PY
+      - uses: ./.github/actions/ssh-setup
+        with:
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      - name: upload server script
+        id: remote
+        run: |
+          remote=$(ssh prod 'mktemp /tmp/cafe-ratings-shots.XXXXXX')
+          echo "path=$remote" >> "$GITHUB_OUTPUT"
+          scp -q deploy/timeweb/cafe-ratings-screenshots.py "prod:$remote"
+      - name: playwright
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
+          npm init -y > /dev/null
+          npm install --silent --no-audit --no-fund playwright@1.48.2
+          npx playwright install --with-deps chromium > /dev/null
+      - name: prepare (temp guests + their ratings)
+        run: |
+          set -o pipefail
+          ssh prod "python3 ${{ steps.remote.outputs.path }} prepare" < "$RUNNER_TEMP/base.json" | tee "$RUNNER_TEMP/prepare.out"
+          existing=$(grep -oP '^EXISTING_SCORES=\K.*' "$RUNNER_TEMP/prepare.out")
+          existing_n=0
+          [ -n "$existing" ] && existing_n=$(awk -F, '{print NF}' <<< "$existing")
+          seeded=$(grep -oP '^RATINGS_SEEDED=\K.*' "$RUNNER_TEMP/prepare.out")
+          [ "$seeded" = "$((3 + existing_n))" ] || { echo "::error::ожидалось $((3 + existing_n)) активных оценок, есть $seeded"; exit 1; }
+      - name: flow.json (expectations)
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          from decimal import Decimal, ROUND_HALF_UP
+          def avg(scores):
+              value = Decimal(sum(scores)) / Decimal(len(scores))
+              return str(value.quantize(Decimal('0.1'), rounding=ROUND_HALF_UP)).replace('.', ',')
+          out = open(os.environ['RUNNER_TEMP'] + '/prepare.out').read()
+          existing = [int(s) for s in (re.search(r'^EXISTING_SCORES=(.*)$', out, re.M).group(1) or '').split(',') if s]
+          seeded = int(re.search(r'^RATINGS_SEEDED=(\d+)$', out, re.M).group(1))
+          data = json.load(open(os.environ['RUNNER_TEMP'] + '/base.json'))
+          seed_scores = [s['score'] for s in data['seeds']]
+          before = existing + seed_scores
+          data['expect'] = {
+              'average_text': avg(before),                  # существующие + сиды
+              'average_after_text': avg(before + [5]),      # + оценка актора через UI
+              'ratings_total_text': f'Отзывы ({seeded + 1})',
+          }
+          json.dump(data, open(os.environ['RUNNER_TEMP'] + '/flow.json', 'w'))
+          PY
+      - name: screenshots (prod UI)
+        run: node scripts/ops/cafe-ratings-screenshots.cjs "$RUNNER_TEMP/pw/node_modules/playwright" "$RUNNER_TEMP/shots" "$RUNNER_TEMP/flow.json"
+      - name: cleanup (temp guests and their ratings)
+        # Без «|| true»: оставшиеся тестовые оценки/отзывы на проде = красный
+        # job, а не тихий успех.
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import json, os
+          run = os.environ['GITHUB_RUN_ID']
+          json.dump({'emails': [
+              f'cafe-ratings-seed-{run}-a@example.com',
+              f'cafe-ratings-seed-{run}-b@example.com',
+              f'cafe-ratings-seed-{run}-c@example.com',
+              f'cafe-ratings-actor-{run}@example.com',
+          ]}, open(os.environ['RUNNER_TEMP'] + '/purge.json', 'w'))
+          PY
+          ssh prod "python3 ${{ steps.remote.outputs.path }} purge" < "$RUNNER_TEMP/purge.json"
+      - name: remove server script
+        if: always()
+        run: ssh prod "rm -f ${{ steps.remote.outputs.path }}" || true
+      - name: upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cafe-ratings-screenshots
+          path: ${{ runner.temp }}/shots
+          if-no-files-found: ignore
+          retention-days: 7

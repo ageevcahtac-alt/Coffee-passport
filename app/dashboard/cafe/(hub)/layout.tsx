@@ -9,6 +9,7 @@ const TABS = [
   { href: '/dashboard/cafe', label: 'Меню зерна' },
   { href: '/dashboard/cafe/orders', label: 'Заказы в ростерию' },
   { href: '/dashboard/cafe/analytics', label: 'Отзывы гостей' },
+  { href: '/dashboard/cafe/ratings', label: 'Оценки зёрнами' },
   { href: '/dashboard/cafe/team', label: 'Команда / Персонал' },
   { href: '/dashboard/cafe/loyalty', label: 'Лояльность' },
   { href: '/dashboard/cafe/anomalies', label: 'Аномалии' },

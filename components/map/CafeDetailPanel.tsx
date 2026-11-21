@@ -5,6 +5,8 @@ import type { CoffeeShop, RoastType } from '@/lib/types/coffee';
 import { useLots } from '@/lib/data/useLots';
 import { useCafeMenuEntries } from '@/lib/data/useCafeMenu';
 import { syncCafeMenuFromSupabase } from '@/lib/data/cafeMenuStore';
+import { isCoffeeShopInDatabase } from '@/lib/data/coffeeShops';
+import { CafeRatingSection } from '@/components/map/CafeRatingSection';
 
 // "Активное зерно в наличии" buckets a shop's active menu into three
 // roast-purpose tags plus a 4th "Архив" count for lots the shop toggled OFF
@@ -138,6 +140,11 @@ export function CafeDetailPanel({ shop, onClose }: { shop: CoffeeShop; onClose: 
             ×
           </button>
         </div>
+
+        {/* Рейтинг «зёрнами» (0052) — только для партнёрских кофеен (строка
+            в coffee_shops); встроенные карточки без строки не оцениваются и
+            рейтинга не показывают. */}
+        {isCoffeeShopInDatabase(shop.id) && <CafeRatingSection shopId={shop.id} />}
 
         {address ? (
           <div className="flex items-center justify-between gap-3 mb-2 text-sm">

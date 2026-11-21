@@ -1,12 +1,16 @@
 name: migration-test
-# Интеграционный прогон миграций 0050/0051 против настоящего Postgres 16
+# Интеграционный прогон миграций против настоящего Postgres 16
 # (сервис-контейнер, scratch-база — прод не трогаем):
 #   * 0050: backfill недостающих profiles-строк (модель боевых сирот), lockdown
 #     дрейфующих table-level грантов до каноничного набора миграций;
 #   * 0051: постоянный 5-значный код гостя — уникальность под гонкой 320
 #     параллельных регистраций (constraint + retry в триггере), формат \d{5}
-#     с ведущими нулями (text), staff без кода, идемпотентность повтора.
-# SQL-харнесс и проверки — supabase/tests/profilesGuestCode/.
+#     с ведущими нулями (text), staff без кода, идемпотентность повтора;
+#   * 0052: рейтинг кофеен «зёрнами» — RPC-постановка/удаление/повтор, запрет
+#     второй активной оценки, границы ролей (anon/staff не оценивают) и
+#     партнёрства, агрегаты после удаления, публичные отзывы с именем, RLS.
+# SQL-харнесс и проверки — supabase/tests/profilesGuestCode/ и
+# supabase/tests/cafeRatings/.
 on:
   pull_request:
   push:
@@ -58,3 +62,46 @@ jobs:
               -c "insert into auth.users (email) values ('race-{}@example.com')"
       - name: race check
         run: psql "$PGCONNECT" -v ON_ERROR_STOP=1 -f supabase/tests/profilesGuestCode/raceCheck.sql
+
+  cafe-ratings:
+    # Интеграционный прогон миграции 0052 (рейтинг кофеен «зёрнами») против
+    # настоящего Postgres 16 (сервис-контейнер, scratch-база — прод не
+    # трогаем): постановка/удаление/повторная оценка, запрет второй активной
+    # оценки, запрет анонима и staff, запрет непартнёрской кофейни, агрегаты
+    # после удаления, распределение (гистограмма), публичные отзывы с именем
+    # (фолбэк «Гость без имени»), RLS (своя строка / staff кофейни / anon),
+    # идемпотентность повторного наката. SQL-харнесс и проверки —
+    # supabase/tests/cafeRatings/.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      db:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PGCONNECT: host=localhost port=5432 user=postgres password=postgres dbname=postgres
+    steps:
+      - uses: actions/checkout@v5
+      - name: install psql client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: harness (auth.users + auth.uid() + profiles + coffee_shops)
+        run: psql "$PGCONNECT" -v ON_ERROR_STOP=1 -f supabase/tests/cafeRatings/harness.sql
+      - name: apply 0052 (настоящий файл миграции)
+        run: psql "$PGCONNECT" -v ON_ERROR_STOP=1 -1 -f supabase/migrations/0052_cafe_ratings.sql
+      - name: assertions
+        run: psql "$PGCONNECT" -v ON_ERROR_STOP=1 -f supabase/tests/cafeRatings/assert.sql
+      - name: snapshot before re-apply
+        run: |
+          psql "$PGCONNECT" -v ON_ERROR_STOP=1 \
+            -c "create table public._ratings_before_reapply as select * from public.cafe_ratings"
+      - name: re-apply 0052 (идемпотентность)
+        run: psql "$PGCONNECT" -v ON_ERROR_STOP=1 -1 -f supabase/migrations/0052_cafe_ratings.sql
+      - name: idempotency check
+        run: psql "$PGCONNECT" -v ON_ERROR_STOP=1 -f supabase/tests/cafeRatings/idempotentCheck.sql
