@@ -112,3 +112,29 @@ export async function fetchShopCafeRatings(cafeId: string): Promise<CafeRatingRo
   }
   return rows;
 }
+
+// Имена авторов отзывов для кабинета кофейни. Отдельный запрос, не
+// fetchGuestDisplayNames из loyalty.ts: тот подставляет срез id, когда
+// display_name пуст, а по правилу владельца пустое имя показываем как
+// «Гость без имени» — единообразно с публичной карточкой. Чанкинг IN-запросов
+// (как selectProfilesByIds в loyalty.ts): длинные IN-списки PostgREST не любит.
+const AUTHOR_NAMES_CHUNK = 100;
+
+export async function fetchRatingAuthorNames(ids: string[]): Promise<Map<string, string | null>> {
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  if (unique.length === 0) return new Map();
+  const client = getBrowserSupabaseClient();
+  const names = new Map<string, string | null>();
+  for (let from = 0; from < unique.length; from += AUTHOR_NAMES_CHUNK) {
+    const { data } = await client
+      .from('profiles')
+      .select('id, display_name')
+      .in('id', unique.slice(from, from + AUTHOR_NAMES_CHUNK));
+    if (Array.isArray(data)) {
+      for (const row of data as { id: string; display_name: string | null }[]) {
+        names.set(row.id, row.display_name);
+      }
+    }
+  }
+  return names;
+}

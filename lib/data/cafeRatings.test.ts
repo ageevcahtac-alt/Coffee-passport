@@ -16,6 +16,7 @@ import {
   fetchCafeRatingReviews,
   fetchCafeRatingSummary,
   fetchOwnCafeRating,
+  fetchRatingAuthorNames,
   fetchShopCafeRatings,
   rateCafe,
 } from './cafeRatings';
@@ -120,6 +121,32 @@ describe('fetchOwnCafeRating', () => {
     await expect(fetchOwnCafeRating('shop-x')).resolves.toBeNull();
     fromMock.mockReturnValue(tableChain({ data: null, error: null }));
     await expect(fetchOwnCafeRating('shop-x')).resolves.toBeNull();
+  });
+});
+
+describe('fetchRatingAuthorNames', () => {
+  it('returns display_name as-is, null when unset — no id-slice fallback', async () => {
+    let seenIn: unknown = null;
+    const thenable = {
+      select: () => thenable,
+      in: (_column: string, values: unknown) => {
+        seenIn = values;
+        return thenable;
+      },
+      then: (resolve: (value: unknown) => void) =>
+        resolve({ data: [{ id: 'u1', display_name: 'Вера' }, { id: 'u2', display_name: null }], error: null }),
+    };
+    fromMock.mockReturnValue(thenable);
+    const names = await fetchRatingAuthorNames(['u1', 'u2', 'u2', '']);
+    expect(names.get('u1')).toBe('Вера');
+    expect(names.get('u2')).toBeNull(); // кабинет покажет «Гость без имени», не срез id
+    expect(seenIn).toEqual(['u1', 'u2']); // дедуп и отсев пустых
+  });
+
+  it('returns an empty map for empty input without touching the client', async () => {
+    fromMock.mockReset();
+    await expect(fetchRatingAuthorNames([])).resolves.toEqual(new Map());
+    expect(fromMock).not.toHaveBeenCalled();
   });
 });
 

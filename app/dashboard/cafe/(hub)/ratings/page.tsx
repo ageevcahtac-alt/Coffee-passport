@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CafeRatingRow } from '@/lib/types/database';
 import { computeCafeRatingSummary, formatBeans, formatRatingsCount } from '@/lib/types/cafeRatings';
-import { fetchShopCafeRatings } from '@/lib/data/cafeRatings';
-import { fetchGuestDisplayNames } from '@/lib/data/loyalty';
+import { fetchRatingAuthorNames, fetchShopCafeRatings } from '@/lib/data/cafeRatings';
 import { useStaffSession } from '@/lib/auth/staffSession';
 import { BeanRating } from '@/components/shared/BeanRating';
 
@@ -23,7 +22,7 @@ function formatDate(iso: string): string {
 export default function CafeRatingsPage() {
   const { cafeId } = useStaffSession();
   const [rows, setRows] = useState<CafeRatingRow[] | null>(null);
-  const [names, setNames] = useState<Map<string, string>>(new Map());
+  const [names, setNames] = useState<Map<string, string | null>>(new Map());
 
   useEffect(() => {
     if (!cafeId) return;
@@ -32,7 +31,7 @@ export default function CafeRatingsPage() {
       if (cancelled) return;
       setRows(found);
       const uniqueIds = Array.from(new Set(found.map((row) => row.user_id).filter((id): id is string => Boolean(id))));
-      const resolved = await fetchGuestDisplayNames(uniqueIds);
+      const resolved = await fetchRatingAuthorNames(uniqueIds);
       if (!cancelled) setNames(resolved);
     });
     return () => {

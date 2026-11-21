@@ -12,6 +12,8 @@ name: cafe-ratings-screenshots
 # уборки красит job, а не тонет в «|| true»).
 # Ожидания среднего/количества считаются от факта прода: prepare печатает
 # EXISTING_SCORES/RATINGS_SEEDED, существующие оценки кофейны учитываются.
+# Имена авторов в кабинете — «Гость без имени» при пустом display_name
+# (fetchRatingAuthorNames без id-среза).
 # Артефакты: 5 PNG. Модель: loyalty-screenshots.
 on:
   workflow_dispatch:

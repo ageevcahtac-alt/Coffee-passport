@@ -127,7 +127,8 @@ function instrument(page) {
   await formDialog.getByRole('radio', { name: '5 из 5 зёрен' }).click();
   await formDialog.locator('textarea').fill(actor.review);
   await formDialog.getByRole('button', { name: 'Отправить оценку' }).click();
-  await formDialog.getByText('Ваша оценка', { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
+  // «Ваша оценка» — неуникально (подпись самой формы), ждём блок состояния.
+  await formDialog.getByText('Переоценки нет', { exact: false }).waitFor({ state: 'visible', timeout: 10000 });
   await shot(page, '3-rating-submitted-desktop');
   pass('актор поставил оценку через UI', actor.review.slice(0, 24));
   await desktop2.close();
