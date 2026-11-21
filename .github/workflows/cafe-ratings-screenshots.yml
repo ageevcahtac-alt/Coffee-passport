@@ -23,7 +23,9 @@ on:
   # запускает прогон; обычные пуши — нет (гейт на job). Убрать блок, когда
   # workflow попадёт на main. Deploy на такие пуши не бежит (paths-ignore
   # в deploy.yml) — прод стабилен на всём прогоне. Скрипт
-  # переживает интермитентный краш карты (ErrorBoundary) перезагрузкой.
+  # переживает интермитентный краш карты (ErrorBoundary)
+  # перезагрузкой. Deploy на [shots]-пуши не бежит: paths-ignore в deploy.yml
+  # покрывает workflow и оба runner-скрипта.
   push:
     branches: [fix/pre-pilot-shortlist]
     paths:

@@ -9,11 +9,14 @@ on:
   workflow_dispatch:
   push:
     branches: [fix/pre-pilot-shortlist]
-    # Скриншотный workflow (cafe-ratings-screenshots) правится отдельными
-    # [shots]-пушами; деплой приложения они не требуют, а рестарт прода
-    # посреди его прогона ломает сессию браузера (ChunkLoadError).
+    # Скриншотный прогон (workflow + runner-скрипты) правится отдельными
+    # [shots]-пушами; деплой приложения они не требуют (это не код next-
+    # сборки), а рестарт прода посреди прогона ломает браузерную сессию
+    # (ChunkLoadError — провалы прогонов 44890821613/44891146246/44893604666).
     paths-ignore:
       - '.github/workflows/cafe-ratings-screenshots.yml'
+      - 'scripts/ops/cafe-ratings-screenshots.cjs'
+      - 'deploy/timeweb/cafe-ratings-screenshots.py'
 permissions:
   contents: read
 concurrency:
