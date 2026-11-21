@@ -66,6 +66,7 @@ jobs:
               'base_url': os.environ['PROD_URL'],
               'cafe_id': 'shop-xo-vsevolozhsk',
               'shop_name': 'XO Coffee',
+              'city': 'Всеволожск',
               # Тонкая строка-партнёр (как создаёт map-profile): без неё
               # карточка на /map — только сид и секции оценки нет.
               'partner': {'slug': 'shop-xo-vsevolozhsk', 'name': 'XO Coffee', 'status': 'active',

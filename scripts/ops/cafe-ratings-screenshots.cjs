@@ -32,21 +32,39 @@ async function shot(page, name) {
 }
 
 // Открыть карточку кофейни через маркер на /map. Маркер — L.divIcon (div,
-// не img): ищем по классу .leaflet-marker-icon и title. Пока маркер в
-// кластере, его нет в DOM — кликаем видимые кластеры по очереди (Leaflet
-// убирает кластер после zoom-in, маркер появляется в DOM). Клик —
-// dispatchEvent: сработает у элемента вне вьюпорта, которого playwright
-// не счёл бы «видимым».
+// не img): ищем по классу .leaflet-marker-icon и title. Слои надёжности:
+// 1) маркер уже в DOM (Leaflet держит его там даже вне вьюпорта) — клик
+//    через dispatchEvent, минуя проверки «видимости» playwright;
+// 2) прыжок на город селектором (zoom 13, кластеров быть не должно);
+// 3) раскрытие кластеров по очереди. На фейле — debug-дамп в shotsDir.
 async function openShopCard(page, averageText) {
   await page.goto(base + '/map', { waitUntil: 'networkidle' });
   const marker = page.locator(`.leaflet-marker-icon[title="${flow.shop_name}"]`).first();
-  for (let attempt = 0; attempt < 8 && (await marker.count()) === 0; attempt += 1) {
-    const clusters = page.locator('.leaflet-marker-cluster:visible');
-    if ((await clusters.count()) === 0) break;
-    await clusters.nth(attempt % (await clusters.count())).click();
-    await page.waitForTimeout(700);
+  const inDom = async () => (await marker.count()) > 0;
+
+  if (!(await inDom()) && flow.city) {
+    // Слой 2: селектор города кофейны.
+    const cityValue = await page.evaluate((city) => {
+      const select = document.querySelector('select');
+      const option = select && [...select.options].find((o) => o.text.startsWith(city));
+      return option ? option.value : null;
+    }, flow.city);
+    if (cityValue) {
+      await page.selectOption('select', cityValue);
+      await page.waitForTimeout(1500);
+    }
   }
-  if ((await marker.count()) === 0) {
+  for (let attempt = 0; attempt < 8 && !(await inDom()); attempt += 1) {
+    // Слой 3: кластеры по очереди (animate:false — DOM стабилен после zoom).
+    const clusters = page.locator('.leaflet-marker-cluster');
+    if ((await clusters.count()) === 0) break;
+    await clusters.nth(attempt % (await clusters.count())).click({ force: true });
+    await page.waitForTimeout(800);
+  }
+  if (!(await inDom())) {
+    await page.screenshot({ path: path.join(shotsDir, 'debug-map.png') }).catch(() => {});
+    const html = await page.content().catch(() => '');
+    fs.writeFileSync(path.join(shotsDir, 'debug-map.html'), html);
     throw new Error(`маркер ${flow.shop_name} не появился после раскрытия кластеров`);
   }
   await marker.dispatchEvent('click');
@@ -70,12 +88,22 @@ async function login(page, email, password) {
   ]);
 }
 
+// Console/pageerror страницы — в лог прогона (диагностика карт/карточек;
+// только текст ошибок, без данных страницы).
+function instrument(page) {
+  page.on('pageerror', (error) => console.log(`PAGEERROR: ${String(error).slice(0, 300)}`));
+  page.on('console', (message) => {
+    if (message.type() === 'error') console.log(`CONSOLE: ${message.text().slice(0, 300)}`);
+  });
+  return page;
+}
+
 (async () => {
   const browser = await chromium.launch();
 
   // 1. Десктоп: карточка с рейтингом (аноним).
   const desktop = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-  let page = await desktop.newPage();
+  let page = instrument(await desktop.newPage());
   const dialog = await openShopCard(page, flow.expect.average_text);
   await page.waitForTimeout(400); // докрутка полос/анимаций Leaflet
   await shot(page, '1-card-rating-desktop');
@@ -83,7 +111,7 @@ async function login(page, email, password) {
 
   // 2. Десктоп: форма оценки — актор оценивает через живой UI.
   const desktop2 = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-  page = await desktop2.newPage();
+  page = instrument(await desktop2.newPage());
   await login(page, actor.email, actor.password);
   const formDialog = await openShopCard(page, flow.expect.average_text);
   await formDialog.getByRole('button', { name: 'Оценить', exact: true }).click();
@@ -100,7 +128,7 @@ async function login(page, email, password) {
 
   // 3. Мобильный: та же карточка (уже с оценкой актора).
   const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-  page = await mobile.newPage();
+  page = instrument(await mobile.newPage());
   await openShopCard(page, flow.expect.average_after_text);
   await page.waitForTimeout(400);
   await shot(page, '4-card-rating-mobile');
@@ -108,7 +136,7 @@ async function login(page, email, password) {
 
   // 4. Кабинет кофейни: гистограмма + все отзывы.
   const cabinet = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-  page = await cabinet.newPage();
+  page = instrument(await cabinet.newPage());
   await login(page, cafeAccount.email, cafeAccount.password);
   await page.goto(base + '/dashboard/cafe/ratings', { waitUntil: 'networkidle' });
   await page.getByText('средний балл', { exact: true }).waitFor({ state: 'visible', timeout: 15000 });
